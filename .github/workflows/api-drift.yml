@@ -1,0 +1,66 @@
+name: API drift
+
+# Deliberately not run on pull requests. Drift is a maintenance signal about Discord
+# shipping fields, not a defect in the change under review, and blocking a contributor
+# on it would be hostile. See docs/adr/0003-hand-written-types.md.
+on:
+  schedule:
+    # Mondays at 06:00 UTC.
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    name: Compare typings against Discord's specification
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22.15.0'
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Check for drift
+        id: drift
+        run: |
+          set +e
+          node --experimental-strip-types scripts/check-api-drift.ts > drift.md
+          echo "found=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Open or update the tracking issue
+        if: steps.drift.outputs.found == '1'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          body="$(cat drift.md)"
+          existing="$(gh issue list --label api-drift --state open --limit 1 --json number --jq '.[0].number // empty')"
+          if [ -n "$existing" ]; then
+            gh issue edit "$existing" --body "$body"
+            echo "Updated issue #$existing"
+          else
+            gh issue create \
+              --title "API typing drift" \
+              --label api-drift \
+              --body "$body"
+          fi
+
+      - name: Close the tracking issue when clean
+        if: steps.drift.outputs.found == '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          existing="$(gh issue list --label api-drift --state open --limit 1 --json number --jq '.[0].number // empty')"
+          if [ -n "$existing" ]; then
+            gh issue close "$existing" --comment "No drift remains: every mapped type now covers each field the specification declares."
+          fi
