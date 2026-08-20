@@ -7,64 +7,101 @@ import { ChannelType, type APIChannel, type APIGuildMember } from '@vestra/types
  * property of these typings day to day, and it is easy to break by widening a member's
  * `type` field to `ChannelType`. These tests fail to *compile* if that happens, which is
  * the point -- the runtime assertions are almost incidental.
+ *
+ * Narrowing is exercised across a function boundary rather than on a `const`. Given a
+ * literal object, TypeScript already knows the exact member and the checks would be
+ * statically redundant, which tests nothing.
  */
+
+/**
+ * Reaches for a field that exists on exactly one branch of the union, proving the branch
+ * was actually narrowed rather than widened to a common base.
+ */
+function summarise(channel: APIChannel): string {
+  switch (channel.type) {
+    case ChannelType.GuildVoice:
+    case ChannelType.GuildStageVoice:
+      // `bitrate` does not exist on a text channel; this only compiles after narrowing.
+      return `voice:${String(channel.bitrate)}:${String(channel.user_limit)}`
+    case ChannelType.GuildForum:
+      return `forum:${String(channel.available_tags?.[0]?.name)}`
+    case ChannelType.GuildText:
+      return `text:${String(channel.topic)}`
+    case ChannelType.PublicThread:
+    case ChannelType.PrivateThread:
+    case ChannelType.AnnouncementThread:
+      return `thread:${String(channel.owner_id)}:${String(channel.total_message_sent)}`
+    case ChannelType.GuildCategory:
+      return `category:${channel.name}`
+    case ChannelType.DM:
+    case ChannelType.GroupDM:
+      return `dm:${String(channel.recipients?.length)}`
+    default:
+      return `other:${String(channel.type)}`
+  }
+}
+
 describe('APIChannel narrowing', () => {
   it('narrows to a voice channel, exposing voice-only fields', () => {
-    const channel: APIChannel = {
-      id: '1',
-      type: ChannelType.GuildVoice,
-      name: 'General',
-      position: 0,
-      bitrate: 64_000,
-      user_limit: 10,
-    }
-
-    if (channel.type !== ChannelType.GuildVoice) {
-      assert.fail('did not narrow to a voice channel')
-    }
-
-    // `bitrate` does not exist on a text channel; this line only compiles after narrowing.
-    assert.equal(channel.bitrate, 64_000)
-    assert.equal(channel.user_limit, 10)
+    assert.equal(
+      summarise({
+        id: '1',
+        type: ChannelType.GuildVoice,
+        name: 'General',
+        position: 0,
+        bitrate: 64_000,
+        user_limit: 10,
+      }),
+      'voice:64000:10',
+    )
   })
 
   it('narrows to a forum channel, exposing tag configuration', () => {
-    const channel: APIChannel = {
-      id: '2',
-      type: ChannelType.GuildForum,
-      name: 'help',
-      position: 1,
-      available_tags: [
-        { id: '10', name: 'answered', moderated: false, emoji_id: null, emoji_name: null },
-      ],
-    }
-
-    if (channel.type !== ChannelType.GuildForum) {
-      assert.fail('did not narrow to a forum channel')
-    }
-
-    assert.equal(channel.available_tags?.[0]?.name, 'answered')
+    assert.equal(
+      summarise({
+        id: '2',
+        type: ChannelType.GuildForum,
+        name: 'help',
+        position: 1,
+        available_tags: [
+          { id: '10', name: 'answered', moderated: false, emoji_id: null, emoji_name: null },
+        ],
+      }),
+      'forum:answered',
+    )
   })
 
-  it('narrows threads across their three channel types', () => {
-    const channel: APIChannel = {
-      id: '3',
-      type: ChannelType.PublicThread,
-      name: 'a thread',
-      position: 0,
-      owner_id: '99',
-      total_message_sent: 12,
-    }
+  it('narrows threads across all three of their channel types', () => {
+    assert.equal(
+      summarise({
+        id: '3',
+        type: ChannelType.PublicThread,
+        name: 'a thread',
+        position: 0,
+        owner_id: '99',
+        total_message_sent: 12,
+      }),
+      'thread:99:12',
+    )
+  })
 
-    if (
-      channel.type !== ChannelType.PublicThread &&
-      channel.type !== ChannelType.PrivateThread &&
-      channel.type !== ChannelType.AnnouncementThread
-    ) {
-      assert.fail('did not narrow to a thread')
-    }
-
-    assert.equal(channel.owner_id, '99')
+  it('narrows a DM, which has no guild fields at all', () => {
+    assert.equal(
+      summarise({
+        id: '4',
+        type: ChannelType.DM,
+        recipients: [
+          {
+            id: '5',
+            username: 'someone',
+            discriminator: '0',
+            global_name: null,
+            avatar: null,
+          },
+        ],
+      }),
+      'dm:1',
+    )
   })
 })
 
