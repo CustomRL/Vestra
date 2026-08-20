@@ -1,43 +1,10 @@
 import { EventEmitter } from 'node:events'
-import type { APISessionStartLimit, RESTGetAPIGatewayBotResult } from '@vestra/types'
+import type { RESTGetAPIGatewayBotResult } from '@vestra/types'
 import { Shard } from './Shard.js'
 import type { ShardOptions } from './GatewayOptions.js'
 import { LocalIdentifyThrottler, type IdentifyThrottler } from './session/IdentifyThrottler.js'
 import { shardIdForGuild } from './util/ShardRouting.js'
-
-/**
- * Thrown when starting would exceed the daily session start allowance.
- *
- * @remarks
- * Deliberately fatal, never retried. Overrunning the limit does not throttle the bot: it
- * terminates every active session, resets the token, and emails the owner. A retry loop
- * past the cap converts a configuration mistake into an outage that needs a human to fix.
- */
-export class SessionLimitError extends Error {
-  /** Session starts left today. */
-  readonly remaining: number
-  /** The daily allowance. */
-  readonly total: number
-  /** Milliseconds until the allowance resets. */
-  readonly resetAfter: number
-
-  /**
-   * @param limit - The session start limit from `GET /gateway/bot`.
-   * @param required - How many session starts were needed.
-   */
-  constructor(limit: APISessionStartLimit, required: number) {
-    super(
-      `Starting ${String(required)} shards needs ${String(required)} session starts but only ` +
-        `${String(limit.remaining)} of ${String(limit.total)} remain today. The allowance ` +
-        `resets in ${String(Math.ceil(limit.reset_after / 1000))}s. Refusing to start: ` +
-        'exceeding the limit terminates every session, resets the token, and emails the owner.',
-    )
-    this.name = 'SessionLimitError'
-    this.remaining = limit.remaining
-    this.total = limit.total
-    this.resetAfter = limit.reset_after
-  }
-}
+import { SessionLimitError } from './errors/SessionLimitError.js'
 
 /**
  * Fetches gateway connection information.

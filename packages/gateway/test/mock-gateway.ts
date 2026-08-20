@@ -121,7 +121,10 @@ function encodeFrame(opcode: number, payload: Buffer, fin = true): Buffer {
  * frames can arrive in one. Both are normal and both must be handled, or the tests fail
  * for reasons that have nothing to do with the code under test.
  */
-function decodeFrames(buffer: Buffer): { frames: { opcode: number; payload: Buffer }[]; rest: Buffer } {
+function decodeFrames(buffer: Buffer): {
+  frames: { opcode: number; payload: Buffer }[]
+  rest: Buffer
+} {
   const frames: { opcode: number; payload: Buffer }[] = []
   let offset = 0
 

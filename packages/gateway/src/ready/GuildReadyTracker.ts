@@ -1,4 +1,4 @@
-import type { Timers } from '../connection/Heartbeater.js'
+import type { Timers } from '../util/Timers.js'
 
 /**
  * Settings for guild readiness tracking.

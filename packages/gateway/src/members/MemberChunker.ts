@@ -8,7 +8,7 @@ import {
   type GatewayRequestGuildMembersData,
   type Snowflake,
 } from '@vestra/types'
-import type { Timers } from '../connection/Heartbeater.js'
+import type { Timers } from '../util/Timers.js'
 
 /**
  * The hard ceiling Discord places on a request nonce.

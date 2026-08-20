@@ -27,7 +27,6 @@ const skip = canConnect
   ? false
   : "this runtime's WebSocket cannot connect to a local server; see mock-gateway.ts"
 
-
 interface Harness {
   transport: Transport
   events: {

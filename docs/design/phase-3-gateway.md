@@ -89,11 +89,24 @@ packages/gateway/src/
 │   ├── Timers.ts                     ~90    injectable clock/timer/random seams
 │   └── ShardRouting.ts               ~60    (guild_id >> 22) % num_shards
 └── errors/
-    ├── GatewayError.ts               ~40
-    ├── FatalCloseError.ts            ~60
+    ├── GatewayError.ts               ~40    base class for the four below
+    ├── FatalGatewayError.ts          ~60
     ├── SessionLimitError.ts          ~70
-    └── PayloadTooLargeError.ts       ~50
+    ├── PayloadTooLargeError.ts       ~50    also owns MAX_PAYLOAD_BYTES
+    └── SendTimeoutError.ts           ~40
 ```
+
+Two corrections to the layout as first written, both made while implementing it:
+
+- **`FatalCloseError.ts` is `FatalGatewayError.ts`.** The exported class has always been
+  `FatalGatewayError`, and a file named for a class it does not contain is worse than the
+  naming inconsistency it was trying to fix. The file follows the class.
+- **`SendTimeoutError.ts` was missing.** `SendQueue` throws two errors, not one, and the
+  second belongs beside the first.
+
+`PayloadTooLargeError.ts` owns `MAX_PAYLOAD_BYTES` because the error message quotes the
+limit. Leaving the constant in `SendQueue.ts` would have made `errors/` import the module
+that throws the error.
 
 `packages/gateway/test/` — `mock-transport.ts`, `mock-gateway.ts`, plus the suites in §7.
 
@@ -655,7 +668,7 @@ Paired with `Timers` (§4.13) and `node:test`'s `t.mock.timers.enable({ apis: ['
 
 A real RFC 6455 server over `node:http` + `node:crypto` (SHA-1 + the RFC GUID handshake, frame encode/decode with client-mask handling), mirroring `packages/rest/test/mock-discord.ts` and its recorded rationale ("A real socket rather than a stubbed `fetch`"). ~120 lines, no dependency. Both layers are needed: the fake transport for state-machine logic, the real server for the undici-specific behaviours (1006 collapse, CLOSING hang, `binaryType`) that only appear against a socket.
 
-**Implemented, with one environment caveat.** The server is RFC-correct: a hand-written raw client completes the handshake against it and reads both whole and fragmented frames. But on **Node 25.8.1 on Windows** the global `WebSocket` aborts the upgrade against *any* locally hosted server — `ws` and `wss` alike, at any response timing, with undici reporting only "The operation was aborted" and the bare `TypeError` error event the transport already documents. The same process connects to Discord's gateway without trouble. `websocketClientCanConnect()` probes for this and the suite skips rather than reporting failures that say nothing about the code under test.
+**Implemented, with one environment caveat.** The server is RFC-correct: a hand-written raw client completes the handshake against it and reads both whole and fragmented frames. But on **Node 25.8.1 on Windows** the global `WebSocket` aborts the upgrade against _any_ locally hosted server — `ws` and `wss` alike, at any response timing, with undici reporting only "The operation was aborted" and the bare `TypeError` error event the transport already documents. The same process connects to Discord's gateway without trouble. `websocketClientCanConnect()` probes for this and the suite skips rather than reporting failures that say nothing about the code under test.
 
 The consequence is that X1–X9 are written but only run where undici will talk to a local server. Two of them are verifiable against Discord instead, and are: `scripts/transport-check.ts` in Vestra-Testing-Bot provokes a 4004 with a deliberately invalid token and asserts X1 (`code=4004`, `wasClean=true`, `reason="Authentication failed."` — delivered verbatim) and X7 (the first `zlib-stream` frame arrives as an `ArrayBuffer`). Both hold. The remainder need a peer that misbehaves on command and stay with the local suite.
 
@@ -696,10 +709,11 @@ Nothing in this section is settled. None of it is promoted to a confident rule a
 - **A3. On op 9 `d:true`, must the socket be closed first, or may Resume go out on the existing connection?** The Resuming procedure is written entirely in terms of a _new_ connection, but `d:true` is listed as a trigger without saying to close. Row 11 takes the safe reading (close then reconnect); unverified.
 - **A4. Close 4003.** Marked `Reconnect: true` but explained as "payload prior to identifying, **or this session has been invalidated**". §6 maps it to re-identify as policy. Resume-once-then-degrade is equally defensible.
 - **A5. Can Discord send 1000/1001 _to_ the client, and what does it imply for the session?** The docs describe only the client sending them. Also unaddressed: 1012/1013 from a fronted deployment.
-- **A6. Discord's zstd window size.** If it exceeds Node's default `ZSTD_d_windowLogMax` the decompressor refuses to allocate. Settable via `params`; the required value is unknown and untested against live traffic. Blocks the zstd default (§4.4). **Still open after the 2026-08-20 run** — and specifically *not* answered by it: Node's default window allows 128 MiB and the largest frame observed was 18 KB, which could not have tripped the limit either way. Answering this needs a guild large enough to produce a genuinely large `GUILD_CREATE` or member chunk.
+- **A6. Discord's zstd window size.** If it exceeds Node's default `ZSTD_d_windowLogMax` the decompressor refuses to allocate. Settable via `params`; the required value is unknown and untested against live traffic. Blocks the zstd default (§4.4). **Still open after the 2026-08-20 run** — and specifically _not_ answered by it: Node's default window allows 128 MiB and the largest frame observed was 18 KB, which could not have tripped the limit either way. Answering this needs a guild large enough to produce a genuinely large `GUILD_CREATE` or member chunk.
 - **A7. Does node:zlib's zstd interoperate with Discord's encoder?** **Answered 2026-08-20** (`scripts/compression-check.ts`): `zlib-stream`, `zstd-stream` and `none` decoded live traffic to byte-identical payloads — key-sorted digests match and a structural diff of the dumped payloads is empty. Node's zstd decoder does interoperate with Discord's encoder. Largest frame decoded was 18,106 bytes, so this is a conformance result at ordinary payload sizes, not at the sizes A6 cares about. Z7 as specified (a golden frame checked into the repo) is still worth having so this is a regression test rather than a one-off.
 
   A method note worth keeping: the digest must sort object keys first. Discord's JSON key ordering varies between connections, so hashing raw `JSON.stringify` output compares serialisation order rather than content and three correct decodes produce three different hashes.
+
 - **A8. Cross-process resume.** Strong inference, not documented. Session lifetime is described in terms of the connection and close code, never the process.
 - **A9. Does READY still enumerate guilds when GUILDS is not requested?** Determines whether the readiness tracker could rely on an empty array. §4.9 branches on the intent bit instead, which is safe either way.
 - **A10. Is `d` false on the op 9 sent for a `max_concurrency` breach?** If it were true, a shard would attempt a resume it has no session for. Row 7 treats op 9 during identify as `d:false` regardless.

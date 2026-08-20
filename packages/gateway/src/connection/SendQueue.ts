@@ -1,50 +1,6 @@
 import { setTimeout as sleep } from 'node:timers/promises'
-
-/**
- * The hard ceiling on a single gateway payload.
- *
- * @remarks
- * Exceeding it closes the connection with 4002.
- */
-export const MAX_PAYLOAD_BYTES = 4096
-
-/**
- * Thrown when a payload is too large for the gateway to accept.
- */
-export class PayloadTooLargeError extends Error {
-  /** The opcode of the rejected payload. */
-  readonly opcode: number
-  /** How large the payload was, in bytes. */
-  readonly size: number
-
-  /**
-   * @param opcode - The opcode of the rejected payload.
-   * @param size - The serialised size in bytes.
-   */
-  constructor(opcode: number, size: number) {
-    super(
-      `Gateway payload for opcode ${String(opcode)} is ${String(size)} bytes, past the ` +
-        `${String(MAX_PAYLOAD_BYTES)} byte limit. Sending it would close the connection ` +
-        'with code 4002. Split the request — a large `user_ids` array is the usual cause.',
-    )
-    this.name = 'PayloadTooLargeError'
-    this.opcode = opcode
-    this.size = size
-  }
-}
-
-/**
- * Thrown when a send waits longer than the configured ceiling.
- */
-export class SendTimeoutError extends Error {
-  /**
-   * @param waitMs - How long the send would have had to wait.
-   */
-  constructor(waitMs: number) {
-    super(`Sending would have waited ${String(waitMs)}ms for the gateway command allowance.`)
-    this.name = 'SendTimeoutError'
-  }
-}
+import { MAX_PAYLOAD_BYTES, PayloadTooLargeError } from '../errors/PayloadTooLargeError.js'
+import { SendTimeoutError } from '../errors/SendTimeoutError.js'
 
 /**
  * Settings for gateway command pacing.

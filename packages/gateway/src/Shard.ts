@@ -20,7 +20,8 @@ import type { IdentifyThrottler } from './session/IdentifyThrottler.js'
 import type { ShardEvents } from './ShardEvents.js'
 import { sendIdentify, sendResume } from './ShardHandshake.js'
 import { ShardSession } from './ShardSession.js'
-import { ClosingIntent, ConnectIntent, FatalGatewayError, ShardState } from './ShardState.js'
+import { ClosingIntent, ConnectIntent, ShardState } from './ShardState.js'
+import { FatalGatewayError } from './errors/FatalGatewayError.js'
 
 /**
  * One gateway connection, and the state machine that keeps it alive.
