@@ -22,6 +22,12 @@ export {
   type ShardManagerOptions,
 } from './ShardManager.js'
 export { GuildReadyTracker, type GuildReadyTrackerOptions } from './ready/GuildReadyTracker.js'
+export {
+  MAX_NONCE_BYTES,
+  MemberChunker,
+  type RequestGuildMembersOptions,
+  type SendChunkRequest,
+} from './members/MemberChunker.js'
 export { receivesGuildlessEvents, shardIdForGuild } from './util/ShardRouting.js'
 export type { ShardEvents } from './ShardEvents.js'
 export { ShardSession } from './ShardSession.js'
