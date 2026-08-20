@@ -23,7 +23,7 @@ import type { APIUser } from './user.js'
  *
  * `user` is separately unreliable: Discord notes that some older integrations have no
  * attached user, and the gateway strips it from INTEGRATION_CREATE and INTEGRATION_UPDATE
- * entirely. See {@link APIIntegrationModifyData}.
+ * entirely. See `GatewayIntegrationCreateDispatchData` in the gateway typings.
  */
 export interface APIIntegration {
   /**
@@ -155,47 +155,4 @@ export interface APIIntegrationApplication {
   primary_sku_id?: Snowflake
   /** The bot user attached to the application. */
   bot?: APIUser
-}
-
-/**
- * The data carried by the INTEGRATION_CREATE and INTEGRATION_UPDATE gateway events.
- *
- * @remarks
- * The integration object with `user` removed and a `guild_id` added. Both events use this
- * one shape; only the event name distinguishes them.
- *
- * `user` is dropped by the gateway rather than merely being optional, so an integration
- * cached from a dispatch never has one even where the REST resource would.
- */
-export interface APIIntegrationModifyData extends Omit<APIIntegration, 'user'> {
-  /** The ID of the guild the integration belongs to. */
-  guild_id: Snowflake
-}
-
-/**
- * The data carried by the INTEGRATION_DELETE gateway event.
- *
- * @remarks
- * Nothing of the integration survives the delete but its ID, so a consumer that wants to
- * know what was removed must have cached it beforehand.
- */
-export interface APIIntegrationDeleteData {
-  /** The ID of the deleted integration. */
-  id: Snowflake
-  /** The ID of the guild the integration belonged to. */
-  guild_id: Snowflake
-  /** The application behind the integration, for `Discord` integrations. */
-  application_id?: Snowflake
-}
-
-/**
- * The data carried by the GUILD_INTEGRATIONS_UPDATE gateway event.
- *
- * @remarks
- * A bare notification: it names the guild and nothing else, not even which integration
- * changed. Acting on it means refetching the guild's integrations.
- */
-export interface APIGuildIntegrationsUpdateData {
-  /** The ID of the guild whose integrations changed. */
-  guild_id: Snowflake
 }

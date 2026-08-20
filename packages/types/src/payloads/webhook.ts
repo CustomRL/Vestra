@@ -126,18 +126,3 @@ export interface APIWebhookSourceChannel {
   /** The channel's name. */
   name: string
 }
-
-/**
- * The data carried by the WEBHOOKS_UPDATE gateway event.
- *
- * @remarks
- * Sent when a webhook in a channel is created, updated or deleted, but it says only which
- * channel changed — not which webhook, nor which of the three things happened. Acting on
- * it means refetching the channel's webhooks and diffing.
- */
-export interface APIWebhooksUpdateData {
-  /** The ID of the guild the channel belongs to. */
-  guild_id: Snowflake
-  /** The ID of the channel whose webhooks changed. */
-  channel_id: Snowflake
-}
