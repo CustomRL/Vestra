@@ -194,12 +194,14 @@ describe('member chunking', () => {
     assert.equal(sent.length, 1)
 
     // Settle it, or the pending timeout outlives the test and rejects into the run.
+    const nonce = sent[0]?.nonce
+    assert.ok(nonce)
     c.handleChunk({
       guild_id: '1',
       members: [member('a')],
       chunk_index: 0,
       chunk_count: 1,
-      nonce: sent[0]?.nonce,
+      nonce,
     })
     assert.equal((await pending).length, 1)
   })
@@ -230,12 +232,14 @@ describe('member chunking', () => {
     await Promise.resolve()
     assert.equal(sent.length, 1, 'omitting intents should preserve the previous behaviour')
 
+    const nonce = sent[0]?.nonce
+    assert.ok(nonce)
     c.handleChunk({
       guild_id: '1',
       members: [member('a')],
       chunk_index: 0,
       chunk_count: 1,
-      nonce: sent[0]?.nonce,
+      nonce,
     })
     assert.equal((await pending).length, 1)
   })
