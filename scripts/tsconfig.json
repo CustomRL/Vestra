@@ -1,0 +1,11 @@
+{
+  "//": "Tooling scripts are never published, so top-level await is fine here — the no-top-level-await rule applies to packages/*/src only.",
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": ".",
+    "module": "nodenext",
+    "types": ["node"]
+  },
+  "include": ["**/*.ts"]
+}

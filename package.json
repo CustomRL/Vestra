@@ -19,7 +19,7 @@
     "test": "node --experimental-strip-types --test \"tests/**/*.test.ts\" \"packages/*/test/**/*.test.ts\"",
     "test:coverage": "node --experimental-strip-types --experimental-test-coverage --test \"tests/**/*.test.ts\" \"packages/*/test/**/*.test.ts\"",
     "check:packaging": "turbo run check:packaging",
-    "check:drift": "node scripts/check-api-drift.ts",
+    "check:drift": "node --experimental-strip-types scripts/check-api-drift.ts",
     "changeset": "changeset",
     "release": "turbo run build && changeset publish"
   },
