@@ -22,8 +22,7 @@ export const TransportCompression = {
 /**
  * A transport compression mode.
  */
-export type TransportCompression =
-  (typeof TransportCompression)[keyof typeof TransportCompression]
+export type TransportCompression = (typeof TransportCompression)[keyof typeof TransportCompression]
 
 /**
  * Builds the gateway websocket URL for a given resume or identify.
@@ -32,10 +31,7 @@ export type TransportCompression =
  * @param compression - Transport compression to negotiate, or `null` for none.
  * @returns A fully qualified gateway URL including version and encoding.
  */
-export function buildGatewayUrl(
-  baseUrl: string,
-  compression: TransportCompression | null,
-): string {
+export function buildGatewayUrl(baseUrl: string, compression: TransportCompression | null): string {
   const url = new URL(baseUrl)
   url.searchParams.set('v', APIVersion)
   url.searchParams.set('encoding', 'json')
