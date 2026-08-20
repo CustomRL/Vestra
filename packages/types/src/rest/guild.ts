@@ -1,0 +1,126 @@
+import type { ISO8601Timestamp, Permissions, Snowflake } from '../globals.js'
+import type { APIBan, APIGuild } from '../payloads/guild.js'
+import type { APIGuildMember } from '../payloads/member.js'
+import type { APIRole } from '../payloads/role.js'
+
+/**
+ * `GET /guilds/{guild.id}`
+ */
+export interface RESTGetAPIGuildQuery {
+  /** Whether to include approximate member and presence counts. */
+  with_counts?: boolean
+}
+
+/** The result of `GET /guilds/{guild.id}`. */
+export type RESTGetAPIGuildResult = APIGuild
+
+/**
+ * `GET /guilds/{guild.id}/members`
+ */
+export interface RESTGetAPIGuildMembersQuery {
+  /** How many members to return, from 1 to 1000. Defaults to 1. */
+  limit?: number
+  /** The highest user ID from the previous page. */
+  after?: Snowflake
+}
+
+/** The result of `GET /guilds/{guild.id}/members`. */
+export type RESTGetAPIGuildMembersResult = APIGuildMember[]
+
+/** The result of `GET /guilds/{guild.id}/members/{user.id}`. */
+export type RESTGetAPIGuildMemberResult = APIGuildMember
+
+/**
+ * `PATCH /guilds/{guild.id}/members/{user.id}`
+ *
+ * @remarks
+ * Each field requires a different permission, so a partial update can fail wholesale on
+ * one field the bot cannot change. Send only what is actually being modified.
+ */
+export interface RESTPatchAPIGuildMemberJSONBody {
+  /** The member's new nickname. Requires `ManageNicknames`. */
+  nick?: string | null
+  /** The member's new roles. Requires `ManageRoles`. */
+  roles?: Snowflake[] | null
+  /** Whether the member is server-muted. Requires `MuteMembers`. */
+  mute?: boolean | null
+  /** Whether the member is server-deafened. Requires `DeafenMembers`. */
+  deaf?: boolean | null
+  /** The voice channel to move the member to. Requires `MoveMembers`. */
+  channel_id?: Snowflake | null
+  /**
+   * When the member's timeout expires, up to 28 days ahead.
+   *
+   * @remarks
+   * Requires `ModerateMembers`. Pass `null` to clear an active timeout.
+   */
+  communication_disabled_until?: ISO8601Timestamp | null
+  /** The member's new flags. */
+  flags?: number | null
+}
+
+/** The result of `PATCH /guilds/{guild.id}/members/{user.id}`. */
+export type RESTPatchAPIGuildMemberResult = APIGuildMember
+
+/**
+ * `PUT /guilds/{guild.id}/bans/{user.id}`
+ */
+export interface RESTPutAPIGuildBanJSONBody {
+  /**
+   * Seconds of the user's message history to delete, from 0 to 604800.
+   *
+   * @remarks
+   * Applies across every channel in the guild, and is irreversible.
+   */
+  delete_message_seconds?: number
+}
+
+/** The result of `GET /guilds/{guild.id}/bans/{user.id}`. */
+export type RESTGetAPIGuildBanResult = APIBan
+
+/**
+ * `GET /guilds/{guild.id}/bans`
+ */
+export interface RESTGetAPIGuildBansQuery {
+  /** How many bans to return, from 1 to 1000. Defaults to 1000. */
+  limit?: number
+  /** Return bans before this user ID. */
+  before?: Snowflake
+  /** Return bans after this user ID. */
+  after?: Snowflake
+}
+
+/** The result of `GET /guilds/{guild.id}/bans`. */
+export type RESTGetAPIGuildBansResult = APIBan[]
+
+/**
+ * `POST /guilds/{guild.id}/roles`
+ */
+export interface RESTPostAPIGuildRoleJSONBody {
+  /** The role's name. Defaults to "new role". */
+  name?: string
+  /** The role's permission bit set, as a decimal string. */
+  permissions?: Permissions
+  /** The role's colour as an integer representation of a hex code. */
+  color?: number
+  /** Whether members with this role are listed separately in the sidebar. */
+  hoist?: boolean
+  /** The role's icon, as a data URI. Requires the guild to have `ROLE_ICONS`. */
+  icon?: string | null
+  /** The role's unicode emoji. */
+  unicode_emoji?: string | null
+  /** Whether the role can be mentioned by anyone. */
+  mentionable?: boolean
+}
+
+/** `PATCH /guilds/{guild.id}/roles/{role.id}` */
+export type RESTPatchAPIGuildRoleJSONBody = RESTPostAPIGuildRoleJSONBody
+
+/** The result of `POST /guilds/{guild.id}/roles`. */
+export type RESTPostAPIGuildRoleResult = APIRole
+
+/** The result of `PATCH /guilds/{guild.id}/roles/{role.id}`. */
+export type RESTPatchAPIGuildRoleResult = APIRole
+
+/** The result of `GET /guilds/{guild.id}/roles`. */
+export type RESTGetAPIGuildRolesResult = APIRole[]
