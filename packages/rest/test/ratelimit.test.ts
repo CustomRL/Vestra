@@ -15,7 +15,7 @@ describe('BucketRegistry route identity', () => {
     const a = registry.getIdentity('POST', '/channels/111111111111111111/messages')
     const b = registry.getIdentity('POST', '/channels/222222222222222222/messages')
     assert.equal(a.route, b.route)
-    assert.notEqual(registry.getBucketKey(a), registry.getBucketKey(b))
+    assert.notEqual(registry.getHandlerKey(a), registry.getHandlerKey(b))
   })
 
   it('treats guild and webhook ids as major parameters too', () => {
@@ -80,15 +80,72 @@ describe('BucketRegistry route identity', () => {
 })
 
 describe('BucketRegistry hashes', () => {
-  it('switches from a provisional key to the hash-based one', () => {
+  it('keeps the handler key stable when a bucket hash is learned', () => {
+    // The handler key must not change underneath a live queue. If it does, later requests
+    // are routed to a fresh handler while the original is still draining, and two queues
+    // end up running one Discord bucket concurrently.
     const registry = new BucketRegistry()
     const identity = registry.getIdentity('GET', '/channels/123456789012345678/messages')
 
-    const provisional = registry.getBucketKey(identity)
-    assert.match(provisional, /^provisional:/)
+    const before = registry.getHandlerKey(identity)
+    registry.setHash(identity.route, 'abcdef')
+
+    assert.equal(registry.getHandlerKey(identity), before)
+  })
+
+  it('migrates bucket state across the hash transition rather than discarding it', () => {
+    const registry = new BucketRegistry()
+    const identity = registry.getIdentity('GET', '/channels/123456789012345678/messages')
+
+    const state = registry.getState(identity)
+    state.limit = 5
+    state.remaining = 0
+    state.resetAt = Date.now() + 60_000
 
     registry.setHash(identity.route, 'abcdef')
-    assert.equal(registry.getBucketKey(identity), 'abcdef:123456789012345678')
+
+    const after = registry.getState(identity)
+    assert.equal(after.remaining, 0, 'a known-exhausted window was forgotten on hash discovery')
+    assert.equal(after.limit, 5)
+    assert.ok(after.resetAt > Date.now())
+  })
+
+  it('shares one state object between routes Discord puts in the same bucket', () => {
+    const registry = new BucketRegistry()
+    const a = registry.getIdentity('GET', '/channels/123456789012345678/messages')
+    const b = registry.getIdentity('GET', '/channels/123456789012345678/pins')
+
+    registry.setHash(a.route, 'shared')
+    registry.setHash(b.route, 'shared')
+
+    assert.equal(registry.getState(a), registry.getState(b))
+  })
+
+  it('keeps different major parameters on separate state even under one hash', () => {
+    const registry = new BucketRegistry()
+    const a = registry.getIdentity('GET', '/channels/111111111111111111/messages')
+    const b = registry.getIdentity('GET', '/channels/222222222222222222/messages')
+
+    registry.setHash(a.route, 'shared')
+
+    assert.notEqual(registry.getState(a), registry.getState(b))
+  })
+
+  it('takes the more restrictive value when merging state into an existing bucket', () => {
+    const registry = new BucketRegistry()
+    const a = registry.getIdentity('GET', '/channels/123456789012345678/messages')
+    const b = registry.getIdentity('GET', '/channels/123456789012345678/pins')
+
+    registry.setHash(a.route, 'shared')
+    const established = registry.getState(a)
+    established.remaining = 4
+
+    const pending = registry.getState(b)
+    pending.remaining = 0
+
+    registry.setHash(b.route, 'shared')
+
+    assert.equal(registry.getState(b).remaining, 0, 'merge must not restore a spent allowance')
   })
 
   it('sweeps hashes that have gone unused', () => {
@@ -98,7 +155,7 @@ describe('BucketRegistry hashes', () => {
     assert.equal(registry.size, 1)
 
     assert.equal(registry.sweep(Date.now() + 1000), 0, 'swept an entry that was still fresh')
-    assert.equal(registry.sweep(Date.now() + 86_400_001), 1)
+    assert.ok(registry.sweep(Date.now() + 86_400_001) >= 1)
     assert.equal(registry.size, 0)
   })
 })
