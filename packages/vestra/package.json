@@ -1,0 +1,37 @@
+{
+  "name": "vestra",
+  "version": "0.0.0",
+  "description": "A lightweight, fully-typed Discord library for Node.js",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.15.0"
+  },
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "rm -rf dist *.tsbuildinfo",
+    "check:packaging": "publint --strict && attw --pack ."
+  },
+  "keywords": [
+    "discord",
+    "discord-api",
+    "bot",
+    "typescript"
+  ],
+  "dependencies": {
+    "@vestra/core": "workspace:^"
+  },
+  "devDependencies": {
+    "@types/node": "26.2.0"
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "name": "@vestra/core",
+  "version": "0.0.0",
+  "description": "Vestra client: structures, pluggable cache and typed events",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.15.0"
+  },
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "rm -rf dist *.tsbuildinfo",
+    "check:packaging": "publint --strict && attw --pack ."
+  },
+  "keywords": [
+    "discord",
+    "discord-api",
+    "bot",
+    "typescript"
+  ],
+  "dependencies": {
+    "@vestra/gateway": "workspace:^",
+    "@vestra/rest": "workspace:^",
+    "@vestra/types": "workspace:^"
+  },
+  "devDependencies": {
+    "@types/node": "26.2.0"
+  }
+}
