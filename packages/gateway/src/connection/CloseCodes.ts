@@ -133,6 +133,35 @@ export function classifyCloseCode(code: number | undefined): CloseCodeVerdict {
 }
 
 /**
+ * Decides what a close means, accounting for a close this shard asked for itself.
+ *
+ * @param deliberate - Why the shard closed its own socket, if it did.
+ * @param code - The close code reported by the event.
+ * @param wasClean - Whether a closing handshake completed.
+ * @returns The action to take.
+ *
+ * @remarks
+ * A shard cannot read back its own close code: the event reports what the *peer* sent, or
+ * 1006 when the socket simply died. Without consulting the recorded intent, a deliberate
+ * zombie termination is indistinguishable from a network drop.
+ */
+export function resolveCloseVerdict(
+  deliberate: string | null,
+  code: number,
+  wasClean: boolean,
+): CloseCodeVerdict {
+  if (deliberate !== null) {
+    return {
+      action: ShardCloseAction.Resume,
+      warn: false,
+      reason: `the shard closed this connection itself (${deliberate})`,
+    }
+  }
+  // 1006 with an unclean close means no code was ever received.
+  return classifyCloseCode(!wasClean && code === 1006 ? undefined : code)
+}
+
+/**
  * A message explaining a fatal close in terms of what the user must change.
  */
 function fatalExplanation(code: number): string {
