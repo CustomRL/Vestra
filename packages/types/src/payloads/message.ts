@@ -1,13 +1,26 @@
-import type { ISO8601Timestamp, Snowflake } from '../globals.js'
-import type { ChannelType } from '../enums/channel.js'
-import type { MessageReferenceType, MessageType } from '../enums/message.js'
-import type { InteractionType } from '../enums/interaction.js'
-import type { APIMessageComponent } from './component.js'
+import type { APIAttachment } from './attachment.js'
 import type { APIEmbed } from './embed.js'
-import type { APIPartialEmoji } from './emoji.js'
 import type { APIGuildMemberPartial } from './member.js'
+import type {
+  APIMessageApplication,
+  APIMessageInteraction,
+  APIMessageInteractionMetadata,
+  APIMessageResolvedData,
+} from './message-interaction.js'
+import type { APIMessageComponent } from './component.js'
+import type { APIMessagePurchaseNotification, APIRoleSubscriptionData } from './monetisation.js'
+import type { APIPoll } from './poll.js'
+import type { APIReaction } from './reaction.js'
+import type { APISticker, APIStickerItem } from './sticker.js'
 import type { APIThreadChannel } from './channel.js'
 import type { APIUser } from './user.js'
+import type { ChannelType } from '../enums/channel.js'
+import type { ISO8601Timestamp, Snowflake } from '../globals.js'
+import type { MessageActivityType, MessageReferenceType, MessageType } from '../enums/message.js'
+
+/**
+ * A message in a channel.
+ */
 
 /**
  * A message in a channel.
@@ -98,8 +111,73 @@ export interface APIMessage {
   components?: APIMessageComponent[]
   /** Approximate position of the message in a thread. */
   position?: number
-  /** The IDs of application integrations owning the resources in the message. */
+  /**
+   * The application's ID.
+   *
+   * @remarks
+   * Present on interaction responses and on messages sent through an
+   * application-owned webhook. Not to be confused with
+   * `interaction_metadata.authorizing_integration_owners`, which describes installation
+   * contexts rather than naming an application.
+   */
   application_id?: Snowflake
+  /**
+   * A Rich Presence activity attached to the message.
+   *
+   * @remarks
+   * Sent with the invite-to-play, spectate and listen-along cards a game integration
+   * produces. It describes an activity the reader can join, not the author's presence.
+   */
+  activity?: APIMessageActivity
+  /** The application a Rich Presence chat embed belongs to. */
+  application?: APIMessageApplication
+  /** The call this message started, in a DM or a group DM. */
+  call?: APIMessageCall
+  /**
+   * The interaction this message is a response to.
+   *
+   * @deprecated Use `interaction_metadata`, which also covers component and modal
+   * interactions. Discord still sends this field, so it is kept for reading old messages.
+   */
+  interaction?: APIMessageInteraction
+  /**
+   * The content of the message this one forwards.
+   *
+   * @remarks
+   * Present when `message_reference.type` is `MessageReferenceType.Forward`, alongside the
+   * `HAS_SNAPSHOT` message flag (`1 << 14`), which `MessageFlags` does not model yet.
+   * Nesting is limited to one level, so the snapshot of a forwarded message never carries
+   * snapshots of its own.
+   */
+  message_snapshots?: APIMessageSnapshot[]
+  /**
+   * The poll attached to the message.
+   *
+   * @remarks
+   * Omitted entirely — not sent as an empty object — for an application without the
+   * `MessageContent` privileged intent, in the same way `content` arrives empty.
+   */
+  poll?: APIPoll
+  /**
+   * What was bought, on a purchase notification message.
+   *
+   * @remarks
+   * Accompanies message type `44`, which `MessageType` does not model yet.
+   */
+  purchase_notification?: APIMessagePurchaseNotification
+  /** Objects referenced by the message's auto-populated select menus. */
+  resolved?: APIMessageResolvedData
+  /** The purchase or renewal behind a `MessageType.RoleSubscriptionPurchase` message. */
+  role_subscription_data?: APIRoleSubscriptionData
+  /** The stickers sent with the message, reduced to what is needed to render them. */
+  sticker_items?: APIStickerItem[]
+  /**
+   * The stickers sent with the message.
+   *
+   * @deprecated Use `sticker_items`. Discord kept this field for older messages and does
+   * not populate it on new ones.
+   */
+  stickers?: APISticker[]
 }
 
 /**
@@ -114,68 +192,6 @@ export interface APIChannelMention {
   type: ChannelType
   /** The channel's name. */
   name: string
-}
-
-/**
- * A file attached to a message.
- */
-export interface APIAttachment {
-  /** The attachment's ID. */
-  id: Snowflake
-  /** The name of the attached file. */
-  filename: string
-  /** The title of the file, shown in place of the filename when set. */
-  title?: string
-  /** A description of the file, used as alt text, up to 1024 characters. */
-  description?: string
-  /** The attachment's media type. */
-  content_type?: string
-  /** The file's size in bytes. */
-  size: number
-  /** The source URL of the file. */
-  url: string
-  /** A proxied URL of the file. */
-  proxy_url: string
-  /** The image height, for images. */
-  height?: number | null
-  /** The image width, for images. */
-  width?: number | null
-  /** Whether the attachment is a voice message recording. */
-  ephemeral?: boolean
-  /** The duration of a voice message, in seconds. */
-  duration_secs?: number
-  /** A base64 waveform summary of a voice message. */
-  waveform?: string
-  /** The attachment's flags. A bit set of `AttachmentFlags`. */
-  flags?: number
-}
-
-/**
- * A reaction on a message.
- */
-export interface APIReaction {
-  /** The number of times this emoji has been used. */
-  count: number
-  /** A breakdown of the count into normal and super reactions. */
-  count_details: APIReactionCountDetails
-  /** Whether the current user reacted with this emoji. */
-  me: boolean
-  /** Whether the current user super-reacted with this emoji. */
-  me_burst: boolean
-  /** The emoji, in its partial form. */
-  emoji: APIPartialEmoji
-  /** Hex colours used for the super-reaction animation. */
-  burst_colors: string[]
-}
-
-/**
- * How a reaction's count splits between normal and super reactions.
- */
-export interface APIReactionCountDetails {
-  /** The number of super reactions. */
-  burst: number
-  /** The number of normal reactions. */
-  normal: number
 }
 
 /**
@@ -201,19 +217,64 @@ export interface APIMessageReference {
 }
 
 /**
- * Metadata about the interaction that produced a message.
+ * A Rich Presence activity attached to a message.
+ *
+ * @remarks
+ * Only Discord's own Rich Presence integrations produce these; an application cannot send
+ * one on a normal message.
  */
-export interface APIMessageInteractionMetadata {
-  /** The interaction's ID. */
-  id: Snowflake
-  /** The interaction's type. */
-  type: InteractionType
-  /** The user who triggered the interaction. */
-  user: APIUser
-  /** The IDs of installation contexts the interaction was authorised for. */
-  authorizing_integration_owners: Record<string, Snowflake>
-  /** The ID of the original response message, for follow-ups. */
-  original_response_message_id?: Snowflake
-  /** The ID of the message containing the component that was interacted with. */
-  interacted_message_id?: Snowflake
+export interface APIMessageActivity {
+  /** What the activity invites the reader to do. */
+  type: MessageActivityType
+  /** The `party_id` carried by the Rich Presence event the activity came from. */
+  party_id?: string
+}
+
+/**
+ * A call in a DM or group DM.
+ */
+export interface APIMessageCall {
+  /** The IDs of the users that joined the call. */
+  participants: Snowflake[]
+  /**
+   * When the call ended.
+   *
+   * @remarks
+   * Absent while the call is still ringing or in progress, and `null` on a call that was
+   * never answered, so a running call cannot be detected by the key's presence alone.
+   */
+  ended_timestamp?: ISO8601Timestamp | null
+}
+
+/**
+ * The copied content of a forwarded message.
+ *
+ * @remarks
+ * A snapshot is taken when the forward is sent and is never updated afterwards: editing
+ * or deleting the original leaves the snapshot as it was.
+ */
+export interface APIMessageSnapshot {
+  /**
+   * The forwarded message, reduced to the fields Discord snapshots.
+   *
+   * @remarks
+   * There is no `id`, `author` or `channel_id` here, so the source cannot be identified
+   * from the snapshot alone — the enclosing message's `message_reference` carries that.
+   * Each field keeps the optionality it has on a full message.
+   */
+  message: Pick<
+    APIMessage,
+    | 'attachments'
+    | 'components'
+    | 'content'
+    | 'edited_timestamp'
+    | 'embeds'
+    | 'flags'
+    | 'mention_roles'
+    | 'mentions'
+    | 'sticker_items'
+    | 'stickers'
+    | 'timestamp'
+    | 'type'
+  >
 }

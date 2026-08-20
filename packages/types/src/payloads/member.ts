@@ -1,5 +1,5 @@
 import type { ISO8601Timestamp, Permissions, Snowflake } from '../globals.js'
-import type { APIAvatarDecorationData, APIUser } from './user.js'
+import type { APIAvatarDecorationData, APICollectibles, APIUser } from './user.js'
 
 /**
  * A user's membership of a guild.
@@ -59,6 +59,16 @@ export interface APIGuildMember {
   communication_disabled_until?: ISO8601Timestamp | null
   /** The member's avatar decoration. */
   avatar_decoration_data?: APIAvatarDecorationData | null
+  /**
+   * The member's collectibles.
+   *
+   * @remarks
+   * Omitted on most payloads and sent as `null` for members who own none, so both cases
+   * have to be handled. Discord uses the same object on the user resource and does not
+   * document whether a member's collectibles can differ from the underlying user's, so do
+   * not assume reading either one is equivalent.
+   */
+  collectibles?: APICollectibles | null
 }
 
 /**

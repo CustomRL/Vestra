@@ -1,5 +1,6 @@
 import type { ISO8601Timestamp } from '../globals.js'
 import type { EmbedType } from '../enums/message.js'
+import type { APIMessageComponent } from './component.js'
 
 /**
  * Rich content attached to a message.
@@ -43,6 +44,29 @@ export interface APIEmbed {
   author?: APIEmbedAuthor
   /** Up to 25 fields of additional information. */
   fields?: APIEmbedField[]
+  /**
+   * Components rendered inside the embed.
+   *
+   * @remarks
+   * Receive-only, and absent from Discord's embed reference table — it appears only in the
+   * published OpenAPI specification, which declares it as an array of Components v2
+   * container components (type 17). Those are not modelled yet (see `component.ts`), so
+   * this does not narrow to what actually arrives; read it as opaque rather than branching
+   * on it. It cannot be set when sending: the request-side embed shape has no such field.
+   */
+  components?: APIMessageComponent[]
+  /**
+   * The embed's flags, as a bit set.
+   *
+   * @remarks
+   * The only value Discord documents is `1 << 5`, marking the embed as the fallback shown
+   * for a reply to an activity card. Receive-only, and undocumented values do occur, so
+   * test individual bits rather than comparing the whole value.
+   *
+   * The reference table describes this as a plain optional integer while the OpenAPI
+   * specification declares it nullable; both an absent key and `null` have to be handled.
+   */
+  flags?: number | null
 }
 
 /**

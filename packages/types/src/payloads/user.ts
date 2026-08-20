@@ -62,6 +62,23 @@ export interface APIUser {
   public_flags?: number
   /** The user's avatar decoration. */
   avatar_decoration_data?: APIAvatarDecorationData | null
+  /**
+   * The cosmetic collectibles the user has equipped on their profile.
+   *
+   * @remarks
+   * Sent as `null` for a user with nothing equipped. Every cosmetic inside the object is
+   * itself optional, so a present `collectibles` can still be empty.
+   */
+  collectibles?: APICollectibles | null
+  /**
+   * The user's primary guild, which is what backs the server tag shown beside their name.
+   *
+   * @remarks
+   * Sent as `null` for a user who has not set one. Every field inside the object is
+   * optional and nullable, so a present `primary_guild` does not by itself mean there is a
+   * tag to render.
+   */
+  primary_guild?: APIUserPrimaryGuild | null
 }
 
 /**
@@ -72,6 +89,83 @@ export interface APIAvatarDecorationData {
   asset: string
   /** The ID of the SKU the decoration came from. */
   sku_id: Snowflake
+}
+
+/**
+ * The cosmetic collectibles equipped on a user's profile.
+ *
+ * @remarks
+ * Discord adds categories of collectible over time and each one is optional, so an absent
+ * key means "nothing equipped" rather than a malformed payload.
+ */
+export interface APICollectibles {
+  /** The user's equipped nameplate. */
+  nameplate?: APINameplate
+}
+
+/**
+ * A nameplate: the decorated background drawn behind a user's name in the member list.
+ */
+export interface APINameplate {
+  /** The ID of the SKU the nameplate came from. */
+  sku_id: Snowflake
+  /**
+   * The path to the nameplate asset.
+   *
+   * @remarks
+   * A path fragment, not a bare hash like `avatar` or `banner`, so it does not slot into
+   * the usual image routes.
+   */
+  asset: string
+  /**
+   * The nameplate's label.
+   *
+   * @remarks
+   * Documented by Discord as currently unused.
+   */
+  label: string
+  /**
+   * The nameplate's background colour, given as one of Discord's palette names.
+   *
+   * @remarks
+   * The palettes documented so far are `crimson`, `berry`, `sky`, `teal`, `forest`,
+   * `bubble_gum`, `violet`, `cobalt`, `clover`, `lemon` and `white`. This is typed as
+   * `string` rather than a union of those names because Discord adds palettes whenever it
+   * ships a nameplate collection, and a closed union would reject valid payloads.
+   */
+  palette: string
+}
+
+/**
+ * A user's primary guild — the server whose tag can be displayed beside their name.
+ *
+ * @remarks
+ * This is the feature previously called a clan, and the field was named `clan` before it
+ * was renamed. Discord documents all four fields as both optional and nullable, so read
+ * each one defensively. Changes arrive on `GUILD_MEMBER_UPDATE`.
+ */
+export interface APIUserPrimaryGuild {
+  /** The ID of the user's primary guild. */
+  identity_guild_id?: Snowflake | null
+  /**
+   * Whether the user is displaying their primary guild's server tag.
+   *
+   * @remarks
+   * `false` means the user removed the tag themselves; `null` means Discord cleared the
+   * identity for them, for example because the guild no longer supports tags. Only treat
+   * `true` as a reason to render the tag.
+   */
+  identity_enabled?: boolean | null
+  /** The text of the user's server tag. At most four characters. */
+  tag?: string | null
+  /**
+   * The server tag badge hash.
+   *
+   * @remarks
+   * The CDN route for it is keyed by guild rather than by user, so rendering the badge
+   * needs `identity_guild_id` as well as this hash.
+   */
+  badge?: string | null
 }
 
 /**

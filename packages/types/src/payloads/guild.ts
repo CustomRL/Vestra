@@ -10,6 +10,7 @@ import type {
 import type { APIChannelPartial } from './channel.js'
 import type { APIEmoji } from './emoji.js'
 import type { APIRole } from './role.js'
+import type { APISticker } from './sticker.js'
 import type { APIUser } from './user.js'
 
 /**
@@ -29,6 +30,14 @@ export interface APIGuild {
   /** The guild's discovery splash hash. Only present for discoverable guilds. */
   discovery_splash: string | null
   /**
+   * The hash of the guild's home header image, shown to new members on the server guide.
+   *
+   * @remarks
+   * Not listed in Discord's guild object table, but declared on every guild response in
+   * its OpenAPI specification. `null` when no home header has been uploaded.
+   */
+  home_header: string | null
+  /**
    * Whether the current user owns the guild.
    *
    * @remarks
@@ -40,6 +49,17 @@ export interface APIGuild {
   owner_id: Snowflake
   /** The current user's permissions in the guild, excluding channel overwrites. */
   permissions?: Permissions
+  /**
+   * The guild's voice region ID.
+   *
+   * @remarks
+   * Documented as both optional and nullable, so it may be missing as well as `null`,
+   * even though Discord's OpenAPI specification still declares it a required string.
+   *
+   * @deprecated Voice regions moved from the guild to the channel. Read `rtc_region` on
+   * the voice or stage channel instead.
+   */
+  region?: string | null
   /** The ID of the AFK voice channel. */
   afk_channel_id: Snowflake | null
   /** How long a member must be idle before being moved to the AFK channel, in seconds. */
@@ -58,6 +78,15 @@ export interface APIGuild {
   roles: APIRole[]
   /** The guild's custom emojis. */
   emojis: APIEmoji[]
+  /**
+   * The guild's custom stickers.
+   *
+   * @remarks
+   * Documented as optional, and sent on full guild payloads such as `GUILD_CREATE` and
+   * `GET /guilds/{id}`. An absent field means Discord did not send the list, which is not
+   * the same as the guild having no stickers.
+   */
+  stickers?: APISticker[]
   /**
    * The features the guild has enabled.
    *
@@ -103,12 +132,62 @@ export interface APIGuild {
   approximate_member_count?: number
   /** An approximate count of non-offline members, when requested with counts. */
   approximate_presence_count?: number
+  /**
+   * Whether the guild is considered NSFW.
+   *
+   * @deprecated Derived from `nsfw_level`, and `true` for both `Explicit` and
+   * `AgeRestricted`. Read `nsfw_level`, which tells the two apart.
+   */
+  nsfw: boolean
   /** The guild's NSFW classification. */
   nsfw_level: GuildNSFWLevel
   /** Whether the guild has the boost progress bar enabled. */
   premium_progress_bar_enabled: boolean
+  /**
+   * When the boost progress bar was last enabled by a user.
+   *
+   * @remarks
+   * Discord's OpenAPI specification does not list this among the required fields, and it
+   * is `null` on guilds where the bar has never been enabled, so both cases have to be
+   * handled. Not part of the documented guild object table.
+   */
+  premium_progress_bar_enabled_user_updated_at?: ISO8601Timestamp | null
   /** The channel receiving safety alerts from Discord. */
   safety_alerts_channel_id: Snowflake | null
+  /** The guild's safety incident actions, or `null` if none have ever been set. */
+  incidents_data: APIIncidentsData | null
+}
+
+/**
+ * The safety incident actions in force in a guild.
+ *
+ * @remarks
+ * Moderators pause invites or direct messages from the guild's safety settings, and
+ * Discord itself pauses them on detecting a raid or a wave of DM spam. Each timestamp is
+ * the moment that pause lifts, so a value in the past means the pause has already
+ * expired; `null` means that pause is not in force at all.
+ */
+export interface APIIncidentsData {
+  /** When invites to the guild are re-enabled. `null` if invites are not paused. */
+  invites_disabled_until: ISO8601Timestamp | null
+  /** When direct messages between members are re-enabled. `null` if they are not paused. */
+  dms_disabled_until: ISO8601Timestamp | null
+  /**
+   * When Discord detected DM spam originating from the guild.
+   *
+   * @remarks
+   * Documented as both optional and nullable, and absent from the incidents data schema
+   * in Discord's OpenAPI specification altogether, so it may be missing as well as
+   * `null`.
+   */
+  dm_spam_detected_at?: ISO8601Timestamp | null
+  /**
+   * When Discord detected a raid on the guild.
+   *
+   * @remarks
+   * Optional as well as nullable, on the same terms as `dm_spam_detected_at`.
+   */
+  raid_detected_at?: ISO8601Timestamp | null
 }
 
 /**
