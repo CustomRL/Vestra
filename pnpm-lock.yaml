@@ -23,6 +23,18 @@ importers:
       '@types/node':
         specifier: 26.2.0
         version: 26.2.0
+      '@vestra/core':
+        specifier: workspace:*
+        version: link:packages/core
+      '@vestra/gateway':
+        specifier: workspace:*
+        version: link:packages/gateway
+      '@vestra/rest':
+        specifier: workspace:*
+        version: link:packages/rest
+      '@vestra/types':
+        specifier: workspace:*
+        version: link:packages/types
       eslint:
         specifier: 10.8.1
         version: 10.8.1(supports-color@7.2.0)
@@ -47,6 +59,9 @@ importers:
       typescript-eslint:
         specifier: 8.67.0
         version: 8.67.0(eslint@10.8.1(supports-color@7.2.0))(supports-color@7.2.0)(typescript@6.0.3)
+      vestra:
+        specifier: workspace:*
+        version: link:packages/vestra
 
   packages/core:
     dependencies:
