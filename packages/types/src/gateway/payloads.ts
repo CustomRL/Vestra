@@ -124,8 +124,12 @@ export interface GatewayInvalidSession {
    * Whether the session may still be resumed.
    *
    * @remarks
-   * `false` means the session is gone and the shard must re-identify — after a delay of
-   * 1 to 5 seconds, or Discord will invalidate the new session too.
+   * `false` means the session is gone and the shard must identify afresh.
+   *
+   * Vestra waits a short randomised delay before re-identifying. That is library policy,
+   * not a documented protocol requirement: Discord's documentation states no delay here.
+   * The delay exists so that a fleet of shards invalidated together does not re-identify
+   * in lockstep.
    */
   d: boolean
 }
@@ -180,6 +184,14 @@ export interface GatewayIdentifyData {
   presence?: GatewayPresenceUpdateData
   /** The intents bit set for this connection. */
   intents: number
+  /**
+   * Optional protocol behaviours to opt into. A bit set of `GatewayCapabilityFlags`.
+   *
+   * @remarks
+   * Defaults to `0`. Opting in can change the shape of received payloads, so it is a
+   * parsing decision rather than a volume one.
+   */
+  capabilities?: number
 }
 
 /**
@@ -291,11 +303,69 @@ export interface GatewayVoiceStateUpdateData {
 }
 
 /**
+ * A request for a guild's members.
+ *
+ * @remarks
+ * Exactly one of `query` or `user_ids` may be sent, and `limit` is required alongside
+ * `query`. Requesting all members needs the `GuildMembers` privileged intent.
+ */
+export interface GatewayRequestGuildMembers {
+  /** Always {@link GatewayOpcodes.RequestGuildMembers}. */
+  op: typeof GatewayOpcodes.RequestGuildMembers
+  /** The request data. */
+  d: GatewayRequestGuildMembersData
+}
+
+/**
+ * The data of a request for guild members.
+ */
+export interface GatewayRequestGuildMembersData {
+  /** The guild to fetch members from. One guild per request. */
+  guild_id: Snowflake
+  /** A username prefix to match. An empty string matches every member. */
+  query?: string
+  /** How many members to return, from 0 to 100. `0` with an empty query returns all. */
+  limit?: number
+  /** Whether to include presences. Requires the `GuildPresences` intent. */
+  presences?: boolean
+  /** Specific users to fetch, up to 100. Mutually exclusive with `query`. */
+  user_ids?: Snowflake[]
+  /**
+   * A value echoed back on every resulting chunk, up to 32 bytes.
+   *
+   * @remarks
+   * The only way to correlate chunks with the request that produced them, which matters
+   * because chunks from concurrent requests interleave on one socket.
+   */
+  nonce?: string
+}
+
+/**
+ * A request for a guild's soundboard sounds.
+ */
+export interface GatewayRequestSoundboardSounds {
+  /** Always {@link GatewayOpcodes.RequestSoundboardSounds}. */
+  op: typeof GatewayOpcodes.RequestSoundboardSounds
+  /** The request data. */
+  d: GatewayRequestSoundboardSoundsData
+}
+
+/**
+ * The data of a request for soundboard sounds.
+ */
+export interface GatewayRequestSoundboardSoundsData {
+  /** The guilds to fetch sounds for. */
+  guild_ids: Snowflake[]
+}
+
+/**
  * Any payload a client can send to the gateway.
  */
 export type GatewaySendPayload =
   | GatewayHeartbeat
   | GatewayIdentify
   | GatewayPresenceUpdate
+  | GatewayRequestGuildMembers
+  | GatewayRequestSoundboardSounds
   | GatewayResume
   | GatewayVoiceStateUpdate

@@ -1,5 +1,5 @@
-import type { Snowflake } from '../globals.js'
-import type { APIChannel } from '../payloads/channel.js'
+import type { ISO8601Timestamp, Snowflake } from '../globals.js'
+import type { APIChannel, APIThreadChannel } from '../payloads/channel.js'
 import type { APIGuild, APIUnavailableGuild } from '../payloads/guild.js'
 import type { APIGuildMember, APIVoiceState } from '../payloads/member.js'
 import type { APIMessage } from '../payloads/message.js'
@@ -25,7 +25,7 @@ export interface GatewayDispatchEventMap {
   RESUMED: undefined
 
   /** A guild became available, or the bot joined one. */
-  GUILD_CREATE: APIGuild
+  GUILD_CREATE: GatewayGuildCreateDispatchData
   /** A guild was updated. */
   GUILD_UPDATE: APIGuild
   /** A guild became unavailable, or the bot was removed from one. */
@@ -67,6 +67,10 @@ export interface GatewayDispatchEventMap {
   VOICE_STATE_UPDATE: APIVoiceState
   /** A user started typing. */
   TYPING_START: GatewayTypingStartDispatchData
+  /** A page of members requested with opcode 8. */
+  GUILD_MEMBERS_CHUNK: GatewayGuildMembersChunkDispatchData
+  /** A gateway command was rejected for exceeding a rate limit. */
+  RATE_LIMITED: GatewayRateLimitedDispatchData
 }
 
 /**
@@ -75,6 +79,117 @@ export interface GatewayDispatchEventMap {
 export type GatewayDispatchData<Event extends string> = Event extends keyof GatewayDispatchEventMap
   ? GatewayDispatchEventMap[Event]
   : unknown
+
+/**
+ * A guild as delivered by `GUILD_CREATE`.
+ *
+ * @remarks
+ * Either a full guild, or an unavailable stub during an outage. Narrow before use:
+ *
+ * ```ts
+ * if ('unavailable' in data && data.unavailable === true) {
+ *   // outage; the guild is not gone
+ * }
+ * ```
+ *
+ * Distinguishing the two is the difference between dropping a guild from cache and
+ * waiting for it to come back, and it is what lets a client tell "startup finished" from
+ * "still streaming".
+ */
+export type GatewayGuildCreateDispatchData =
+  (APIGuild & GatewayGuildCreateExtraFields) | APIUnavailableGuild
+
+/**
+ * Fields present on a guild only when it arrives through `GUILD_CREATE`.
+ */
+export interface GatewayGuildCreateExtraFields {
+  /** When the current user joined the guild. */
+  joined_at: ISO8601Timestamp
+  /**
+   * Whether the guild is considered large.
+   *
+   * @remarks
+   * Large guilds omit offline members from `members`, which is the main lever on memory
+   * during startup. The threshold is `large_threshold` from the identify payload.
+   */
+  large: boolean
+  /** Present and `true` only while the guild is unavailable. */
+  unavailable?: boolean
+  /** The total member count, regardless of how many are included in `members`. */
+  member_count: number
+  /** Voice states of connected members, without their `guild_id`. */
+  voice_states: Omit<APIVoiceState, 'guild_id'>[]
+  /** Members of the guild, subject to `large` and the `GuildMembers` intent. */
+  members: APIGuildMember[]
+  /** The guild's channels. */
+  channels: APIChannel[]
+  /** Threads the current user can see. */
+  threads: APIThreadChannel[]
+  /**
+   * Presences of members, as partial presence updates.
+   *
+   * @remarks
+   * Typed loosely because presences are not modelled yet; `unknown` forces a consumer to
+   * narrow rather than trusting a shape this package cannot yet promise.
+   */
+  presences: unknown[]
+  /** Stage instances in the guild. Not modelled yet. */
+  stage_instances: unknown[]
+  /** Scheduled events in the guild. Not modelled yet. */
+  guild_scheduled_events: unknown[]
+  /** Soundboard sounds in the guild. Not modelled yet. */
+  soundboard_sounds: unknown[]
+}
+
+/**
+ * A page of members returned for a request sent with opcode 8.
+ */
+export interface GatewayGuildMembersChunkDispatchData {
+  /** The guild the members belong to. */
+  guild_id: Snowflake
+  /** Up to 1000 members. */
+  members: APIGuildMember[]
+  /** This chunk's index, from `0`. */
+  chunk_index: number
+  /**
+   * How many chunks the response has in total.
+   *
+   * @remarks
+   * A request is complete when `chunk_index === chunk_count - 1`, never when a running
+   * count of received chunks reaches `chunk_count` — chunks from concurrent requests
+   * interleave on one socket.
+   */
+  chunk_count: number
+  /** IDs from `user_ids` that matched no member. */
+  not_found?: Snowflake[]
+  /** Presences of the returned members, if requested. */
+  presences?: unknown[]
+  /** The `nonce` from the request, which is the only way to correlate chunks. */
+  nonce?: string
+}
+
+/**
+ * Notification that a gateway command was rejected for exceeding a rate limit.
+ */
+export interface GatewayRateLimitedDispatchData {
+  /** The opcode of the command that was rejected. */
+  opcode: number
+  /**
+   * How long to wait before retrying, in **seconds**.
+   *
+   * @remarks
+   * Seconds, and fractional. Treating it as milliseconds turns a 30 second backoff into
+   * 30 milliseconds and reproduces the limit immediately.
+   */
+  retry_after: number
+  /** Which request was rejected. */
+  meta: {
+    /** The guild the rejected request concerned. */
+    guild_id?: Snowflake
+    /** The `nonce` of the rejected request, for correlation. */
+    nonce?: string
+  }
+}
 
 /**
  * The initial state sent after identifying.
