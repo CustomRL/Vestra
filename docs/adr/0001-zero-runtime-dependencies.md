@@ -18,20 +18,20 @@ Node built-ins and globals only.
 
 Specifically:
 
-| Need | Historically | Vestra |
-| --- | --- | --- |
-| WebSocket | `ws` | global `WebSocket` (Node 22.4+) |
-| HTTP | `node-fetch`, `undici` | global `fetch` |
-| `zlib-stream` | `zlib-sync` (native) | `node:zlib` `createInflate` |
-| `zstd-stream` | `fzstd`, `zstd-napi` | `node:zlib` `createZstdDecompress` (Node 22.15+) |
-| Multipart uploads | `form-data` | global `FormData` / `Blob` |
-| ETF encoding | `erlpack` (native) | not supported; JSON only |
+| Need              | Historically           | Vestra                                           |
+| ----------------- | ---------------------- | ------------------------------------------------ |
+| WebSocket         | `ws`                   | global `WebSocket` (Node 22.4+)                  |
+| HTTP              | `node-fetch`, `undici` | global `fetch`                                   |
+| `zlib-stream`     | `zlib-sync` (native)   | `node:zlib` `createInflate`                      |
+| `zstd-stream`     | `fzstd`, `zstd-napi`   | `node:zlib` `createZstdDecompress` (Node 22.15+) |
+| Multipart uploads | `form-data`            | global `FormData` / `Blob`                       |
+| ETF encoding      | `erlpack` (native)     | not supported; JSON only                         |
 
 Native zstd in `node:zlib` is the reason the Node floor is **22.15.0**.
 
 Anything a consumer might reasonably want to swap — the socket, the inflator, the
 encoder, the cache, the session store — is defined as an interface with a native default,
-so `ws` or `erlpack` remain drop-in *choices* rather than imposed costs.
+so `ws` or `erlpack` remain drop-in _choices_ rather than imposed costs.
 
 ## Consequences
 

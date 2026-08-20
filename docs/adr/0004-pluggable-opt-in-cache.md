@@ -10,7 +10,7 @@ every guild by default will use gigabytes in a bot that only ever reads message 
 
 The opposite extreme — no cache at all — is smallest and most predictable, but loses the
 ergonomics that make Eris and Oceanic pleasant: `message.member.roles` has to resolve
-against *something*.
+against _something_.
 
 ## Decision
 
