@@ -1,0 +1,28 @@
+name: Feature request
+description: Propose an addition or change to the API
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the situation you hit, not the solution you have in mind.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed API
+      render: typescript
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What did you try instead?
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Constraints
+      description: See docs/adr for why these exist.
+      options:
+        - label: This can be built with no new runtime dependencies
+        - label: This does not require caching anything by default
