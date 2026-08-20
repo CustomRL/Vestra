@@ -83,7 +83,9 @@ describe('REST request building', () => {
       json(response, 200, [])
     })
     try {
-      await clientFor(mock).channels.getMessages('1', { limit: 50, before: undefined })
+      await clientFor(mock).get('/channels/1/messages', {
+        query: { limit: 50, before: undefined },
+      })
       assert.equal(mock.requests[0]?.url, '/v10/channels/1/messages?limit=50')
     } finally {
       await mock.close()
