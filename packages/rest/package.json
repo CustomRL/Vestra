@@ -20,7 +20,7 @@
   "scripts": {
     "build": "tsc --build",
     "clean": "rm -rf dist *.tsbuildinfo",
-    "check:packaging": "publint --strict && attw --pack ."
+    "check:packaging": "publint --strict && attw --pack . --profile esm-only"
   },
   "keywords": [
     "discord",
