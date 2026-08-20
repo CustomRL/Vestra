@@ -1,11 +1,9 @@
 {
+  "//": "Composite so `tsc --build` typechecks repo-level tests, noEmit because they are never published. Also what lets ESLint's project service resolve these files.",
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
     "noEmit": true,
-    "composite": false,
-    "declaration": false,
-    "declarationMap": false,
-    "sourceMap": false
+    "rootDir": "."
   },
   "include": ["**/*.ts"]
 }

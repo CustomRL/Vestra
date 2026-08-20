@@ -6,6 +6,8 @@
     { "path": "packages/rest" },
     { "path": "packages/gateway" },
     { "path": "packages/core" },
-    { "path": "packages/vestra" }
+    { "path": "packages/vestra" },
+    { "path": "packages/types/test" },
+    { "path": "tests" }
   ]
 }
