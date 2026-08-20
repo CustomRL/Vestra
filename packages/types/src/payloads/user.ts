@@ -1,5 +1,5 @@
 import type { Snowflake } from '../globals.js'
-import type { PremiumType, UserFlags } from '../enums/user.js'
+import type { PremiumType } from '../enums/user.js'
 
 /**
  * A Discord user.
@@ -48,12 +48,12 @@ export interface APIUser {
   verified?: boolean
   /** The account's email. Requires the `email` OAuth2 scope. */
   email?: string | null
-  /** The flags on the account. A bit set of {@link UserFlags}. */
+  /** The flags on the account. A bit set of `UserFlags`. */
   flags?: number
   /** The account's Nitro subscription tier. */
   premium_type?: PremiumType
   /**
-   * The public flags on the account. A bit set of {@link UserFlags}.
+   * The public flags on the account. A bit set of `UserFlags`.
    *
    * @remarks
    * This is the field present on users received from the gateway. `flags` is only
