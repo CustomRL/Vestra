@@ -14,6 +14,15 @@ export {
   type ShardOptions,
 } from './GatewayOptions.js'
 export { Shard } from './Shard.js'
+export {
+  SessionLimitError,
+  ShardManager,
+  type GatewayBotFetcher,
+  type ShardManagerEvents,
+  type ShardManagerOptions,
+} from './ShardManager.js'
+export { GuildReadyTracker, type GuildReadyTrackerOptions } from './ready/GuildReadyTracker.js'
+export { receivesGuildlessEvents, shardIdForGuild } from './util/ShardRouting.js'
 export type { ShardEvents } from './ShardEvents.js'
 export { ShardSession } from './ShardSession.js'
 export { ClosingIntent, ConnectIntent, FatalGatewayError, ShardState } from './ShardState.js'
