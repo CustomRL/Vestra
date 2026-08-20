@@ -2,7 +2,8 @@ import type { Snowflake } from '../globals.js'
 import type { APIChannel, APIOverwrite } from '../payloads/channel.js'
 import type { APIMessageComponent } from '../payloads/component.js'
 import type { APIEmbed } from '../payloads/embed.js'
-import type { APIAttachment, APIMessage, APIMessageReference } from '../payloads/message.js'
+import type { APIAttachment } from '../payloads/attachment.js'
+import type { APIMessage, APIMessageReference } from '../payloads/message.js'
 
 /**
  * Controls which mentions in a message actually ping.

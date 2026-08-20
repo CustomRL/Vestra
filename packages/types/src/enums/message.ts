@@ -72,6 +72,16 @@ export const MessageType = {
   StageTopic: 31,
   /** An application premium subscription was purchased. */
   GuildApplicationPremiumSubscription: 32,
+  /** Security actions were enabled after a suspected raid. */
+  GuildIncidentAlertModeEnabled: 36,
+  /** Security actions were disabled. */
+  GuildIncidentAlertModeDisabled: 37,
+  /** A raid was reported. */
+  GuildIncidentReportRaid: 38,
+  /** A reported raid was marked a false alarm. */
+  GuildIncidentReportFalseAlarm: 39,
+  /** A purchase was made. */
+  PurchaseNotification: 44,
   /** A poll finished. */
   PollResult: 46,
 } as const
@@ -107,6 +117,8 @@ export const MessageFlags = {
   SuppressNotifications: 1 << 12,
   /** The message is a voice message. */
   IsVoiceMessage: 1 << 13,
+  /** The message carries a snapshot of a forwarded message. */
+  HasSnapshot: 1 << 14,
   /**
    * The message uses the Components v2 layout system.
    *
@@ -122,6 +134,25 @@ export const MessageFlags = {
  * A message flag.
  */
 export type MessageFlags = (typeof MessageFlags)[keyof typeof MessageFlags]
+
+/**
+ * The kind of rich presence activity a message invites the reader to join.
+ */
+export const MessageActivityType = {
+  /** Join the sender's party. */
+  Join: 1,
+  /** Spectate the sender's game. */
+  Spectate: 2,
+  /** Listen along with the sender. */
+  Listen: 3,
+  /** Request to join the sender's party. */
+  JoinRequest: 5,
+} as const
+
+/**
+ * A message activity type.
+ */
+export type MessageActivityType = (typeof MessageActivityType)[keyof typeof MessageActivityType]
 
 /**
  * What a message reference points at.

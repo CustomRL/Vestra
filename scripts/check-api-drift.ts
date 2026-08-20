@@ -39,7 +39,30 @@ const MAPPINGS: { ours: string; theirs: string }[] = [
   { ours: 'APIThreadMetadata', theirs: 'ThreadMetadataResponse' },
   { ours: 'APIForumTag', theirs: 'ForumTagResponse' },
   { ours: 'APIVoiceState', theirs: 'VoiceStateResponse' },
+  { ours: 'APIPoll', theirs: 'PollResponse' },
+  { ours: 'APISticker', theirs: 'GuildStickerResponse' },
+  { ours: 'APIStickerItem', theirs: 'MessageStickerItemResponse' },
+  { ours: 'APIRoleColors', theirs: 'GuildRoleColorsResponse' },
+  { ours: 'APIIncidentsData', theirs: 'GuildIncidentsDataResponse' },
 ]
+
+/**
+ * Fields the specification declares that Vestra deliberately does not model.
+ *
+ * @remarks
+ * A report that is permanently non-empty trains everyone to ignore it, so a field is
+ * either modelled or recorded here with a reason. Removing an entry is how you decide to
+ * model it.
+ */
+const IGNORED: Record<string, Record<string, string>> = {
+  APIMessage: {
+    lobby_member:
+      'Lobbies are an unreleased SDK feature with no public documentation; the shape ' +
+      'would be guesswork and is not reachable by a bot token.',
+    shared_client_theme:
+      'Client themes are a first-party client feature, not part of the bot API surface.',
+  },
+}
 
 interface SpecSchema {
   properties?: Record<string, unknown>
@@ -121,8 +144,9 @@ function findDrift(
     }
 
     checked += 1
+    const ignored = IGNORED[mapping.ours] ?? {}
     const missing = Object.keys(theirSchema.properties)
-      .filter((field) => !ourFields.has(field))
+      .filter((field) => !ourFields.has(field) && !(field in ignored))
       .sort()
     if (missing.length > 0) drift.push({ ...mapping, missing })
   }
@@ -131,11 +155,16 @@ function findDrift(
 }
 
 function renderMarkdown(drift: Drift[], checked: number, version: string): string {
+  const ignoredCount = Object.values(IGNORED).reduce(
+    (sum, fields) => sum + Object.keys(fields).length,
+    0,
+  )
   const lines = [
     '## API typing drift',
     '',
     `Compared ${String(checked)} of ${String(MAPPINGS.length)} mapped types against Discord's`,
-    `OpenAPI specification (API version ${version}).`,
+    `OpenAPI specification (API version ${version}), ignoring ${String(ignoredCount)} fields`,
+    'recorded as deliberately unmodelled.',
     '',
   ]
 
