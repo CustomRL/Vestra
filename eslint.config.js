@@ -36,7 +36,30 @@ export default defineConfig([
 
       /* This library is almost entirely async queues, reconnect timers and
          rate-limit backoff. An unhandled promise here is a hung bot, not a warning. */
-      '@typescript-eslint/no-floating-promises': 'error',
+      '@typescript-eslint/no-floating-promises': [
+        'error',
+        {
+          // node:test's describe/it return promises by design and are meant to be
+          // called bare. Exempt those specific calls rather than turning the rule off
+          // in tests, where genuinely floating promises are just as much of a bug.
+          allowForKnownSafeCalls: [
+            {
+              from: 'package',
+              package: 'node:test',
+              name: [
+                'describe',
+                'it',
+                'test',
+                'suite',
+                'before',
+                'after',
+                'beforeEach',
+                'afterEach',
+              ],
+            },
+          ],
+        },
+      ],
       '@typescript-eslint/no-misused-promises': 'error',
       '@typescript-eslint/return-await': ['error', 'always'],
 
