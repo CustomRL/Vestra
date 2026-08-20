@@ -168,7 +168,9 @@ export class REST extends EventEmitter<RESTEvents> {
    */
   async raw(request: InternalRequest): Promise<Response> {
     const identity = this.#registry.getIdentity(request.method, request.path)
-    const bucketKey = this.#registry.getBucketKey(identity)
+    // Stable for the life of the route: deliberately not the bucket hash, which changes
+    // the moment Discord first reveals it and would strand this handler mid-queue.
+    const bucketKey = this.#registry.getHandlerKey(identity)
 
     let handler = this.#handlers.get(bucketKey)
     if (handler === undefined) {
@@ -207,10 +209,14 @@ export class REST extends EventEmitter<RESTEvents> {
       url.search = query.toString()
     }
 
-    const headers = new Headers({
-      'User-Agent': this.#options.userAgent,
-      ...request.headers,
-    })
+    // Built with set() rather than from an object literal: header names are
+    // case-insensitive, but object keys are not, so `{ 'User-Agent': a, 'user-agent': b }`
+    // survives as two entries and Headers joins them into one malformed value.
+    const headers = new Headers()
+    headers.set('User-Agent', this.#options.userAgent)
+    if (request.headers !== undefined) {
+      for (const [name, value] of Object.entries(request.headers)) headers.set(name, value)
+    }
 
     if (request.auth !== false) {
       if (this.#token === null) {
@@ -263,11 +269,35 @@ export class REST extends EventEmitter<RESTEvents> {
     const isJson = contentType.includes('application/json')
 
     if (response.ok) {
-      return isJson ? await response.json() : await response.arrayBuffer()
+      if (!isJson) return await response.arrayBuffer()
+      try {
+        return await response.json()
+      } catch (error) {
+        // A truncated or mislabelled body must not surface as a bare SyntaxError with no
+        // indication of which request produced it.
+        throw new HTTPError(
+          response.status,
+          response.statusText,
+          request.method,
+          request.path,
+          `response declared JSON but did not parse: ${String(error)}`,
+        )
+      }
     }
 
     if (isJson) {
-      const body: unknown = await response.json()
+      let body: unknown
+      try {
+        body = await response.json()
+      } catch {
+        throw new HTTPError(
+          response.status,
+          response.statusText,
+          request.method,
+          request.path,
+          await response.text().catch(() => undefined),
+        )
+      }
       if (DiscordAPIError.isErrorBody(body)) {
         throw new DiscordAPIError(body, response.status, request.method, request.path)
       }
