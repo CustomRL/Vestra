@@ -1,0 +1,34 @@
+{
+  "name": "@vestra/types",
+  "version": "0.0.0",
+  "description": "Zero-dependency TypeScript typings for the Discord API",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.15.0"
+  },
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "rm -rf dist *.tsbuildinfo",
+    "check:packaging": "publint --strict && attw --pack ."
+  },
+  "keywords": [
+    "discord",
+    "discord-api",
+    "bot",
+    "typescript"
+  ],
+  "devDependencies": {
+    "@types/node": "26.2.0"
+  }
+}
