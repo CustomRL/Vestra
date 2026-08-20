@@ -1,0 +1,40 @@
+{
+  "name": "vestra-monorepo",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "A lightweight, fully-typed Discord library for Node.js",
+  "packageManager": "pnpm@11.17.0",
+  "engines": {
+    "node": ">=22.15.0"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "clean": "turbo run clean && rm -rf node_modules/.cache",
+    "typecheck": "tsc --build --force",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "node --test --experimental-test-module-mocks \"tests/**/*.test.ts\" \"packages/*/test/**/*.test.ts\"",
+    "test:coverage": "node --test --experimental-test-coverage \"tests/**/*.test.ts\" \"packages/*/test/**/*.test.ts\"",
+    "check:packaging": "turbo run check:packaging",
+    "check:drift": "node scripts/check-api-drift.ts",
+    "changeset": "changeset",
+    "release": "turbo run build && changeset publish"
+  },
+  "devDependencies": {
+    "@arethetypeswrong/cli": "0.18.5",
+    "@changesets/cli": "3.0.1",
+    "@eslint/js": "10.0.1",
+    "@types/node": "26.2.0",
+    "eslint": "10.8.1",
+    "eslint-config-prettier": "10.1.8",
+    "eslint-plugin-tsdoc": "0.5.2",
+    "prettier": "3.9.6",
+    "publint": "0.3.24",
+    "turbo": "2.10.11",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.67.0"
+  }
+}

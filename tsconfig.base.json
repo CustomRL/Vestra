@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "compilerOptions": {
+    /* Output. Node 22.15+ is the floor, so we can emit modern syntax directly. */
+    "target": "es2023",
+    "lib": ["es2023"],
+
+    /* Node globals (URL, Buffer, timers) are declared explicitly rather than picked up
+       by ambient @types scanning, so a package can never silently rely on a global it
+       did not declare a dependency on. */
+    "types": ["node"],
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "moduleDetection": "force",
+
+    /* Every package is composite so `tsc --build` enforces the package graph:
+       importing across an undeclared reference is a compile error, not a review comment. */
+    "composite": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+
+    /* Strictness. All of it. This is a library; consumers inherit our mistakes. */
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "useUnknownInCatchVariables": true,
+
+    /* `erasableSyntaxOnly` bans `enum`, parameter properties and namespaces outright.
+       That is deliberate: it mechanically enforces the "enums are `as const` objects"
+       rule from the ADRs, and keeps our output strippable by Node's native type stripping. */
+    "erasableSyntaxOnly": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  }
+}

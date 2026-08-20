@@ -1,0 +1,11 @@
+{
+  "//": "Solution file. Builds nothing itself; `tsc --build` walks the references.",
+  "files": [],
+  "references": [
+    { "path": "packages/types" },
+    { "path": "packages/rest" },
+    { "path": "packages/gateway" },
+    { "path": "packages/core" },
+    { "path": "packages/vestra" }
+  ]
+}
