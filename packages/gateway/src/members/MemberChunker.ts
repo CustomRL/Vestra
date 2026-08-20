@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import {
+  GatewayIntentBits,
   GatewayOpcodes,
   type APIGuildMember,
   type GatewayGuildMembersChunkDispatchData,
@@ -71,6 +72,7 @@ interface Pending {
 export class MemberChunker {
   readonly #send: SendChunkRequest
   readonly #timers: Timers
+  readonly #intents: number | undefined
   readonly #pending = new Map<string, Pending>()
   /** When each guild may next be asked for all of its members. */
   readonly #allMembersGate = new Map<Snowflake, number>()
@@ -78,10 +80,50 @@ export class MemberChunker {
   /**
    * @param send - Sends the request payload.
    * @param timers - Timer sources.
+   * @param intents - The shard's intents, so requests that could never be answered are
+   *                  rejected before they are sent. Omitting it skips those checks.
    */
-  constructor(send: SendChunkRequest, timers: Timers) {
+  constructor(send: SendChunkRequest, timers: Timers, intents?: number) {
     this.#send = send
     this.#timers = timers
+    this.#intents = intents
+  }
+
+  /**
+   * Rejects a request the connection's intents cannot satisfy.
+   *
+   * @param wantsEveryone - Whether every member was asked for.
+   * @param presences - Whether presences were asked for.
+   *
+   * @remarks
+   * Discord does not answer these and does not say why: the request is dropped and the
+   * caller waits out the timeout, whose message can only guess at the cause. Checking the
+   * bit the shard identified with turns that into an immediate, accurate error.
+   *
+   * Enabling a privileged intent in the developer portal is only half of it — the identify
+   * payload still has to carry the bit — and that distinction is exactly what the silent
+   * drop hides.
+   */
+  #assertIntents(wantsEveryone: boolean, presences: boolean): void {
+    const intents = this.#intents
+    if (intents === undefined) return
+
+    if (wantsEveryone && (intents & GatewayIntentBits.GuildMembers) === 0) {
+      throw new Error(
+        'Requesting every member needs the GuildMembers intent, which this connection did ' +
+          'not identify with. Enabling it in the developer portal is not enough on its own: ' +
+          'the bit has to be in the intents passed to the shard. Without it Discord drops ' +
+          'the request silently.',
+      )
+    }
+
+    if (presences && (intents & GatewayIntentBits.GuildPresences) === 0) {
+      throw new Error(
+        'Requesting presences needs the GuildPresences intent, which this connection did ' +
+          'not identify with. Enabling it in the developer portal is not enough on its own: ' +
+          'the bit has to be in the intents passed to the shard.',
+      )
+    }
   }
 
   /** How many requests are awaiting chunks. */
@@ -105,6 +147,9 @@ export class MemberChunker {
     if ((options.userIds?.length ?? 0) > 100) {
       throw new RangeError('`userIds` accepts at most 100 ids per request.')
     }
+
+    // Before the per-guild gate, so an impossible request does not consume the allowance.
+    this.#assertIntents(wantsEveryone, options.presences ?? false)
 
     if (wantsEveryone) {
       // Discord limits the all-members form to one request per guild per bot every 30

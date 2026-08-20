@@ -1,23 +1,31 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import { MemberChunker, SystemTimers } from '@vestra/gateway'
-import { GatewayOpcodes, type GatewayRequestGuildMembersData } from '@vestra/types'
+import {
+  GatewayIntentBits,
+  GatewayOpcodes,
+  type GatewayRequestGuildMembersData,
+} from '@vestra/types'
 
 /** A member with only the fields these tests care about. */
 function member(id: string): never {
   return { user: { id } } as never
 }
 
-function chunker(): {
+function chunker(intents?: number): {
   chunker: MemberChunker
   sent: GatewayRequestGuildMembersData[]
 } {
   const sent: GatewayRequestGuildMembersData[] = []
   return {
-    chunker: new MemberChunker(async (data) => {
-      sent.push(data)
-      await Promise.resolve()
-    }, SystemTimers),
+    chunker: new MemberChunker(
+      async (data) => {
+        sent.push(data)
+        await Promise.resolve()
+      },
+      SystemTimers,
+      intents,
+    ),
     sent,
   }
 }
@@ -164,5 +172,71 @@ describe('member chunking', () => {
 
     await assert.rejects(pending, /the session ended/)
     assert.equal(c.pendingCount, 0)
+  })
+
+  it('rejects a request for every member without the GuildMembers intent', async () => {
+    const { chunker: c, sent } = chunker(GatewayIntentBits.Guilds)
+
+    await assert.rejects(
+      async () => await c.request({ guildId: '1' }),
+      /GuildMembers intent/,
+      'an unanswerable request should fail immediately rather than time out',
+    )
+    assert.equal(sent.length, 0, 'nothing should reach the socket')
+  })
+
+  it('allows a query without the GuildMembers intent', async () => {
+    const { chunker: c, sent } = chunker(GatewayIntentBits.Guilds)
+
+    // Querying by username prefix is not gated on the intent; only the all-members form is.
+    const pending = c.request({ guildId: '1', query: 'a', limit: 10 })
+    await Promise.resolve()
+    assert.equal(sent.length, 1)
+
+    // Settle it, or the pending timeout outlives the test and rejects into the run.
+    c.handleChunk({
+      guild_id: '1',
+      members: [member('a')],
+      chunk_index: 0,
+      chunk_count: 1,
+      nonce: sent[0]?.nonce,
+    })
+    assert.equal((await pending).length, 1)
+  })
+
+  it('rejects presences without the GuildPresences intent', async () => {
+    const { chunker: c, sent } = chunker(GatewayIntentBits.GuildMembers)
+
+    await assert.rejects(
+      async () => await c.request({ guildId: '1', presences: true }),
+      /GuildPresences intent/,
+    )
+    assert.equal(sent.length, 0)
+  })
+
+  it('does not spend the per-guild allowance on a rejected request', async () => {
+    const { chunker: c } = chunker(GatewayIntentBits.Guilds)
+
+    await assert.rejects(async () => await c.request({ guildId: '1' }), /GuildMembers intent/)
+    // The gate is 30s per guild. Had the rejected attempt consumed it, this second
+    // rejection would name the interval rather than the intent.
+    await assert.rejects(async () => await c.request({ guildId: '1' }), /GuildMembers intent/)
+  })
+
+  it('skips the intent checks when no intents were supplied', async () => {
+    const { chunker: c, sent } = chunker()
+
+    const pending = c.request({ guildId: '1' })
+    await Promise.resolve()
+    assert.equal(sent.length, 1, 'omitting intents should preserve the previous behaviour')
+
+    c.handleChunk({
+      guild_id: '1',
+      members: [member('a')],
+      chunk_index: 0,
+      chunk_count: 1,
+      nonce: sent[0]?.nonce,
+    })
+    assert.equal((await pending).length, 1)
   })
 })
