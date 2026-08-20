@@ -12,23 +12,23 @@ Everything below is tagged. Nothing is asserted from memory.
 
 **Verified locally by probe, Node v25.8.1** (`/tmp/probe.mjs`, `probe2.mjs`, `probe3.mjs`, `probe4.mjs`):
 
-| Claim | Result |
-|---|---|
-| `WebSocket.close(code)` accepted codes | 1000 ✅, 3000 ✅, 4000 ✅, 4999 ✅; 1001, 1006, 2000, 5000 all throw `DOMException: invalid code` |
-| `binaryType` default | `'blob'`; assigning `'nodebuffer'` silently leaves `'blob'`; `'arraybuffer'` honoured |
-| receive back-pressure | `['pause','resume','_socket','terminate']` — none present on the global WebSocket |
-| `inflate._processChunk(chunk, Z_SYNC_FLUSH)` | call 1 correct, call 2 throws `TypeError: Cannot read properties of null (reading 'writeSync')` |
-| shared async inflate, write-callback only, no `flush()` | correct payloads; every frame ended `00 00 ff ff` |
-| `maxOutputLength: 4096` on a **streaming** inflate | 200,000 bytes emitted, no error, `destroyed === false` — **does not guard streams** |
-| zstd-stream framing | magic `28 b5 2f fd` on message 1 only; `zstdDecompressSync` on message 2 throws `ZSTD_error_prefix_unknown`; shared streaming context decodes all three |
-| Node 22 zstd stability | `zlib.createZstdDecompress` is **Stability 1 — Experimental**, "Added in: v22.15.0" (nodejs.org v22 docs) |
-| `maxOutputLength` documented scope | "Limits output size when using **convenience methods**" (nodejs.org v22 docs) |
-| Node 22 globals page | lists `WebSocket` (v21.0.0/v20.10.0, Stable as of v22.4.0) and `MessageEvent` (v15.0.0). **`CloseEvent` and `ErrorEvent` are absent from the Node 22 globals documentation** — corroborates the researchers' "do not reference them by name" rule |
+| Claim                                                   | Result                                                                                                                                                                                                                                            |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `WebSocket.close(code)` accepted codes                  | 1000 ✅, 3000 ✅, 4000 ✅, 4999 ✅; 1001, 1006, 2000, 5000 all throw `DOMException: invalid code`                                                                                                                                                 |
+| `binaryType` default                                    | `'blob'`; assigning `'nodebuffer'` silently leaves `'blob'`; `'arraybuffer'` honoured                                                                                                                                                             |
+| receive back-pressure                                   | `['pause','resume','_socket','terminate']` — none present on the global WebSocket                                                                                                                                                                 |
+| `inflate._processChunk(chunk, Z_SYNC_FLUSH)`            | call 1 correct, call 2 throws `TypeError: Cannot read properties of null (reading 'writeSync')`                                                                                                                                                   |
+| shared async inflate, write-callback only, no `flush()` | correct payloads; every frame ended `00 00 ff ff`                                                                                                                                                                                                 |
+| `maxOutputLength: 4096` on a **streaming** inflate      | 200,000 bytes emitted, no error, `destroyed === false` — **does not guard streams**                                                                                                                                                               |
+| zstd-stream framing                                     | magic `28 b5 2f fd` on message 1 only; `zstdDecompressSync` on message 2 throws `ZSTD_error_prefix_unknown`; shared streaming context decodes all three                                                                                           |
+| Node 22 zstd stability                                  | `zlib.createZstdDecompress` is **Stability 1 — Experimental**, "Added in: v22.15.0" (nodejs.org v22 docs)                                                                                                                                         |
+| `maxOutputLength` documented scope                      | "Limits output size when using **convenience methods**" (nodejs.org v22 docs)                                                                                                                                                                     |
+| Node 22 globals page                                    | lists `WebSocket` (v21.0.0/v20.10.0, Stable as of v22.4.0) and `MessageEvent` (v15.0.0). **`CloseEvent` and `ErrorEvent` are absent from the Node 22 globals documentation** — corroborates the researchers' "do not reference them by name" rule |
 
 **Two researcher claims I could not confirm, corrected below:**
 
-1. *"Inflation must be a strict per-shard FIFO queue — never call `write()` for N+1 before N's callback has fired"* conflicts with another researcher's *"write every message immediately, do not await between writes."* I tested it: six frames written **synchronously with no awaiting**, including a 300,039-byte payload spanning many output chunks, harvesting the accumulator inside each write callback — all six reconstructed byte-exact and in order. The mechanism is that `Writable` will not enter `_transform` for N+1 until N's callback has fired, and all `'data'` for N is pushed before that callback. **Resolution: write immediately, never await between writes, harvest inside the write callback.** See §4.3.
-2. The claimed corruption from harvesting *outside* the callback **did not reproduce** (4/4 payloads exact, including a 200 KB one). The likely reason is that output for N+1 needs a threadpool round-trip, so the harvesting microtask always wins. I am not promoting this to "safe" — it depends on undocumented internals — but the spec must not cite a corruption that was not observed. It is listed in §8 as unproven, and the mandated pattern is the one with the stronger argument.
+1. _"Inflation must be a strict per-shard FIFO queue — never call `write()` for N+1 before N's callback has fired"_ conflicts with another researcher's _"write every message immediately, do not await between writes."_ I tested it: six frames written **synchronously with no awaiting**, including a 300,039-byte payload spanning many output chunks, harvesting the accumulator inside each write callback — all six reconstructed byte-exact and in order. The mechanism is that `Writable` will not enter `_transform` for N+1 until N's callback has fired, and all `'data'` for N is pushed before that callback. **Resolution: write immediately, never await between writes, harvest inside the write callback.** See §4.3.
+2. The claimed corruption from harvesting _outside_ the callback **did not reproduce** (4/4 payloads exact, including a 200 KB one). The likely reason is that output for N+1 needs a threadpool round-trip, so the harvesting microtask always wins. I am not promoting this to "safe" — it depends on undocumented internals — but the spec must not cite a corruption that was not observed. It is listed in §8 as unproven, and the mandated pattern is the one with the stronger argument.
 
 ---
 
@@ -36,15 +36,15 @@ Everything below is tagged. Nothing is asserted from memory.
 
 I re-read the repo files and confirm every gap. `@vestra/gateway` cannot be written cleanly without these; each requires a cast otherwise, which ADR 3's conventions forbid.
 
-| # | File | Change | Verified against |
-|---|---|---|---|
-| 1 | `enums/gateway.ts` | Add `RequestChannelInfo: 43` to `GatewayOpcodes` | opcode table: `43 \| Request Channel Info \| Send` |
-| 2 | `gateway/payloads.ts` | Add `GatewayRequestGuildMembers` (op 8) and `GatewayRequestSoundboardSounds` (op 31) to the `GatewaySendPayload` union — currently only Heartbeat/Identify/PresenceUpdate/Resume/VoiceStateUpdate | Send Events table |
-| 3 | `gateway/payloads.ts` | Add `capabilities?: number` to `GatewayIdentifyData`; add a `GatewayCapabilityFlags = { ChannelObfuscation: 1 << 15 }` const | Identify Structure now lists `capabilities?  integer  … Default 0` |
-| 4 | `enums/dispatch-events.ts` | Add `RateLimited: 'RATE_LIMITED'` (absent today) | `#### Rate Limited` under `### Rate Limits` |
-| 5 | `gateway/dispatch.ts` | Add `GUILD_MEMBERS_CHUNK: GatewayGuildMembersChunkDispatchData` and `RATE_LIMITED: GatewayRateLimitedDispatchData` to `GatewayDispatchEventMap` (the event *name* `GuildMembersChunk` exists; the data type does not) | Guild Members Chunk fields; Rate Limited fields |
-| 6 | `gateway/dispatch.ts` | Replace `GUILD_CREATE: APIGuild` with `GatewayGuildCreateDispatchData = (APIGuild & GuildCreateExtraFields) \| APIUnavailableGuild` | "The inner payload can be: An available Guild … An unavailable Guild" + the Extra Fields table (`joined_at`, `large`, `unavailable?`, `member_count`, `voice_states`, `members`, `channels`, `threads`, `presences`, `stage_instances`, `guild_scheduled_events`, `soundboard_sounds`) |
-| 7 | `gateway/payloads.ts` | Reword the `GatewayInvalidSession.d` TSDoc. It currently says re-identify happens "after a delay of 1 to 5 seconds, **or Discord will invalidate the new session too**". I grepped all three current doc files for `random`, `between 1 and 5`, `backoff`, `exponential`: the only `random` hit is the heartbeat jitter sentence. The claim is not in the docs. Reword as Vestra policy. | absence verified |
+| #   | File                       | Change                                                                                                                                                                                                                                                                                                                                                                                   | Verified against                                                                                                                                                                                                                                                                       |
+| --- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `enums/gateway.ts`         | Add `RequestChannelInfo: 43` to `GatewayOpcodes`                                                                                                                                                                                                                                                                                                                                         | opcode table: `43 \| Request Channel Info \| Send`                                                                                                                                                                                                                                     |
+| 2   | `gateway/payloads.ts`      | Add `GatewayRequestGuildMembers` (op 8) and `GatewayRequestSoundboardSounds` (op 31) to the `GatewaySendPayload` union — currently only Heartbeat/Identify/PresenceUpdate/Resume/VoiceStateUpdate                                                                                                                                                                                        | Send Events table                                                                                                                                                                                                                                                                      |
+| 3   | `gateway/payloads.ts`      | Add `capabilities?: number` to `GatewayIdentifyData`; add a `GatewayCapabilityFlags = { ChannelObfuscation: 1 << 15 }` const                                                                                                                                                                                                                                                             | Identify Structure now lists `capabilities?  integer  … Default 0`                                                                                                                                                                                                                     |
+| 4   | `enums/dispatch-events.ts` | Add `RateLimited: 'RATE_LIMITED'` (absent today)                                                                                                                                                                                                                                                                                                                                         | `#### Rate Limited` under `### Rate Limits`                                                                                                                                                                                                                                            |
+| 5   | `gateway/dispatch.ts`      | Add `GUILD_MEMBERS_CHUNK: GatewayGuildMembersChunkDispatchData` and `RATE_LIMITED: GatewayRateLimitedDispatchData` to `GatewayDispatchEventMap` (the event _name_ `GuildMembersChunk` exists; the data type does not)                                                                                                                                                                    | Guild Members Chunk fields; Rate Limited fields                                                                                                                                                                                                                                        |
+| 6   | `gateway/dispatch.ts`      | Replace `GUILD_CREATE: APIGuild` with `GatewayGuildCreateDispatchData = (APIGuild & GuildCreateExtraFields) \| APIUnavailableGuild`                                                                                                                                                                                                                                                      | "The inner payload can be: An available Guild … An unavailable Guild" + the Extra Fields table (`joined_at`, `large`, `unavailable?`, `member_count`, `voice_states`, `members`, `channels`, `threads`, `presences`, `stage_instances`, `guild_scheduled_events`, `soundboard_sounds`) |
+| 7   | `gateway/payloads.ts`      | Reword the `GatewayInvalidSession.d` TSDoc. It currently says re-identify happens "after a delay of 1 to 5 seconds, **or Discord will invalidate the new session too**". I grepped all three current doc files for `random`, `between 1 and 5`, `backoff`, `exponential`: the only `random` hit is the heartbeat jitter sentence. The claim is not in the docs. Reword as Vestra policy. | absence verified                                                                                                                                                                                                                                                                       |
 
 Item 6 is load-bearing for §4.9: the readiness tracker needs `unavailable` to distinguish "guild arrived" from "guild is in an outage".
 
@@ -101,14 +101,14 @@ packages/gateway/src/
 
 `Shard` holds **per-session** state and lives across reconnects. `ShardConnection` holds **per-connection** state and is constructed per socket and thrown away on close.
 
-| Owned by `Shard` (survives a reconnect) | Owned by `ShardConnection` (destroyed with the socket) |
-|---|---|
-| `sessionId`, `sequence`, `resumeUrl` | transport, compression context, encoding |
-| state, intent, backoff, resume-attempt count | `Heartbeater` (incl. `awaitingAck`) |
-| `SessionStore`, `IdentifyThrottler`, `MemberChunker` | `SendQueue` (the 120/60s budget is per connection) |
-| `GuildReadyTracker` | `epoch`, `disposed`, in-flight counters |
+| Owned by `Shard` (survives a reconnect)              | Owned by `ShardConnection` (destroyed with the socket) |
+| ---------------------------------------------------- | ------------------------------------------------------ |
+| `sessionId`, `sequence`, `resumeUrl`                 | transport, compression context, encoding               |
+| state, intent, backoff, resume-attempt count         | `Heartbeater` (incl. `awaitingAck`)                    |
+| `SessionStore`, `IdentifyThrottler`, `MemberChunker` | `SendQueue` (the 120/60s budget is per connection)     |
+| `GuildReadyTracker`                                  | `epoch`, `disposed`, in-flight counters                |
 
-This makes the researchers' "two-tier reset" rule structural rather than disciplinary: you *cannot* carry `awaitingAck = false` or a stale inflate context into a new socket, because the object holding them no longer exists. The failure modes it forecloses — an instant zombie declaration on the first beat of a new socket, and `incorrect header check` on a reused inflate context — are the two most common reconnect-loop bugs.
+This makes the researchers' "two-tier reset" rule structural rather than disciplinary: you _cannot_ carry `awaitingAck = false` or a stale inflate context into a new socket, because the object holding them no longer exists. The failure modes it forecloses — an instant zombie declaration on the first beat of a new socket, and `incorrect header check` on a reused inflate context — are the two most common reconnect-loop bugs.
 
 ---
 
@@ -135,11 +135,11 @@ export interface ShardOptions {
   token: string
   intents: number
   shard?: [shardId: number, shardCount: number]
-  compression?: CompressionMode          // 'none' | 'zlib-stream' | 'zstd-stream'
+  compression?: CompressionMode // 'none' | 'zlib-stream' | 'zstd-stream'
   encoding?: 'json'
-  largeThreshold?: number                // 50..250
+  largeThreshold?: number // 50..250
   presence?: GatewayPresenceUpdateData
-  capabilities?: number                  // escape hatch; never set by default
+  capabilities?: number // escape hatch; never set by default
   properties?: GatewayIdentifyProperties
 
   transport?: TransportFactory
@@ -149,23 +149,23 @@ export interface ShardOptions {
   identifyThrottler?: IdentifyThrottler
   timers?: Timers
 
-  handshakeTimeout?: number              // socket open → Hello
-  identifyRetryDelay?: [minMs, maxMs]    // LIBRARY POLICY, see §8-C1
+  handshakeTimeout?: number // socket open → Hello
+  identifyRetryDelay?: [minMs, maxMs] // LIBRARY POLICY, see §8-C1
   resumeBackoff?: BackoffPolicy
   identifyBackoff?: BackoffPolicy
   maxResumeAttempts?: number
   maxReconnectAttempts?: number
-  sendLimit?: number                     // 120
-  sendWindow?: number                    // 60_000
-  heartbeatReserve?: number              // slots withheld from user sends
-  sendTimeout?: number | null            // null = wait forever, mirrors rateLimitTimeout
+  sendLimit?: number // 120
+  sendWindow?: number // 60_000
+  heartbeatReserve?: number // slots withheld from user sends
+  sendTimeout?: number | null // null = wait forever, mirrors rateLimitTimeout
   maxInflightMessages?: number
   maxBufferedBytes?: number
-  maxPayloadBytes?: number               // decompression-bomb ceiling
-  chunkSize?: number                     // inflate output chunk size
+  maxPayloadBytes?: number // decompression-bomb ceiling
+  chunkSize?: number // inflate output chunk size
   guildReadyIdleTimeout?: number
   headers?: Record<string, string>
-  dispatcher?: unknown                   // passed through to undici; not typed here
+  dispatcher?: unknown // passed through to undici; not typed here
 }
 ```
 
@@ -173,23 +173,24 @@ Defaults, each annotated in TSDoc with whether it is **protocol** or **Vestra po
 
 ```ts
 export const DefaultShardOptions = {
-  compression: 'zlib-stream',            // see §4.4 — decision needs sign-off
+  compression: 'zlib-stream', // see §4.4 — decision needs sign-off
   encoding: 'json',
-  largeThreshold: 50,                    // Discord's documented default
-  handshakeTimeout: 30_000,              // policy
-  identifyRetryDelay: [1_000, 5_000],    // policy (removed from the docs)
-  resumeBackoff:   { baseMs: 500,  capMs: 30_000, maxAttempts: Infinity },
+  largeThreshold: 50, // Discord's documented default
+  handshakeTimeout: 30_000, // policy
+  identifyRetryDelay: [1_000, 5_000], // policy (removed from the docs)
+  resumeBackoff: { baseMs: 500, capMs: 30_000, maxAttempts: Infinity },
   identifyBackoff: { baseMs: 1_000, capMs: 60_000, maxAttempts: Infinity },
-  maxResumeAttempts: 2,                  // policy
+  maxResumeAttempts: 2, // policy
   maxReconnectAttempts: Infinity,
-  sendLimit: 120, sendWindow: 60_000,    // protocol
-  heartbeatReserve: 4,                   // policy, §8-C4
+  sendLimit: 120,
+  sendWindow: 60_000, // protocol
+  heartbeatReserve: 4, // policy, §8-C4
   sendTimeout: null,
-  maxInflightMessages: 256,              // policy
-  maxBufferedBytes: 8 * 1024 * 1024,     // policy
-  maxPayloadBytes: 8 * 1024 * 1024,      // policy, §8-C5
-  chunkSize: 64 * 1024,                  // policy; 16 KiB is Node's default
-  guildReadyIdleTimeout: 15_000,         // policy, §8-C3
+  maxInflightMessages: 256, // policy
+  maxBufferedBytes: 8 * 1024 * 1024, // policy
+  maxPayloadBytes: 8 * 1024 * 1024, // policy, §8-C5
+  chunkSize: 64 * 1024, // policy; 16 KiB is Node's default
+  guildReadyIdleTimeout: 15_000, // policy, §8-C3
 } as const
 ```
 
@@ -226,8 +227,7 @@ export interface Transport {
   readonly bufferedAmount: number
 }
 
-export type TransportFactory =
-  (listeners: TransportListeners, options: TransportInit) => Transport
+export type TransportFactory = (listeners: TransportListeners, options: TransportInit) => Transport
 ```
 
 `connect` is separate from construction so a scripted test transport survives a reconnect sequence and records the URL of each attempt in order.
@@ -266,8 +266,8 @@ export interface CompressionHooks {
 }
 
 export interface Compression {
-  readonly query: string | null    // 'zlib-stream' | 'zstd-stream' | null
-  push(chunk: Buffer): void        // never throws; errors go to hooks.onError
+  readonly query: string | null // 'zlib-stream' | 'zstd-stream' | null
+  push(chunk: Buffer): void // never throws; errors go to hooks.onError
   destroy(): void
 }
 ```
@@ -308,7 +308,7 @@ The borrow contract is how the spec satisfies two rules at once: Node slices out
 
 The case for zstd is real: Discord's own figures favour it, and the decoder is strictly simpler. The case against is that `zlib.createZstdDecompress` is **Stability 1 — Experimental** across the entire Node 22 LTS line (verified at v22.x docs today), it sits on the hot path of a library whose selling point is reliability, ADR 1 leaves no fallback implementation, and — decisively — the only round-trip evidence anyone has used **Node's compressor on both ends**. That proves Node is self-consistent; it does not prove interoperability with Discord's encoder, and the window-size question (§8-A6) is unresolved.
 
-Both codecs ship fully implemented behind the same interface. The default flips to `zstd-stream` when (a) a conformance test against captured live gateway traffic passes, and (b) node:zlib's zstd reaches Stability 2. Record it as ADR 7 either way; the Node floor of 22.15.0 stays justified because it buys the *option*, and the option is what ADR 1's pluggable-interface constraint exists to protect.
+Both codecs ship fully implemented behind the same interface. The default flips to `zstd-stream` when (a) a conformance test against captured live gateway traffic passes, and (b) node:zlib's zstd reaches Stability 2. Record it as ADR 7 either way; the Node floor of 22.15.0 stays justified because it buys the _option_, and the option is what ADR 1's pluggable-interface constraint exists to protect.
 
 ---
 
@@ -335,7 +335,7 @@ Responsibilities and rules:
 
 - Constructs transport, compression and `SendQueue`; wires `Heartbeater`.
 - Message path: `onMessage(data)` → `Buffer.from(ab)` (zero-copy) → `compression.push` → `onPayload(buf)` → `encoding.decode(buf)` → `shard.handleFrame(payload)`. Nothing is retained.
-- **Back-pressure**: maintain explicit counters — messages pushed but not yet delivered, and accumulated compressed bytes. Past `maxInflightMessages` or `maxBufferedBytes`, emit `backpressure` and `close(4000)`. Verified rationale: `write()`'s boolean return is useless because the high-water mark counts *compressed* bytes — four writes totalling ~960 bytes expanded to 800 KB and `write()` returned `true` every time. Closing is safe because a non-1000/1001 close leaves the session resumable.
+- **Back-pressure**: maintain explicit counters — messages pushed but not yet delivered, and accumulated compressed bytes. Past `maxInflightMessages` or `maxBufferedBytes`, emit `backpressure` and `close(4000)`. Verified rationale: `write()`'s boolean return is useless because the high-water mark counts _compressed_ bytes — four writes totalling ~960 bytes expanded to 800 KB and `write()` returned `true` every time. Closing is safe because a non-1000/1001 close leaves the session resumable.
 - **Decompression error** → `hooks.onError` → dispose the connection (the context is already dead and cannot be reset), reconnect with a fresh one, attempt RESUME once; if it recurs immediately, degrade to identify.
 - `dispose()` sets `disposed` first, then stops the heartbeater, destroys the compression context, and calls `transport.destroy()`.
 
@@ -347,8 +347,8 @@ Responsibilities and rules:
 export class Heartbeater {
   constructor(hooks: HeartbeaterHooks, timers: Timers)
   start(intervalMs: number): void
-  beatNow(): void            // op 1 received from Discord
-  ack(): void                // op 11 received
+  beatNow(): void // op 1 received from Discord
+  ack(): void // op 11 received
   stop(): void
   readonly latency: number
   readonly acked: boolean
@@ -357,11 +357,11 @@ export class Heartbeater {
 
 Rules, all verified verbatim:
 
-- **First beat only is jittered**: `timers.setTimeout(beat, intervalMs * timers.random())`. "Upon receiving the Hello event, your app should wait `heartbeat_interval * jitter` where `jitter` is any random value between 0 and 1, then send its first Heartbeat event. From that point until the connection is closed, your app must continually send Discord a heartbeat every `heartbeat_interval` milliseconds." Do **not** re-randomise per beat. Jitter is per *connection*, so a resume connection re-jitters its own first beat. Purpose, per the Info callout: preventing an influx of traffic when many clients reconnect at once.
+- **First beat only is jittered**: `timers.setTimeout(beat, intervalMs * timers.random())`. "Upon receiving the Hello event, your app should wait `heartbeat_interval * jitter` where `jitter` is any random value between 0 and 1, then send its first Heartbeat event. From that point until the connection is closed, your app must continually send Discord a heartbeat every `heartbeat_interval` milliseconds." Do **not** re-randomise per beat. Jitter is per _connection_, so a resume connection re-jitters its own first beat. Purpose, per the Info callout: preventing an influx of traffic when many clients reconnect at once.
 - **Payload**: `{ op: 1, d: <last non-null s> }`, `null` if none. "You need to cache the most recent non-null `s` value for heartbeats, and to pass when Resuming." Control frames (op 1/7/9/10/11) carry `s: null` and must never overwrite it.
 - **Zombie check fires at the moment the next beat is due.** If the previous beat is un-ACKed, do not send another and do not wait for a close — call `hooks.onZombie()`, which disposes the connection. "If a client does not receive a heartbeat ACK between its attempts at sending heartbeats, this may be due to a failed or 'zombied' connection. The client should immediately terminate the connection with any close code besides `1000` or `1001`, then reconnect and attempt to Resume."
 - **Zombie recovery uses `dispose()`, never `close()`.** A zombie is by definition a peer that has stopped responding, so the closing handshake never completes; the researchers observed `readyState` stuck at 2 (CLOSING) with no close event after 45 seconds, and there is no closing-handshake timeout in undici and no `terminate()` on the WHATWG interface. A shard that awaits the close event before reconnecting hangs forever. This is the single worst failure mode in the design and it is invisible against a well-behaved mock server — hence test scenario R7.
-- **`beatNow()`** on receiving op 1: "your app should immediately send back another Heartbeat event without waiting the remainder of the current interval." *Policy (docs silent, §8-A2):* a requested beat does **not** reset the periodic timer and shares the single `awaitingAck` flag, so a burst of requested beats can neither starve nor falsely trip the detector.
+- **`beatNow()`** on receiving op 1: "your app should immediately send back another Heartbeat event without waiting the remainder of the current interval." _Policy (docs silent, §8-A2):_ a requested beat does **not** reset the periodic timer and shares the single `awaitingAck` flag, so a burst of requested beats can neither starve nor falsely trip the detector.
 - **Heartbeat fire-time drift**: record `actual - scheduled` on every beat and emit `heartbeatDrift` past a threshold. A blocked event loop delays the heartbeat timer itself, Discord stops receiving beats and closes the connection, the bot reconnects, replays, and blocks again — the classic "dies under load" spiral. The fire-time delta is the only self-observable signal, because a blocked loop cannot run the code that would detect it in real time.
 - **Never await user dispatch handlers on this path.** The heartbeat timer must be independent of dispatch processing.
 - Secondary signal: sample `transport.bufferedAmount` at each beat; non-zero and not decreasing across two intervals means the send path is wedged — treat as zombied even if ACKs are somehow still arriving. (`bufferedAmount` is implemented; researcher-verified on Node 25, §8-B.)
@@ -386,7 +386,7 @@ Per connection. Enforces:
 export const ShardCloseAction = { Resume: 'resume', Identify: 'identify', Fatal: 'fatal' } as const
 export function classifyClose(code: number | undefined, wasClean: boolean): ShardCloseAction
 export const ClientCloseCodes = { Shutdown: 1000, Resumable: 4000 } as const
-export function assertSendableCloseCode(code: number): void   // 1000 or 3000..4999
+export function assertSendableCloseCode(code: number): void // 1000 or 3000..4999
 ```
 
 `Backoff` implements **full jitter**: `delay = random() * min(cap, base * 2 ** attempt)`. Full jitter rather than fixed or decorrelated is what actually decorrelates a fleet whose shards all disconnected in the same second.
@@ -403,8 +403,11 @@ Backoff itself is entirely undocumented — verified by grepping all three doc f
 
 ```ts
 export class GuildReadyTracker {
-  constructor(opts: { idleMs: number; enabled: boolean }, timers: Timers,
-              onComplete: (unresolved: string[]) => void)
+  constructor(
+    opts: { idleMs: number; enabled: boolean },
+    timers: Timers,
+    onComplete: (unresolved: string[]) => void,
+  )
   seed(ids: string[]): void
   resolve(id: string): void
   stop(): void
@@ -505,7 +508,7 @@ export class ShardManager extends EventEmitter<ShardManagerEvents> {
 - Honour `UnrecoverableGatewayCloseCodes`. On 4011 surface a fatal error naming the required shard count; retrying is an infinite loop that also spends a session start each attempt.
 - Read the daily budget and `max_concurrency` from the endpoint. Never hard-code 1000 or 1: above 150,000 guilds the limit becomes `max(2000, (guild_count / 1000) * 5)` and `max_concurrency` is increased.
 - **Shard 0 receives guild-less events** — DM, subscription and entitlement events. Document it; shards are not interchangeable and DM handling must never be round-robined.
-- **Zero-downtime resharding**: "`num_shards` does not relate to (or limit) the total number of potential sessions. It is only used for routing traffic… You can establish multiple sessions with the same `[shard_id, num_shards]`, or sessions with different `num_shards` values… to orchestrate 'zero-downtime' scaling." The design decision here is deliberately *not* to invent a `ShardGroup` class: a second `ShardManager` with a different `shardCount`, **sharing the same `IdentifyThrottler` and `REST` instance**, is the sanctioned cut-over path. `ShardManagerOptions` therefore takes `shardIds?: number[]` and `shardCount` independently, and the throttler is injectable. Costs nothing now; a manager that assumes `num_shards` is global state per token cannot express rolling resharding at all.
+- **Zero-downtime resharding**: "`num_shards` does not relate to (or limit) the total number of potential sessions. It is only used for routing traffic… You can establish multiple sessions with the same `[shard_id, num_shards]`, or sessions with different `num_shards` values… to orchestrate 'zero-downtime' scaling." The design decision here is deliberately _not_ to invent a `ShardGroup` class: a second `ShardManager` with a different `shardCount`, **sharing the same `IdentifyThrottler` and `REST` instance**, is the sanctioned cut-over path. `ShardManagerOptions` therefore takes `shardIds?: number[]` and `shardCount` independently, and the throttler is injectable. Costs nothing now; a manager that assumes `num_shards` is global state per token cannot express rolling resharding at all.
 - `shardIdForGuild`: `Number(BigInt(id) >> 22n) % count`. Called only by the manager when routing an outbound op 8 / op 3 / op 4 — never per inbound dispatch, which would violate the snowflakes-as-string hot-path rule. If it ever lands on a hot path it needs a benchmark under `scripts/bench/` first.
 
 ---
@@ -514,19 +517,19 @@ export class ShardManager extends EventEmitter<ShardManagerEvents> {
 
 ### States (`as const`)
 
-| State | Meaning | Connection object |
-|---|---|---|
-| `Idle` | constructed; `connect()` not called | none |
-| `Connecting` | `transport.connect(url)` issued, awaiting `open` | alive |
-| `Handshaking` | socket open, **no Hello yet**, nothing sent | alive |
-| `Identifying` | Hello received, heartbeats started, Identify sent, awaiting READY | alive |
-| `Resuming` | Hello received, heartbeats started, Resume sent | alive |
-| `Replaying` | first replayed dispatch arrived; awaiting `RESUMED` | alive |
-| `Ready` | READY or RESUMED received; live traffic | alive |
-| `Reconnecting` | connection disposed, backoff timer pending | none |
-| `Closing` | user shutdown in flight, close issued, abandon timer armed | alive |
-| `Closed` | stopped by the user; `connect()` may be called again | none |
-| `Fatal` | terminal; `connect()` throws | none |
+| State          | Meaning                                                           | Connection object |
+| -------------- | ----------------------------------------------------------------- | ----------------- |
+| `Idle`         | constructed; `connect()` not called                               | none              |
+| `Connecting`   | `transport.connect(url)` issued, awaiting `open`                  | alive             |
+| `Handshaking`  | socket open, **no Hello yet**, nothing sent                       | alive             |
+| `Identifying`  | Hello received, heartbeats started, Identify sent, awaiting READY | alive             |
+| `Resuming`     | Hello received, heartbeats started, Resume sent                   | alive             |
+| `Replaying`    | first replayed dispatch arrived; awaiting `RESUMED`               | alive             |
+| `Ready`        | READY or RESUMED received; live traffic                           | alive             |
+| `Reconnecting` | connection disposed, backoff timer pending                        | none              |
+| `Closing`      | user shutdown in flight, close issued, abandon timer armed        | alive             |
+| `Closed`       | stopped by the user; `connect()` may be called again              | none              |
+| `Fatal`        | terminal; `connect()` throws                                      | none              |
 
 The `identify | resume` branch is chosen **before connecting**, from `#intent`, which decides both the URL and what is sent after Hello:
 
@@ -538,51 +541,51 @@ url    = intent === 'resume' ? resumeUrl : baseUrl
 
 ### Transition table
 
-| # | From | Trigger | To | Actions |
-|---|---|---|---|---|
-| 1 | `Idle`/`Closed` | `connect()` | `Connecting` | resolve intent + URL, `epoch++`, new `ShardConnection` |
-| 2 | `Connecting` | transport `open` | `Handshaking` | **send nothing** |
-| 3 | `Connecting` | transport `error`, or close before open | `Reconnecting` \| `Fatal` | classify; if intent was resume, `resumeAttempts++` |
-| 4 | `Handshaking` | `handshakeTimeout` elapses | `Reconnecting` | dispose; policy, not protocol |
-| 5 | `Handshaking` | **op 10 Hello** | `Identifying` \| `Resuming` | `heartbeater.start(d.heartbeat_interval)` **first**; then if identify → `await throttler.waitForIdentify(id)` → send Identify; else send Resume |
-| 6 | `Identifying` | dispatch `t: "READY"` | `Ready` | store `session_id` + `resume_gateway_url`; `sessionStore.set`; seed `GuildReadyTracker`; `backoff.reset()`; `resumeAttempts = 0` |
-| 7 | `Identifying` | **op 9** (any `d`) | `Reconnecting` | intent = identify; clear session; `identifyRetryDelay` + backoff. Treat `d` as false during identify (§8-A10) — a `d:false` storm across shards is the signature of a broken identify throttle |
-| 8 | `Resuming` | any dispatch | `Replaying` | set replay flag; advance `s` normally |
-| 9 | `Resuming`/`Replaying` | dispatch `t: "RESUMED"` | `Ready` | clear replay flag; `backoff.reset()`; `resumeAttempts = 0` |
-| 10 | `Resuming`/`Replaying` | **op 9 `d:false`** | `Reconnecting` | clear `sessionId`/`sequence`/`resumeUrl`; `sessionStore.delete`; intent = identify; URL = **base**; `identifyRetryDelay` |
-| 11 | *any connected state* | **op 9 `d:true`** | `Reconnecting` | intent = resume; `close(4000)` then reconnect (§8-A3) |
-| 12 | *any state incl. `Handshaking`* | **op 7 Reconnect** | `Reconnecting` | `close(4000)`; intent = resume **if a session exists**, else identify + base URL |
-| 13 | `Ready` | **op 0 Dispatch** | `Ready` | `sequence = s` (non-null only); feed tracker/chunker; emit `dispatch` |
-| 14 | *any* | **op 1 received** | unchanged | `heartbeater.beatNow()` |
-| 15 | *any* | **op 11** | unchanged | `heartbeater.ack()` |
-| 16 | *any* | next beat due while un-ACKed | `Reconnecting` | **`connection.dispose()`** — not `close()`; intent = resume |
-| 17 | *any* | transport `close(code, reason, wasClean)` | `Reconnecting` \| `Fatal` | `classifyClose` (§6); on Identify → clear session; on Fatal → `FatalCloseError` |
-| 18 | *any* | back-pressure ceiling breached | `Reconnecting` | emit `backpressure`; `close(4000)`; intent = resume |
-| 19 | *any* | compression `error` | `Reconnecting` | dispose; intent = resume once, then identify if it recurs |
-| 20 | `Resuming`/`Replaying` | `resumeAttempts > maxResumeAttempts` | `Reconnecting` | intent = identify; URL = base |
-| 21 | `Reconnecting` | backoff timer fires | `Connecting` | — |
-| 22 | `Reconnecting` | `attempts > maxReconnectAttempts` | `Fatal` | — |
-| 23 | *any* | `destroy({ recover: 'none' })` | `Closing` | `close(1000)` — ends the session deliberately |
-| 24 | *any* | `destroy({ recover: 'resume' })` | `Closing` | `close(4000)` — keeps the session resumable; persist to `SessionStore` |
-| 25 | `Closing` | close event, or abandon timer | `Closed` | `dispose()`; reject pending sends and chunk requests |
+| #   | From                            | Trigger                                   | To                          | Actions                                                                                                                                                                                        |
+| --- | ------------------------------- | ----------------------------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `Idle`/`Closed`                 | `connect()`                               | `Connecting`                | resolve intent + URL, `epoch++`, new `ShardConnection`                                                                                                                                         |
+| 2   | `Connecting`                    | transport `open`                          | `Handshaking`               | **send nothing**                                                                                                                                                                               |
+| 3   | `Connecting`                    | transport `error`, or close before open   | `Reconnecting` \| `Fatal`   | classify; if intent was resume, `resumeAttempts++`                                                                                                                                             |
+| 4   | `Handshaking`                   | `handshakeTimeout` elapses                | `Reconnecting`              | dispose; policy, not protocol                                                                                                                                                                  |
+| 5   | `Handshaking`                   | **op 10 Hello**                           | `Identifying` \| `Resuming` | `heartbeater.start(d.heartbeat_interval)` **first**; then if identify → `await throttler.waitForIdentify(id)` → send Identify; else send Resume                                                |
+| 6   | `Identifying`                   | dispatch `t: "READY"`                     | `Ready`                     | store `session_id` + `resume_gateway_url`; `sessionStore.set`; seed `GuildReadyTracker`; `backoff.reset()`; `resumeAttempts = 0`                                                               |
+| 7   | `Identifying`                   | **op 9** (any `d`)                        | `Reconnecting`              | intent = identify; clear session; `identifyRetryDelay` + backoff. Treat `d` as false during identify (§8-A10) — a `d:false` storm across shards is the signature of a broken identify throttle |
+| 8   | `Resuming`                      | any dispatch                              | `Replaying`                 | set replay flag; advance `s` normally                                                                                                                                                          |
+| 9   | `Resuming`/`Replaying`          | dispatch `t: "RESUMED"`                   | `Ready`                     | clear replay flag; `backoff.reset()`; `resumeAttempts = 0`                                                                                                                                     |
+| 10  | `Resuming`/`Replaying`          | **op 9 `d:false`**                        | `Reconnecting`              | clear `sessionId`/`sequence`/`resumeUrl`; `sessionStore.delete`; intent = identify; URL = **base**; `identifyRetryDelay`                                                                       |
+| 11  | _any connected state_           | **op 9 `d:true`**                         | `Reconnecting`              | intent = resume; `close(4000)` then reconnect (§8-A3)                                                                                                                                          |
+| 12  | _any state incl. `Handshaking`_ | **op 7 Reconnect**                        | `Reconnecting`              | `close(4000)`; intent = resume **if a session exists**, else identify + base URL                                                                                                               |
+| 13  | `Ready`                         | **op 0 Dispatch**                         | `Ready`                     | `sequence = s` (non-null only); feed tracker/chunker; emit `dispatch`                                                                                                                          |
+| 14  | _any_                           | **op 1 received**                         | unchanged                   | `heartbeater.beatNow()`                                                                                                                                                                        |
+| 15  | _any_                           | **op 11**                                 | unchanged                   | `heartbeater.ack()`                                                                                                                                                                            |
+| 16  | _any_                           | next beat due while un-ACKed              | `Reconnecting`              | **`connection.dispose()`** — not `close()`; intent = resume                                                                                                                                    |
+| 17  | _any_                           | transport `close(code, reason, wasClean)` | `Reconnecting` \| `Fatal`   | `classifyClose` (§6); on Identify → clear session; on Fatal → `FatalCloseError`                                                                                                                |
+| 18  | _any_                           | back-pressure ceiling breached            | `Reconnecting`              | emit `backpressure`; `close(4000)`; intent = resume                                                                                                                                            |
+| 19  | _any_                           | compression `error`                       | `Reconnecting`              | dispose; intent = resume once, then identify if it recurs                                                                                                                                      |
+| 20  | `Resuming`/`Replaying`          | `resumeAttempts > maxResumeAttempts`      | `Reconnecting`              | intent = identify; URL = base                                                                                                                                                                  |
+| 21  | `Reconnecting`                  | backoff timer fires                       | `Connecting`                | —                                                                                                                                                                                              |
+| 22  | `Reconnecting`                  | `attempts > maxReconnectAttempts`         | `Fatal`                     | —                                                                                                                                                                                              |
+| 23  | _any_                           | `destroy({ recover: 'none' })`            | `Closing`                   | `close(1000)` — ends the session deliberately                                                                                                                                                  |
+| 24  | _any_                           | `destroy({ recover: 'resume' })`          | `Closing`                   | `close(4000)` — keeps the session resumable; persist to `SessionStore`                                                                                                                         |
+| 25  | `Closing`                       | close event, or abandon timer             | `Closed`                    | `dispose()`; reject pending sends and chunk requests                                                                                                                                           |
 
 **Rules the table encodes that implementations routinely get wrong:**
 
-- **Row 5 order.** Heartbeating starts *before* Identify, and Identify is **not** gated on the first (jittered) beat having fired. "After the connection is open and your app is sending heartbeats, you should send an Identify (opcode `2`) event." Blocking Identify on the jittered beat would delay login by up to a full interval (~41 s), which presents as a hung startup.
+- **Row 5 order.** Heartbeating starts _before_ Identify, and Identify is **not** gated on the first (jittered) beat having fired. "After the connection is open and your app is sending heartbeats, you should send an Identify (opcode `2`) event." Blocking Identify on the jittered beat would delay login by up to a full interval (~41 s), which presents as a hung startup.
 - **Row 12 reachability.** The op 7 handler must sit in the frame dispatcher, reachable from every state including `Handshaking`. "This can occur at any point in the gateway connection lifecycle, even before/in place of receiving a Hello event." And close yourself rather than waiting: "A few seconds after the reconnect event is dispatched, the connection may be closed by the server" — waiting wastes the grace window and risks the close arriving as 1006 mid-flight.
 - **Row 12, no session.** Op 7 before READY means there is nothing to resume; fall back to a fresh Identify against the cached base URL.
 - **Row 16.** `dispose()`, never `close()`.
 - **Row 13.** Only op 0 advances `s`. Letting a control frame's `s: null` clobber it turns a resumable session into a 4007 on the next resume.
 - **Rows 6/9.** Backoff resets on READY/RESUMED only.
-- **Row 20.** The resume path is bounded: "If you *cannot* reconnect **or the reconnect fails**, you should open a new connection using the URL from the initial call to Get Gateway or Get Gateway Bot." `resume_gateway_url` points at one node; if that node is what died, retrying it forever is a loop against a host that will never answer.
+- **Row 20.** The resume path is bounded: "If you _cannot_ reconnect **or the reconnect fails**, you should open a new connection using the URL from the initial call to Get Gateway or Get Gateway Bot." `resume_gateway_url` points at one node; if that node is what died, retrying it forever is a loop against a host that will never answer.
 - **Rows 23/24.** "When you close the connection to the gateway with close code `1000` or `1001`, your session will be invalidated and your bot will appear offline. If you simply close the TCP connection or use a different close code, the session will remain active and timeout after a few minutes." A reconnect implemented as `close(1000); connect()` silently converts every cheap resume into a full identify. And 1001 is not sendable at all from this API.
-- **A shard cannot read back its own close code.** The close event reports what the *peer* sent, or 1006. Record `#closingIntent: 'zombie' | 'user' | 'resume' | 'backpressure' | null` **before** calling close/dispose and consult it in the close handler. Logic keyed purely off `event.code` misclassifies a deliberate zombie termination as a network drop and a deliberate shutdown as a reconnectable failure.
+- **A shard cannot read back its own close code.** The close event reports what the _peer_ sent, or 1006. Record `#closingIntent: 'zombie' | 'user' | 'resume' | 'backpressure' | null` **before** calling close/dispose and consult it in the close handler. Logic keyed purely off `event.code` misclassifies a deliberate zombie termination as a network drop and a deliberate shutdown as a reconnectable failure.
 
 ### Emitted events
 
 `stateChange(from, to)` · `hello(interval)` · `ready(data)` · `resumed()` · `dispatch(payload, replayed)` · `guildsReady(unresolved)` · `closed(code, reason, wasClean, action)` · `zombie()` · `backpressure(inflight, bytes)` · `heartbeatDrift(ms)` · `rateLimited(data)` · `error(err)`
 
-**Ordering guarantee to publish:** dispatch payloads are handed to handlers in gateway sequence order, exactly once per connection, and the library does not await handler return values. Do **not** guarantee ordered handler *completion* — offer an opt-in serial mode implemented as an explicit queue, never by awaiting in the receive path. Awaiting async handlers puts every user handler on the critical path between the socket and the heartbeat, converting one slow handler into a zombie reconnect.
+**Ordering guarantee to publish:** dispatch payloads are handed to handlers in gateway sequence order, exactly once per connection, and the library does not await handler return values. Do **not** guarantee ordered handler _completion_ — offer an opt-in serial mode implemented as an explicit queue, never by awaiting in the receive path. Awaiting async handlers puts every user handler on the critical path between the socket and the heartbeat, converting one slow handler into a zombie reconnect.
 
 ---
 
@@ -590,26 +593,26 @@ url    = intent === 'resume' ? resumeUrl : baseUrl
 
 Discord's `Reconnect` column is quoted verbatim from the close-code table I fetched. The Vestra action column is the library's mapping.
 
-| Code | Description | Discord `Reconnect` | **Vestra action** | Notes |
-|---|---|---|---|---|
-| **1006 / no code** | abnormal termination | — | **resume** | Documented resume trigger #3: "It's disconnected but doesn't receive *any* close code." Every abnormal termination — TCP RST, FIN without a close frame, non-101 handshake, connection refused — collapses to `1006 / "" / wasClean:false`. Do not try to tell them apart from the event; use context the shard tracks itself. |
-| **4000** Unknown error | "Try reconnecting?" | true | **resume** | |
-| **4001** Unknown opcode | invalid opcode/payload | true | **resume** + loud warning | client-side bug |
-| **4002** Decode error | invalid payload | true | **resume** + loud warning | usually the 4096-byte ceiling; `SendQueue` should have caught it |
-| **4003** Not authenticated | "payload prior to identifying, **or this session has been invalidated**" | true | **re-identify** *(policy)* | genuinely ambiguous — §8-A4. Surface loudly; a resume-once-then-degrade policy is also defensible |
-| **4004** Authentication failed | bad token | **false** | **fatal** | |
-| **4005** Already authenticated | >1 identify | true | **resume** + loud warning | state-machine bug |
-| **4007** Invalid `seq` | "Reconnect and start a new session" | true | **re-identify** | clear session first |
-| **4008** Rate limited | "sending payloads too quickly" | true | **resume**, `backoff.startAtCap()` | the cause is you; treating it as fatal kills a shard that only needed to back off |
-| **4009** Session timed out | "Reconnect and start a new one" | true | **re-identify** | clear session first |
-| **4010** Invalid shard | | **false** | **fatal** | large-bot sharding: count must be a multiple of the assigned number |
-| **4011** Sharding required | >2500 guilds | **false** | **fatal** | error names the required shard count |
-| **4012** Invalid API version | | **false** | **fatal** | |
-| **4013** Invalid intent(s) | bad bitfield | **false** | **fatal** | |
-| **4014** Disallowed intent(s) | not enabled/approved | **false** | **fatal** | retrying presents as a mysterious outage instead of "enable MessageContent" |
-| **1000 / 1001 received from Discord** | — | — | **re-identify** *(policy)* | undocumented direction — §8-A5 |
-| **1012, 1013, other proxy/LB codes** | — | — | **resume** | default: resume-and-degrade |
-| **any other unknown code** | — | — | **resume** | |
+| Code                                  | Description                                                              | Discord `Reconnect` | **Vestra action**                  | Notes                                                                                                                                                                                                                                                                                                                          |
+| ------------------------------------- | ------------------------------------------------------------------------ | ------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **1006 / no code**                    | abnormal termination                                                     | —                   | **resume**                         | Documented resume trigger #3: "It's disconnected but doesn't receive _any_ close code." Every abnormal termination — TCP RST, FIN without a close frame, non-101 handshake, connection refused — collapses to `1006 / "" / wasClean:false`. Do not try to tell them apart from the event; use context the shard tracks itself. |
+| **4000** Unknown error                | "Try reconnecting?"                                                      | true                | **resume**                         |                                                                                                                                                                                                                                                                                                                                |
+| **4001** Unknown opcode               | invalid opcode/payload                                                   | true                | **resume** + loud warning          | client-side bug                                                                                                                                                                                                                                                                                                                |
+| **4002** Decode error                 | invalid payload                                                          | true                | **resume** + loud warning          | usually the 4096-byte ceiling; `SendQueue` should have caught it                                                                                                                                                                                                                                                               |
+| **4003** Not authenticated            | "payload prior to identifying, **or this session has been invalidated**" | true                | **re-identify** _(policy)_         | genuinely ambiguous — §8-A4. Surface loudly; a resume-once-then-degrade policy is also defensible                                                                                                                                                                                                                              |
+| **4004** Authentication failed        | bad token                                                                | **false**           | **fatal**                          |                                                                                                                                                                                                                                                                                                                                |
+| **4005** Already authenticated        | >1 identify                                                              | true                | **resume** + loud warning          | state-machine bug                                                                                                                                                                                                                                                                                                              |
+| **4007** Invalid `seq`                | "Reconnect and start a new session"                                      | true                | **re-identify**                    | clear session first                                                                                                                                                                                                                                                                                                            |
+| **4008** Rate limited                 | "sending payloads too quickly"                                           | true                | **resume**, `backoff.startAtCap()` | the cause is you; treating it as fatal kills a shard that only needed to back off                                                                                                                                                                                                                                              |
+| **4009** Session timed out            | "Reconnect and start a new one"                                          | true                | **re-identify**                    | clear session first                                                                                                                                                                                                                                                                                                            |
+| **4010** Invalid shard                |                                                                          | **false**           | **fatal**                          | large-bot sharding: count must be a multiple of the assigned number                                                                                                                                                                                                                                                            |
+| **4011** Sharding required            | >2500 guilds                                                             | **false**           | **fatal**                          | error names the required shard count                                                                                                                                                                                                                                                                                           |
+| **4012** Invalid API version          |                                                                          | **false**           | **fatal**                          |                                                                                                                                                                                                                                                                                                                                |
+| **4013** Invalid intent(s)            | bad bitfield                                                             | **false**           | **fatal**                          |                                                                                                                                                                                                                                                                                                                                |
+| **4014** Disallowed intent(s)         | not enabled/approved                                                     | **false**           | **fatal**                          | retrying presents as a mysterious outage instead of "enable MessageContent"                                                                                                                                                                                                                                                    |
+| **1000 / 1001 received from Discord** | —                                                                        | —                   | **re-identify** _(policy)_         | undocumented direction — §8-A5                                                                                                                                                                                                                                                                                                 |
+| **1012, 1013, other proxy/LB codes**  | —                                                                        | —                   | **resume**                         | default: resume-and-degrade                                                                                                                                                                                                                                                                                                    |
+| **any other unknown code**            | —                                                                        | —                   | **resume**                         |                                                                                                                                                                                                                                                                                                                                |
 
 `UnrecoverableGatewayCloseCodes` in `packages/types/src/enums/gateway.ts` matches Discord's `Reconnect: false` set **exactly** — I compared all fourteen rows. Honour it; do not duplicate it.
 
@@ -625,19 +628,19 @@ Client-sent codes: **1000** = deliberate permanent shutdown (invalidates the ses
 export class MockTransport implements Transport {
   // drive
   emitOpen(): void
-  emitPayload(payload: object): void        // JSON-encodes and delivers as a message
+  emitPayload(payload: object): void // JSON-encodes and delivers as a message
   emitRaw(data: string | ArrayBuffer): void
   emitClose(code: number, reason?: string, wasClean?: boolean): void
   emitError(error?: Error): void
   // observe
-  readonly connects: string[]               // every URL, in attempt order
-  readonly sent: GatewaySendPayload[]       // parsed outbound frames, in order
+  readonly connects: string[] // every URL, in attempt order
+  readonly sent: GatewaySendPayload[] // parsed outbound frames, in order
   readonly closes: { code: number; reason?: string }[]
   readonly destroys: number
   // behaviour switches
-  failNextConnect(): void                   // error event then 1006/wasClean:false
-  swallowClose(): void                      // never emit close after close() — the CLOSING hang
-  swallowMessages(): void                   // silent peer, for the zombie path
+  failNextConnect(): void // error event then 1006/wasClean:false
+  swallowClose(): void // never emit close after close() — the CLOSING hang
+  swallowMessages(): void // silent peer, for the zombie path
 }
 export function mockTransportFactory(): { factory: TransportFactory; transports: MockTransport[] }
 ```
@@ -686,9 +689,9 @@ Nothing in this section is settled. None of it is promoted to a confident rule a
 
 - **A1. Session timeout after a non-1000/1001 close.** The docs say only "timeout after a few minutes". This bounds how long a resume is worth attempting and how long a `SessionStore` entry stays valid across a restart. Interim: always try resume first and let op 9 `d:false` decide.
 - **A2. Does a Discord-requested heartbeat (op 1 received) reset the periodic timer and/or the un-ACKed flag?** Docs say reply immediately, silent on both. §4.6 picks "resets neither the timer, shares the flag" as policy. Affects whether a burst of requested beats can starve or falsely trip the detector.
-- **A3. On op 9 `d:true`, must the socket be closed first, or may Resume go out on the existing connection?** The Resuming procedure is written entirely in terms of a *new* connection, but `d:true` is listed as a trigger without saying to close. Row 11 takes the safe reading (close then reconnect); unverified.
+- **A3. On op 9 `d:true`, must the socket be closed first, or may Resume go out on the existing connection?** The Resuming procedure is written entirely in terms of a _new_ connection, but `d:true` is listed as a trigger without saying to close. Row 11 takes the safe reading (close then reconnect); unverified.
 - **A4. Close 4003.** Marked `Reconnect: true` but explained as "payload prior to identifying, **or this session has been invalidated**". §6 maps it to re-identify as policy. Resume-once-then-degrade is equally defensible.
-- **A5. Can Discord send 1000/1001 *to* the client, and what does it imply for the session?** The docs describe only the client sending them. Also unaddressed: 1012/1013 from a fronted deployment.
+- **A5. Can Discord send 1000/1001 _to_ the client, and what does it imply for the session?** The docs describe only the client sending them. Also unaddressed: 1012/1013 from a fronted deployment.
 - **A6. Discord's zstd window size.** If it exceeds Node's default `ZSTD_d_windowLogMax` the decompressor refuses to allocate. Settable via `params`; the required value is unknown and untested against live traffic. Blocks the zstd default (§4.4).
 - **A7. Does node:zlib's zstd interoperate with Discord's encoder?** Every round-trip so far used Node's compressor on both ends — that proves Node is self-consistent, not that it matches Discord. Needs a golden-frame conformance test built from captured live traffic (test Z7). Also blocks §4.4.
 - **A8. Cross-process resume.** Strong inference, not documented. Session lifetime is described in terms of the connection and close code, never the process.
@@ -696,10 +699,10 @@ Nothing in this section is settled. None of it is promoted to a confident rule a
 - **A10. Is `d` false on the op 9 sent for a `max_concurrency` breach?** If it were true, a shard would attempt a resume it has no session for. Row 7 treats op 9 during identify as `d:false` regardless.
 - **A11. Per-key or global identify concurrency?** The field description ("identify requests allowed per 5 seconds") reads global; the bucket formula and "you must start them by 'bucket' **in order**" read per-key. Discord never states the mechanism. §4.10 implements the strictly-safer per-key form, which is a subset of both readings. Also unknown: whether the 5 s window starts at the identify frame or at READY, and whether it is sliding or tumbling.
 - **A12. Is there a formula behind `shards`?** Not documented. Use the returned value; do not derive one.
-- **A13. Does a *failed* identify (4004, 4013/4014, or op 9) consume `session_start_limit.remaining`?** The warning counts "IDENTIFY calls", implying yes, but never says. Decides whether a misconfigured bot in a reconnect loop can reach the token-reset cliff.
+- **A13. Does a _failed_ identify (4004, 4013/4014, or op 9) consume `session_start_limit.remaining`?** The warning counts "IDENTIFY calls", implying yes, but never says. Decides whether a misconfigured bot in a reconnect loop can reach the token-reset cliff.
 - **A14. `session_start_limit` reset semantics.** Prose says "24-hour period"; the documented example shows `reset_after: 14400000` (4 hours). Fixed bucket, rolling window, or partial refill? A manager that sleeps for `reset_after` needs to know.
 - **A15. What does `GET /gateway/bot` return when `remaining` is 0?** No JSON error code for session-start exhaustion appears in the opcodes-and-status-codes page.
-- **A16. Is the op-8 30 s limit scoped per (guild, bot) or per (guild, session)?** The changelog says "per guild per bot", implying it is shared across shards *and processes* — meaning the op-8 gate, like the identify throttler, may need to be shareable. Not stated explicitly.
+- **A16. Is the op-8 30 s limit scoped per (guild, bot) or per (guild, session)?** The changelog says "per guild per bot", implying it is shared across shards _and processes_ — meaning the op-8 gate, like the identify throttler, may need to be shareable. Not stated explicitly.
 - **A17. Does Discord ever pack more than one gateway payload into a single websocket message?** Silent for both modes. The official Python example is only correct if it cannot happen. Interim: treat it as a protocol violation surfaced by `JSON.parse` failure, since scanning for interior sentinels is unsafe.
 - **A18. Does Discord ever split a zstd-stream payload across websocket messages?** The docs assert 1:1, but the decoder cannot detect a violation and would emit truncated JSON.
 - **A19. Does Discord's gateway fragment websocket messages, or split a zlib payload across messages, in practice?** The suffix-scanning instruction implies it can; unconfirmed against live traffic.
@@ -728,7 +731,7 @@ Also version-fragile: the flush-free write-callback discipline rests on `process
 ### D. Unresolved measurement
 
 - **D1. Threadpool contention across many concurrent shard contexts** was reasoned about but never benchmarked; the ~40–50k msg/s figures are single-stream. Because no synchronous stateful inflate exists, every gateway event costs one threadpool round-trip, and a 50-shard process multiplexes 50 decompression streams over 4 default threads shared with all fs and dns work. Document it and recommend raising `UV_THREADPOOL_SIZE`; benchmark before claiming anything.
-- **D2. The harvest-outside-callback corruption did not reproduce** (§0). The mandated pattern stands on its own argument, but the alternative is *unproven*, not *known broken*, and the spec must not claim otherwise.
+- **D2. The harvest-outside-callback corruption did not reproduce** (§0). The mandated pattern stands on its own argument, but the alternative is _unproven_, not _known broken_, and the spec must not claim otherwise.
 
 ---
 
