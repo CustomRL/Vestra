@@ -1,2 +1,11 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Source and config stay LF in the working tree on every platform, so Prettier's
+# `endOfLine: lf` check cannot fail purely because of a Windows checkout.
+*.ts    text eol=lf
+*.js    text eol=lf
+*.json  text eol=lf
+*.yaml  text eol=lf
+*.yml   text eol=lf
+*.md    text eol=lf
