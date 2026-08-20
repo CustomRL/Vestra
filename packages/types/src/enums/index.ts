@@ -13,6 +13,8 @@
 
 export * from './channel.js'
 export * from './component.js'
+export * from './dispatch-events.js'
+export * from './gateway.js'
 export * from './guild.js'
 export * from './interaction.js'
 export * from './message.js'
