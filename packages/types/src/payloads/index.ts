@@ -8,8 +8,12 @@
  */
 
 export * from './channel.js'
+export * from './component.js'
+export * from './embed.js'
 export * from './emoji.js'
+export * from './guild.js'
 export * from './member.js'
+export * from './message.js'
 export * from './role.js'
 export * from './thread.js'
 export * from './user.js'
