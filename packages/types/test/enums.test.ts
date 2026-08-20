@@ -56,7 +56,7 @@ describe('enumerations', () => {
 })
 
 describe('bit flags', () => {
-  const flagEnums = enums.filter(([name]) => name.endsWith('Flags') || name.endsWith('FlagsBits'))
+  const flagEnums = enums.filter(([name]) => name.endsWith('Flags') || name.endsWith('Bits'))
 
   it('finds the flag enumerations', () => {
     assert.ok(flagEnums.length > 0, 'no flag enumerations discovered')
