@@ -1,9 +1,15 @@
 import type { ISO8601Timestamp, Snowflake } from '../globals.js'
+import type { ChannelType } from '../enums/channel.js'
+import type { InviteTargetType } from '../enums/guild.js'
+import type { ReactionType } from '../enums/message.js'
 import type { APIChannel, APIThreadChannel } from '../payloads/channel.js'
+import type { APIEmoji, APIPartialEmoji } from '../payloads/emoji.js'
 import type { APIGuild, APIUnavailableGuild } from '../payloads/guild.js'
 import type { APIGuildMember, APIVoiceState } from '../payloads/member.js'
 import type { APIMessage } from '../payloads/message.js'
 import type { APIRole } from '../payloads/role.js'
+import type { APISticker } from '../payloads/sticker.js'
+import type { APIThreadMember } from '../payloads/thread.js'
 import type { APIUser } from '../payloads/user.js'
 
 /**
@@ -71,6 +77,57 @@ export interface GatewayDispatchEventMap {
   GUILD_MEMBERS_CHUNK: GatewayGuildMembersChunkDispatchData
   /** A gateway command was rejected for exceeding a rate limit. */
   RATE_LIMITED: GatewayRateLimitedDispatchData
+
+  /** A thread was created, or the current user was added to one. */
+  THREAD_CREATE: GatewayThreadCreateDispatchData
+  /** A thread was updated. Not sent for `last_message_id` changes. */
+  THREAD_UPDATE: APIThreadChannel
+  /** A thread was deleted. Carries only four fields, not a whole channel. */
+  THREAD_DELETE: GatewayThreadDeleteDispatchData
+  /** The threads the current user can see, sent on gaining access to a channel. */
+  THREAD_LIST_SYNC: GatewayThreadListSyncDispatchData
+  /** The current user's thread membership changed. */
+  THREAD_MEMBER_UPDATE: GatewayThreadMemberUpdateDispatchData
+  /** Members were added to or removed from a thread. */
+  THREAD_MEMBERS_UPDATE: GatewayThreadMembersUpdateDispatchData
+
+  /** A reaction was added to a message. */
+  MESSAGE_REACTION_ADD: GatewayMessageReactionAddDispatchData
+  /** A reaction was removed from a message. */
+  MESSAGE_REACTION_REMOVE: GatewayMessageReactionRemoveDispatchData
+  /** Every reaction was cleared from a message. */
+  MESSAGE_REACTION_REMOVE_ALL: GatewayMessageReactionRemoveAllDispatchData
+  /** Every reaction of one emoji was cleared from a message. */
+  MESSAGE_REACTION_REMOVE_EMOJI: GatewayMessageReactionRemoveEmojiDispatchData
+
+  /** A vote was cast on a poll. */
+  MESSAGE_POLL_VOTE_ADD: GatewayMessagePollVoteDispatchData
+  /** A vote was withdrawn from a poll. */
+  MESSAGE_POLL_VOTE_REMOVE: GatewayMessagePollVoteDispatchData
+
+  /** A channel's pinned messages changed. */
+  CHANNEL_PINS_UPDATE: GatewayChannelPinsUpdateDispatchData
+
+  /** A user was banned from a guild. */
+  GUILD_BAN_ADD: GatewayGuildBanDispatchData
+  /** A user was unbanned from a guild. */
+  GUILD_BAN_REMOVE: GatewayGuildBanDispatchData
+  /** A guild's emojis changed. Carries the full set, not a delta. */
+  GUILD_EMOJIS_UPDATE: GatewayGuildEmojisUpdateDispatchData
+  /** A guild's stickers changed. Carries the full set, not a delta. */
+  GUILD_STICKERS_UPDATE: GatewayGuildStickersUpdateDispatchData
+  /** A guild's integrations changed. A signal to refetch. */
+  GUILD_INTEGRATIONS_UPDATE: GatewayGuildIntegrationsUpdateDispatchData
+  /** A channel's webhooks changed. A signal to refetch. */
+  WEBHOOKS_UPDATE: GatewayWebhooksUpdateDispatchData
+
+  /** An invite was created. */
+  INVITE_CREATE: GatewayInviteCreateDispatchData
+  /** An invite was deleted. */
+  INVITE_DELETE: GatewayInviteDeleteDispatchData
+
+  /** Where to connect for a guild's voice traffic. */
+  VOICE_SERVER_UPDATE: GatewayVoiceServerUpdateDispatchData
 }
 
 /**
@@ -337,4 +394,312 @@ export interface GatewayTypingStartDispatchData {
   timestamp: number
   /** The typing user's guild membership. */
   member?: APIGuildMember
+}
+
+/**
+ * A thread as delivered by `THREAD_CREATE`.
+ *
+ * @remarks
+ * The event fires both when a thread is created and when the current user is added to an
+ * existing one, and the two are told apart by the extra fields rather than by the event
+ * name: `newly_created` marks the first, a `member` marks the second.
+ */
+export interface GatewayThreadCreateDispatchData extends APIThreadChannel {
+  /** Present and `true` only when the thread was just created. */
+  newly_created?: boolean
+  /** The current user's membership, present when being added to an existing private thread. */
+  member?: APIThreadMember
+}
+
+/**
+ * The subset of a thread delivered by `THREAD_DELETE`.
+ *
+ * @remarks
+ * Deliberately not the full channel. Discord sends only these four fields, so typing this
+ * as `APIThreadChannel` would promise data that never arrives.
+ */
+export interface GatewayThreadDeleteDispatchData {
+  /** The thread's ID. */
+  id: Snowflake
+  /** The guild the thread was in. */
+  guild_id: Snowflake
+  /** The channel the thread hung off. */
+  parent_id: Snowflake
+  /** The thread's channel type. */
+  type: ChannelType
+}
+
+/**
+ * The threads the current user can see, sent on gaining access to a channel.
+ */
+export interface GatewayThreadListSyncDispatchData {
+  /** The guild being synced. */
+  guild_id: Snowflake
+  /**
+   * The parent channels whose threads are being synced.
+   *
+   * @remarks
+   * Absent means the entire guild was synced, so an empty `threads` array then means the
+   * guild has no active threads — not that nothing was checked.
+   */
+  channel_ids?: Snowflake[]
+  /** The active threads the current user can access. */
+  threads: APIThreadChannel[]
+  /** The current user's memberships for those threads. */
+  members: APIThreadMember[]
+}
+
+/**
+ * The current user's thread membership, with the guild it belongs to.
+ */
+export interface GatewayThreadMemberUpdateDispatchData extends APIThreadMember {
+  /** The guild the thread is in. */
+  guild_id: Snowflake
+}
+
+/**
+ * A change to who is in a thread.
+ */
+export interface GatewayThreadMembersUpdateDispatchData {
+  /** The thread's ID. */
+  id: Snowflake
+  /** The guild the thread is in. */
+  guild_id: Snowflake
+  /** How many members the thread has, capped at 50 by Discord. */
+  member_count: number
+  /** Members added, present only when the current user can see them. */
+  added_members?: APIThreadMember[]
+  /** The IDs of members removed. */
+  removed_member_ids?: Snowflake[]
+}
+
+/**
+ * A reaction added to a message.
+ */
+export interface GatewayMessageReactionAddDispatchData {
+  /** The user who reacted. */
+  user_id: Snowflake
+  /** The channel the message is in. */
+  channel_id: Snowflake
+  /** The message reacted to. */
+  message_id: Snowflake
+  /** The guild, absent in a direct message. */
+  guild_id?: Snowflake
+  /** The reacting user's membership, present only in a guild. */
+  member?: APIGuildMember
+  /** The emoji used, as a partial. */
+  emoji: APIPartialEmoji
+  /** Who wrote the message being reacted to. */
+  message_author_id?: Snowflake
+  /** Whether this is a super-reaction. */
+  burst: boolean
+  /** Colours for the super-reaction animation, as `#rrggbb` strings. */
+  burst_colors?: string[]
+  /** Whether the reaction is ordinary or a super-reaction. */
+  type: ReactionType
+}
+
+/**
+ * A reaction removed from a message.
+ */
+export interface GatewayMessageReactionRemoveDispatchData {
+  /** The user whose reaction was removed. */
+  user_id: Snowflake
+  /** The channel the message is in. */
+  channel_id: Snowflake
+  /** The message the reaction was on. */
+  message_id: Snowflake
+  /** The guild, absent in a direct message. */
+  guild_id?: Snowflake
+  /** The emoji removed, as a partial. */
+  emoji: APIPartialEmoji
+  /** Whether the removed reaction was a super-reaction. */
+  burst: boolean
+  /** Whether the reaction was ordinary or a super-reaction. */
+  type: ReactionType
+}
+
+/**
+ * Every reaction cleared from a message at once.
+ */
+export interface GatewayMessageReactionRemoveAllDispatchData {
+  /** The channel the message is in. */
+  channel_id: Snowflake
+  /** The message cleared. */
+  message_id: Snowflake
+  /** The guild, absent in a direct message. */
+  guild_id?: Snowflake
+}
+
+/**
+ * Every reaction of one emoji cleared from a message.
+ */
+export interface GatewayMessageReactionRemoveEmojiDispatchData {
+  /** The channel the message is in. */
+  channel_id: Snowflake
+  /** The guild, absent in a direct message. */
+  guild_id?: Snowflake
+  /** The message cleared. */
+  message_id: Snowflake
+  /** The emoji whose reactions were removed. */
+  emoji: APIPartialEmoji
+}
+
+/**
+ * A vote cast on, or withdrawn from, a poll.
+ */
+export interface GatewayMessagePollVoteDispatchData {
+  /** The voting user. */
+  user_id: Snowflake
+  /** The channel the poll is in. */
+  channel_id: Snowflake
+  /** The message carrying the poll. */
+  message_id: Snowflake
+  /** The guild, absent in a direct message. */
+  guild_id?: Snowflake
+  /** Which answer was voted for. */
+  answer_id: number
+}
+
+/**
+ * A channel's pinned messages changed.
+ */
+export interface GatewayChannelPinsUpdateDispatchData {
+  /** The guild, absent in a direct message. */
+  guild_id?: Snowflake
+  /** The channel whose pins changed. */
+  channel_id: Snowflake
+  /**
+   * When the most recent pin was pinned.
+   *
+   * @remarks
+   * Optional *and* nullable, and the two mean different things: absent means unchanged,
+   * `null` means the channel now has no pinned messages at all.
+   */
+  last_pin_timestamp?: ISO8601Timestamp | null
+}
+
+/**
+ * A user banned from or unbanned from a guild.
+ */
+export interface GatewayGuildBanDispatchData {
+  /** The guild. */
+  guild_id: Snowflake
+  /** The user banned or unbanned. */
+  user: APIUser
+}
+
+/**
+ * A guild's emojis after a change.
+ */
+export interface GatewayGuildEmojisUpdateDispatchData {
+  /** The guild. */
+  guild_id: Snowflake
+  /** The guild's emojis in full, not a delta. */
+  emojis: APIEmoji[]
+}
+
+/**
+ * A guild's stickers after a change.
+ */
+export interface GatewayGuildStickersUpdateDispatchData {
+  /** The guild. */
+  guild_id: Snowflake
+  /** The guild's stickers in full, not a delta. */
+  stickers: APISticker[]
+}
+
+/**
+ * A guild's integrations changed.
+ *
+ * @remarks
+ * Carries no detail of what changed — it is a signal to refetch.
+ */
+export interface GatewayGuildIntegrationsUpdateDispatchData {
+  /** The guild. */
+  guild_id: Snowflake
+}
+
+/**
+ * A channel's webhooks changed.
+ *
+ * @remarks
+ * Like the integrations event, a signal to refetch rather than a description of the change.
+ */
+export interface GatewayWebhooksUpdateDispatchData {
+  /** The guild. */
+  guild_id: Snowflake
+  /** The channel whose webhooks changed. */
+  channel_id: Snowflake
+}
+
+/**
+ * An invite created.
+ */
+export interface GatewayInviteCreateDispatchData {
+  /** The channel the invite is for. */
+  channel_id: Snowflake
+  /** The invite code, which is its unique identifier. */
+  code: string
+  /** When the invite was created. */
+  created_at: ISO8601Timestamp
+  /** The guild, absent for a group direct message invite. */
+  guild_id?: Snowflake
+  /** Who created the invite. */
+  inviter?: APIUser
+  /** How long the invite is good for in seconds, where `0` never expires. */
+  max_age: number
+  /** How many times it may be used, where `0` is unlimited. */
+  max_uses: number
+  /** What the invite points at, on a voice channel invite. */
+  target_type?: InviteTargetType
+  /** The user whose stream the invite points at. */
+  target_user?: APIUser
+  /**
+   * The embedded application the invite launches.
+   *
+   * @remarks
+   * `unknown` rather than a guess: this package does not model the application resource
+   * yet, and naming a shape it cannot promise would be worse than making the consumer
+   * narrow.
+   */
+  target_application?: unknown
+  /** Whether the invite grants temporary membership. */
+  temporary: boolean
+  /** How many times it has been used, which is always `0` here. */
+  uses: number
+  /** When the invite expires, or `null` if it never does. */
+  expires_at: ISO8601Timestamp | null
+  /** Roles assigned to users who join through this invite. */
+  role_ids?: Snowflake[]
+}
+
+/**
+ * An invite deleted.
+ */
+export interface GatewayInviteDeleteDispatchData {
+  /** The channel the invite was for. */
+  channel_id: Snowflake
+  /** The guild, absent for a group direct message invite. */
+  guild_id?: Snowflake
+  /** The invite code that was deleted. */
+  code: string
+}
+
+/**
+ * Where to connect for a guild's voice traffic.
+ */
+export interface GatewayVoiceServerUpdateDispatchData {
+  /** The voice connection token. */
+  token: string
+  /** The guild the voice server serves. */
+  guild_id: Snowflake
+  /**
+   * The voice server host.
+   *
+   * @remarks
+   * Nullable, and `null` is not an error: it means the server is being reallocated, and a
+   * client should wait for the next event rather than attempting to connect.
+   */
+  endpoint: string | null
 }
