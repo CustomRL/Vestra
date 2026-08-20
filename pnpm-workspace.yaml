@@ -1,0 +1,10 @@
+packages:
+  - packages/*
+  - examples/*
+
+# eslint-plugin-tsdoc pins an older @typescript-eslint/utils that caps TypeScript at
+# <6.0.0. It only uses ESLintUtils.RuleCreator and performs no type analysis, so
+# aligning every consumer on 8.67.0 (which allows TS <6.1.0) is a genuine fix rather
+# than a suppressed warning. Revisit when eslint-plugin-tsdoc updates.
+overrides:
+  '@typescript-eslint/utils': 8.67.0
