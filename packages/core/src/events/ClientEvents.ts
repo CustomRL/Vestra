@@ -250,12 +250,20 @@ export interface ClientEvents<Client = unknown> {
    * Somebody joined, left or changed their voice state.
    *
    * @remarks
-   * Carries both states, which is the one place this library hands a listener an "old"
-   * object. `previous` is `undefined` on a join and `current` is `undefined` on a leave, so
-   * the pair also says which of the three things happened. See {@link VoiceState.clone} for
-   * why the usual objection to old-object arguments does not apply here.
+   * **The IDs come first because they are the only arguments always present.** `voiceStates`
+   * is off by default, so on most clients a departure has no cached state to report and the
+   * pair alone would be `(undefined, undefined)` — an event saying somebody left without
+   * saying who. The same reasoning as {@link ClientEvents.messageDelete}, which carries IDs
+   * for exactly this reason.
+   *
+   * `previous` and `current` are the states where they are known: `previous` is `undefined` on
+   * a join or when the scope is off, `current` is `undefined` on a leave. This is the one
+   * place the library hands a listener an "old" object — see {@link VoiceState.clone} for why
+   * the usual objection does not apply.
    */
   voiceStateUpdate: [
+    guildId: Snowflake,
+    userId: Snowflake,
     previous: VoiceState<Client> | undefined,
     current: VoiceState<Client> | undefined,
   ]

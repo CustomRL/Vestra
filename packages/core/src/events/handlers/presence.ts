@@ -34,5 +34,9 @@ export const presenceUpdate = defineHandler('PRESENCE_UPDATE', (client, data) =>
   }
 
   cached.patch(data)
-  client.emit('presenceUpdate', cached)
+  // Re-applied through the store, not just mutated: a patch that bypasses `set` skips the
+  // scope's `filter`, leaves its `ttl` measured from the original write, and leaves its
+  // write-recency at the original insertion. `CacheStore.set` names this exact case — a
+  // presence filtered on `status !== 'offline'` must evict when somebody goes offline.
+  client.emit('presenceUpdate', client.cache.presences.add(cached))
 })

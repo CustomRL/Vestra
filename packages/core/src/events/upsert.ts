@@ -26,7 +26,9 @@ export function upsertUser(client: EventContext, data: APIUser): User {
   const cached = client.cache.users.get(data.id)
   if (cached !== undefined) {
     cached.patch(data)
-    return cached
+    // Back through the store so the scope's policy sees the write — see the note in
+    // `handlers/presence.ts` for what skipping it costs.
+    return client.cache.users.add(cached)
   }
 
   return client.cache.users.add(new User(data, client))

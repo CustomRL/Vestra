@@ -39,7 +39,8 @@ export const messageUpdate = defineHandler('MESSAGE_UPDATE', (client, data) => {
   }
 
   cached.patch(data)
-  client.emit('messageUpdate', cached)
+  // Through the store, so the scope's filter, ttl and max see the write. An edit is a write.
+  client.emit('messageUpdate', client.cache.messages.add(cached))
 })
 
 /**

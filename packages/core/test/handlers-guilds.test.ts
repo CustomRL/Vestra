@@ -216,6 +216,82 @@ describe('guild handlers', () => {
     )
   })
 
+  it('G2b: reconciles on a second GUILD_CREATE, rather than only adding', () => {
+    // Discord re-sends GUILD_CREATE for every guild after any fresh identify, and again when
+    // an outage guild returns — and `guildDelete` deliberately keeps the cache on
+    // `unavailable: true`, so the outage path is exactly the one where this matters. The
+    // payload is the guild's complete set, so anything absent from it was deleted while the
+    // bot was away and no dispatch will ever name it again.
+    //
+    // Same bug class as the emoji and thread-sync reconciliation, one level up.
+    const { router, context } = harness({
+      guilds: true,
+      roles: true,
+      channels: true,
+      threads: true,
+      emojis: true,
+      stickers: true,
+      voiceStates: true,
+    })
+
+    const full = guildCreatePayload() as Record<string, unknown>
+    router.route(dispatch('GUILD_CREATE', full), shard, false)
+
+    assert.equal(context.cache.roles.group(GUILD_ID).length, 1)
+    assert.equal(context.cache.channels.group(GUILD_ID).length, 1)
+    assert.equal(context.cache.emojis.group(GUILD_ID).length, 1)
+    assert.equal(context.cache.stickers.group(GUILD_ID).length, 1)
+
+    // The same guild comes back with everything deleted while we were away.
+    router.route(
+      dispatch('GUILD_CREATE', {
+        ...full,
+        roles: [],
+        channels: [],
+        threads: [],
+        emojis: [],
+        stickers: [],
+        voice_states: [],
+      }),
+      shard,
+      false,
+    )
+
+    const leaked: string[] = []
+    if (context.cache.roles.group(GUILD_ID).length > 0) leaked.push('roles')
+    if (context.cache.channels.group(GUILD_ID).length > 0) leaked.push('channels')
+    if (context.cache.emojis.group(GUILD_ID).length > 0) leaked.push('emojis')
+    if (context.cache.stickers.group(GUILD_ID).length > 0) leaked.push('stickers')
+    if (context.cache.threads.size > 0) leaked.push('threads')
+    if (context.cache.voiceStates.size > 0) leaked.push('voiceStates')
+
+    assert.deepEqual(
+      leaked,
+      [],
+      `these survived a GUILD_CREATE that omitted them: ${leaked.join(', ')}`,
+    )
+    // The guild itself stays, obviously.
+    assert.equal(context.cache.guilds.get(GUILD_ID)?.name, 'Vestra')
+  })
+
+  it('G2c: does not evict members, whose list is not authoritative', () => {
+    // Discord sends whoever it feels like in `members`, gated on an intent — so an absence
+    // there means nothing, and reconciling on it would evict members who never left. Measured
+    // earlier in this session: with GuildMembers but not GuildPresences, a three-member guild
+    // sends exactly one member.
+    const { router, context } = harness({ members: true, users: true })
+    router.route(dispatch('GUILD_CREATE', guildCreatePayload()), shard, false)
+    assert.equal(context.cache.members.size, 2)
+
+    router.route(
+      dispatch('GUILD_CREATE', { ...(guildCreatePayload() as object), members: [] }),
+      shard,
+      false,
+    )
+
+    assert.equal(context.cache.members.size, 2, 'members were evicted by an unauthoritative list')
+  })
+
   it('G3: skips an unavailable stub rather than caching a guild of nothing', () => {
     // The stub carries an ID and `unavailable` and nothing else. Constructed from it, every
     // other field would be undefined while its presence in the cache claimed the guild was

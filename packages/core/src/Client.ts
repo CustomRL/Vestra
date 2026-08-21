@@ -141,12 +141,31 @@ export class Client extends EventEmitter<ClientEvents> {
    * finished — that is `shardGuildsReady`.
    */
   async whenReady(): Promise<void> {
-    if (this.#announcedReady) return
+    if (this.#allShardsReady()) return
     await new Promise<void>((resolve) => {
       this.shards.once('allReady', () => {
         resolve()
       })
     })
+  }
+
+  /**
+   * Whether every shard this client owns has reported ready.
+   *
+   * @remarks
+   * The fast path for {@link whenReady}, and the reason it is spelled out rather than reusing
+   * `#announcedReady`: that flag is set by the **first** shard, because it gates the
+   * once-per-client `ready` emit. Guarding on it made `whenReady` return as soon as any shard
+   * was up — on a two-hundred shard bot, about a minute before the fleet was — while its own
+   * documentation promised the opposite. `#readyShards` existed for this and was written to,
+   * cleared, and never read.
+   *
+   * `owned > 0` matters: before `connect()` there are no shards, and an empty set must not
+   * read as "all of them are ready".
+   */
+  #allShardsReady(): boolean {
+    const owned = this.shards.shards.size
+    return owned > 0 && this.#readyShards.size >= owned
   }
 
   /**

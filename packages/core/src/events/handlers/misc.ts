@@ -43,7 +43,11 @@ export const messageDeleteBulk = defineHandler('MESSAGE_DELETE_BULK', (client, d
  * is written through, or an event that said nothing would blank the field.
  */
 export const channelPinsUpdate = defineHandler('CHANNEL_PINS_UPDATE', (client, data) => {
-  const channel = client.cache.channels.get(data.channel_id)
+  // Both scopes, because threads are pinnable and are a separate scope. Looking only in
+  // `channels` silently dropped every pin update in a thread, and the field then said the
+  // thread had never had anything pinned.
+  const channel =
+    client.cache.channels.get(data.channel_id) ?? client.cache.threads.get(data.channel_id)
   if (channel instanceof GuildTextBasedChannel && data.last_pin_timestamp !== undefined) {
     channel.lastPinTimestamp = data.last_pin_timestamp
   }

@@ -7,12 +7,14 @@ import type {
 import {
   applyTimeout,
   computeBasePermissions,
+  computeOverwrites,
   isTimedOut,
   type PermissionsBitField,
 } from '../permissions/index.js'
 import { Base } from './Base.js'
 import { memberAvatarUrl, memberBannerUrl, type ImageOptions } from './cdn.js'
 import type { CacheCapable } from './capabilities.js'
+import type { PermissionOverwrite } from './channels/GuildChannel.js'
 import { User } from './User.js'
 
 /**
@@ -240,40 +242,50 @@ export class GuildMember<Client = unknown> extends Base<Client> {
   }
 
   /**
-   * The member's permissions across the guild, computed from cached roles.
+   * What the member may do, guild-wide or in one channel.
    *
    * @param this - A structure whose client can reach the cache.
+   * @param channel - A channel to apply overwrites for. Omit for the guild-wide answer.
    * @param now - The current time in epoch milliseconds, for the timeout rule.
    * @returns The computed set.
    *
    * @remarks
-   * **Computed rather than read off `permissions`.** That field is only ever populated on an
+   * **Composed here rather than by the caller, because the order is not obvious and getting it
+   * wrong is silent.** An earlier version returned only the guild-wide set and told consumers
+   * to pass it to {@link computeOverwrites} themselves. That composition is wrong: the timeout
+   * had already been applied, and `computeOverwrites` ends each stage with `bits |= allow`, so
+   * a channel overwrite granting `SendMessages` handed it straight back to a timed-out member.
+   * The order is base, then overwrites, then the timeout — last, always, which is what
+   * `compute.ts` says and what nothing was enforcing.
+   *
+   * **Computed rather than read off `permissions`.** That field is only populated on an
    * interaction payload, where Discord has already done this arithmetic for the channel the
-   * interaction happened in. Everywhere else it is `undefined`, and a structure that returned
-   * it would answer "no permissions" for every member outside an interaction.
+   * interaction happened in. Everywhere else it is `undefined`, and returning it would answer
+   * "no permissions" for every member outside an interaction.
    *
    * **Understates rather than overstates when the cache is incomplete.** A role the member
    * holds that the cache has not seen contributes nothing, so with `roles: false` this returns
-   * an empty set for everybody who is not the guild owner. That is the safe direction for a
-   * check that gates an action, and it is why the roles scope is on by default.
-   *
-   * This is guild-wide. For what the member can do somewhere specific, pass a channel's
-   * overwrites to {@link computeOverwrites}.
+   * an empty set for everybody but the guild owner. That is the safe direction for a check
+   * gating an action, and it is why the roles scope is on by default.
    */
   permissionsIn<C extends CacheCapable>(
     this: GuildMember<C>,
+    channel?: { readonly permissionOverwrites: readonly PermissionOverwrite[] },
     now: number = Date.now(),
   ): PermissionsBitField {
-    const guild = this.client.cache.guilds.get(this.guildId)
-    const base = computeBasePermissions(
-      // A guild that is not cached still has a known ID, and its owner is the one fact that
-      // cannot be recovered — so an uncached guild yields role-derived permissions only. Using
-      // the member's own ID as the owner would hand everybody every permission.
-      { id: this.guildId, ownerId: guild?.ownerId ?? '' },
-      this,
-      this.client.cache.roles.group(this.guildId),
-    )
-    return applyTimeout(base, this, now)
+    const cached = this.client.cache.guilds.get(this.guildId)
+    // A guild that is not cached still has a known ID, and its owner is the one fact that
+    // cannot be recovered — so an uncached guild yields role-derived permissions only. Using
+    // the member's own ID as the owner would hand everybody every permission.
+    const guild = { id: this.guildId, ownerId: cached?.ownerId ?? '' }
+
+    const base = computeBasePermissions(guild, this, this.client.cache.roles.group(this.guildId))
+    const scoped =
+      channel === undefined
+        ? base
+        : computeOverwrites(base, guild, this, channel.permissionOverwrites)
+
+    return applyTimeout(scoped, this, now)
   }
 
   /**
