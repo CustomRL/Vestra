@@ -8,10 +8,19 @@ bug worth reporting.
 
 ```bash
 pnpm install
-pnpm build         # tsc --build across the project graph
+pnpm build         # turbo, which builds each package's own sources
+pnpm typecheck     # tsc --build --force across the whole solution, tests included
 pnpm test          # node:test, no test framework to learn
 pnpm lint
 ```
+
+**`pnpm build` does not typecheck the tests.** It runs `turbo run build`, and each package's
+build task compiles that package's `src` only — `packages/*/test/tsconfig.json` are projects
+in the root solution but not turbo tasks, so nothing in them is ever checked. A green
+`pnpm build` is compatible with a test file that does not compile at all: change a
+constructor signature and every call site in `src` fails while the ones in `test` stay
+silent. Run `pnpm typecheck` before you trust it. CI runs it too, so this costs a round trip
+rather than a broken release.
 
 Node **22.15.0 or newer** is required. That floor is not arbitrary — it is the first
 version with native zstd in `node:zlib`, which is what lets the gateway decompress Discord
@@ -125,7 +134,8 @@ Assertions about V8 without measurements get asked for measurements.
 - Imperative subject, roughly 50 characters. No Conventional Commits prefixes, no emoji.
 - Add a body only when the diff does not explain _why_; say what breaks without the change.
 - Prefer several small focused commits over one large one.
-- Run `pnpm lint && pnpm test && pnpm build` before pushing.
+- Run `pnpm lint && pnpm typecheck && pnpm test` before pushing. `typecheck` rather than
+  `build`: it is the one that covers the test projects.
 - Add a changeset (`pnpm changeset`) for anything user-visible.
 
 Real defects, broken assumptions and known limitations belong in GitHub issues, not only in

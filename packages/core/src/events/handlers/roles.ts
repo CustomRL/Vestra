@@ -32,7 +32,11 @@ export const roleCreate = defineHandler('GUILD_ROLE_CREATE', (client, data) => {
 export const roleUpdate = defineHandler('GUILD_ROLE_UPDATE', (client, data) => {
   const cached = client.cache.roles.get(data.role.id)
   if (cached === undefined) {
-    client.emit('roleUpdate', client.cache.roles.add(new Role(data.role, data.guild_id, client)), data.guild_id)
+    client.emit(
+      'roleUpdate',
+      client.cache.roles.add(new Role(data.role, data.guild_id, client)),
+      data.guild_id,
+    )
     return
   }
 

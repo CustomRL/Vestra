@@ -206,7 +206,11 @@ describe('guild handlers', () => {
     // `guild.memberCount` gets a number until somebody renames the server.
     const { router, context } = harness()
     router.route(
-      dispatch('GUILD_CREATE', { ...(guildCreatePayload() as object), large: true, member_count: 4200 }),
+      dispatch('GUILD_CREATE', {
+        ...(guildCreatePayload() as object),
+        large: true,
+        member_count: 4200,
+      }),
       shard,
       false,
     )

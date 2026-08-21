@@ -3,6 +3,7 @@ import { describe, it } from 'node:test'
 import type { Timers } from '@vestra/gateway'
 import { CacheRegistry, CacheSweeper, Role } from '@vestra/core'
 
+const GUILD_ID = '613425648685547541'
 const client = { name: 'test-client' }
 
 /** Timers the test drives, recording what was armed. */
@@ -62,6 +63,7 @@ function role(id: string): Role<typeof client> {
       mentionable: false,
       flags: 0,
     },
+    GUILD_ID,
     client,
   )
 }

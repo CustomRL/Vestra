@@ -90,7 +90,14 @@ const GUILD_CREATE = dispatch('GUILD_CREATE', {
   large: false,
   member_count: 1,
   members: [
-    { user: USER, roles: [], joined_at: '2021-03-14T12:00:00.000000+00:00', deaf: false, mute: false, flags: 0 },
+    {
+      user: USER,
+      roles: [],
+      joined_at: '2021-03-14T12:00:00.000000+00:00',
+      deaf: false,
+      mute: false,
+      flags: 0,
+    },
   ],
   channels: [],
   threads: [],
