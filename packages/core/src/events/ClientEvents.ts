@@ -1,5 +1,6 @@
 import type { GatewayDispatchPayload, GatewayReadyDispatchData, Snowflake } from '@vestra/types'
 import type { ClientUser } from '../structures/ClientUser.js'
+import type { Guild } from '../structures/Guild.js'
 import type { GuildMember } from '../structures/GuildMember.js'
 import type { Message } from '../structures/Message.js'
 import type { Role } from '../structures/Role.js'
@@ -32,6 +33,29 @@ export interface ClientEvents<Client = unknown> {
    * belongs with the readiness tracker.
    */
   ready: [user: ClientUser<Client>]
+
+  /**
+   * A guild became available, or the bot joined one.
+   *
+   * @remarks
+   * Fires for every guild during the startup stream as well as on an actual join. The
+   * payload is identical either way, so a bot that treats this as "joined a new server"
+   * will greet every guild it is already in on every reconnect.
+   */
+  guildCreate: [guild: Guild<Client>]
+  /** A guild was updated. */
+  guildUpdate: [guild: Guild<Client>]
+  /** The bot was removed from a guild, or it was deleted. */
+  guildDelete: [guildId: Snowflake]
+  /**
+   * A guild went unavailable during a Discord outage.
+   *
+   * @remarks
+   * Distinct from {@link ClientEvents.guildDelete} because the guild is coming back. The
+   * cache keeps it; treating an outage as a departure empties the cache during every
+   * incident and refills it minutes later.
+   */
+  guildUnavailable: [guildId: Snowflake]
 
   /** A message was sent. */
   messageCreate: [message: Message<Client>]

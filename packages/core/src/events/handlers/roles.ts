@@ -17,7 +17,7 @@ import { defineHandler } from '../EventHandler.js'
 
 /** A role was created. */
 export const roleCreate = defineHandler('GUILD_ROLE_CREATE', (client, data) => {
-  const role = client.cache.roles.add(new Role(data.role, client))
+  const role = client.cache.roles.add(new Role(data.role, data.guild_id, client))
   client.emit('roleCreate', role, data.guild_id)
 })
 
@@ -32,7 +32,7 @@ export const roleCreate = defineHandler('GUILD_ROLE_CREATE', (client, data) => {
 export const roleUpdate = defineHandler('GUILD_ROLE_UPDATE', (client, data) => {
   const cached = client.cache.roles.get(data.role.id)
   if (cached === undefined) {
-    client.emit('roleUpdate', client.cache.roles.add(new Role(data.role, client)), data.guild_id)
+    client.emit('roleUpdate', client.cache.roles.add(new Role(data.role, data.guild_id, client)), data.guild_id)
     return
   }
 

@@ -4,6 +4,7 @@ import { guildUserKey } from './CacheKeys.js'
 import { resolveCachePolicy, type CacheOption } from './CachePolicy.js'
 import { CacheScope } from './CacheScopes.js'
 import { CacheStore } from './CacheStore.js'
+import type { Guild } from '../structures/Guild.js'
 import type { GuildMember } from '../structures/GuildMember.js'
 import type { Message } from '../structures/Message.js'
 import type { Role } from '../structures/Role.js'
@@ -17,11 +18,13 @@ import type { User } from '../structures/User.js'
  * That is deliberate staging rather than an oversight: a scope is added here when its
  * structure exists, so the map never promises a type nothing can produce.
  *
- * The scopes still to arrive are `guilds`, `channels`, `threads`, `presences`,
+ * The scopes still to arrive are `channels`, `threads`, `presences`,
  * `voiceStates`, `emojis` and `stickers` — each lands with its structure. Adding one is a
  * line here and a row in {@link CacheKeys}, not a change to anything below.
  */
 export interface CacheValueMap<Client> {
+  /** Guilds, keyed by guild ID. */
+  guilds: Guild<Client>
   /** Users, keyed by user ID. */
   users: User<Client>
   /** Roles, keyed by role ID. */
@@ -46,11 +49,15 @@ export type CacheValue<S extends CachedScope, Client> = CacheValueMap<Client>[S]
  * from the value the map says it holds, or `CacheStore.add` cannot work.
  */
 const CacheKeys = {
+  guilds: {
+    keyOf: (value: Guild) => value.id,
+  },
   users: {
     keyOf: (value: User) => value.id,
   },
   roles: {
     keyOf: (value: Role) => value.id,
+    groupKeyOf: (value: Role) => value.guildId,
   },
   members: {
     keyOf: (value: GuildMember) => guildUserKey(value.guildId, value.userId),
@@ -82,13 +89,14 @@ export type CacheOptions<Client = unknown> = {
  * here is Vestra policy rather than protocol, and the two that are on are on for reasons
  * worth restating.
  *
- * `roles` is on and ADR 4 does not list it — permission computation is the most common
+ * `guilds` is on because ADR 4 says so. `roles` is on and ADR 4 does not list it — permission computation is the most common
  * thing a bot does and is impossible offline without roles, and roles are bounded at 250
  * per guild by Discord and arrive inside the guild payload anyway. `users` stays off
  * because it is unbounded in exactly the way ADR 4 exists to prevent: it grows with every
  * person the bot has ever seen speak.
  */
 export const DefaultCacheOptions: Record<CachedScope, CacheOption<never>> = {
+  guilds: true,
   users: false,
   roles: true,
   members: false,
@@ -128,6 +136,8 @@ export interface AnyCacheStore {
  * writes `if (client.cache.members)`.
  */
 export class CacheRegistry<Client = unknown> {
+  /** Guilds the bot is in. On by default, per ADR 4. */
+  readonly guilds: CacheStore<Guild<Client>>
   /** Users the bot has seen. Off by default. */
   readonly users: CacheStore<User<Client>>
   /** Roles, which permission checks need. On by default. */
@@ -161,6 +171,7 @@ export class CacheRegistry<Client = unknown> {
       })
     }
 
+    this.guilds = build(CacheScope.Guilds)
     this.users = build(CacheScope.Users)
     this.roles = build(CacheScope.Roles)
     this.members = build(CacheScope.Members)
@@ -169,7 +180,7 @@ export class CacheRegistry<Client = unknown> {
 
   /** Every store, for operations that apply to all of them. */
   get stores(): readonly AnyCacheStore[] {
-    return [this.users, this.roles, this.members, this.messages]
+    return [this.guilds, this.users, this.roles, this.members, this.messages]
   }
 
   /**

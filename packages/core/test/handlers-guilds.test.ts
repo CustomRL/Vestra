@@ -1,0 +1,267 @@
+import assert from 'node:assert/strict'
+import { describe, it } from 'node:test'
+import { ShardState } from '@vestra/gateway'
+import {
+  GatewayOpcodes,
+  type APIGuild,
+  type APIRole,
+  type GatewayDispatchPayload,
+} from '@vestra/types'
+import {
+  CacheRegistry,
+  EventRouter,
+  Guild,
+  handlers,
+  type CacheOptions,
+  type DispatchShard,
+  type EventContext,
+} from '@vestra/core'
+
+const shard: DispatchShard = { id: 0, state: ShardState.Ready, guildsPending: false }
+const GUILD_ID = '613425648685547541'
+const OTHER_GUILD_ID = '81384788765712384'
+const JOINED_AT = '2021-03-14T12:00:00.000000+00:00'
+
+function apiRole(overrides: Partial<APIRole> = {}): APIRole {
+  return {
+    id: '41771983423143936',
+    name: 'Moderator',
+    color: 0x5865f2,
+    colors: { primary_color: 0x5865f2, secondary_color: null, tertiary_color: null },
+    hoist: true,
+    position: 5,
+    permissions: '66321471',
+    managed: false,
+    mentionable: true,
+    flags: 0,
+    ...overrides,
+  }
+}
+
+function apiGuild(overrides: Partial<APIGuild> = {}): APIGuild {
+  return {
+    id: GUILD_ID,
+    name: 'Vestra',
+    icon: null,
+    splash: null,
+    discovery_splash: null,
+    home_header: null,
+    owner_id: '80351110224678912',
+    afk_channel_id: null,
+    afk_timeout: 300,
+    verification_level: 1,
+    default_message_notifications: 0,
+    explicit_content_filter: 0,
+    roles: [apiRole()],
+    emojis: [],
+    features: [],
+    mfa_level: 0,
+    application_id: null,
+    system_channel_id: null,
+    system_channel_flags: 0,
+    rules_channel_id: null,
+    vanity_url_code: null,
+    description: null,
+    banner: null,
+    premium_tier: 0,
+    preferred_locale: 'en-US',
+    public_updates_channel_id: null,
+    nsfw: false,
+    nsfw_level: 0,
+    premium_progress_bar_enabled: false,
+    safety_alerts_channel_id: null,
+    incidents_data: null,
+    ...overrides,
+  }
+}
+
+function harness(options: CacheOptions = {}): {
+  router: EventRouter
+  context: EventContext
+  emitted: { event: string; args: unknown[] }[]
+} {
+  const emitted: { event: string; args: unknown[] }[] = []
+  const context: EventContext = {
+    cache: new CacheRegistry(options),
+    rest: undefined as never,
+    user: undefined,
+    emit: (event: string, ...args: unknown[]) => {
+      emitted.push({ event, args })
+      return true
+    },
+    listenerCount: () => 0,
+  } as EventContext
+
+  return { router: new EventRouter(context, handlers), context, emitted }
+}
+
+function dispatch(t: string, d: unknown): GatewayDispatchPayload {
+  return { op: GatewayOpcodes.Dispatch, t, s: 1, d } as GatewayDispatchPayload
+}
+
+describe('guild handlers', () => {
+  it('G1: caches the guild and the roles riding along inside it', () => {
+    // The reason this file exists. GUILD_CREATE is the only dispatch that carries a guild's
+    // roles, so with no guild handler the roles cache stayed empty for the whole life of the
+    // process despite defaulting on — which is what the live client reported.
+    const { router, context, emitted } = harness()
+    router.route(dispatch('GUILD_CREATE', apiGuild()), shard, false)
+
+    assert.equal(context.cache.guilds.get(GUILD_ID)?.name, 'Vestra')
+    assert.equal(context.cache.roles.get('41771983423143936')?.name, 'Moderator')
+    assert.deepEqual(
+      emitted.map((entry) => entry.event),
+      ['raw', 'guildCreate'],
+    )
+  })
+
+  it('G2: groups cached roles under the guild they arrived with', () => {
+    const { router, context } = harness()
+    router.route(dispatch('GUILD_CREATE', apiGuild()), shard, false)
+    router.route(
+      dispatch(
+        'GUILD_CREATE',
+        apiGuild({ id: OTHER_GUILD_ID, roles: [apiRole({ id: '900000000000000000' })] }),
+      ),
+      shard,
+      false,
+    )
+
+    assert.deepEqual(
+      context.cache.roles.group(GUILD_ID).map((role) => role.id),
+      ['41771983423143936'],
+    )
+    assert.deepEqual(
+      context.cache.roles.group(OTHER_GUILD_ID).map((role) => role.id),
+      ['900000000000000000'],
+    )
+  })
+
+  it('G3: skips an unavailable stub rather than caching a guild of nothing', () => {
+    // The stub carries an ID and `unavailable` and nothing else. Constructed from it, every
+    // other field would be undefined while its presence in the cache claimed the guild was
+    // known — a worse answer than not having it.
+    const { router, context, emitted } = harness()
+    router.route(dispatch('GUILD_CREATE', { id: GUILD_ID, unavailable: true }), shard, false)
+
+    assert.equal(context.cache.guilds.get(GUILD_ID), undefined)
+    assert.deepEqual(
+      emitted.map((entry) => entry.event),
+      ['raw'],
+    )
+  })
+
+  it('G4: patches a cached guild in place so held references see the update', () => {
+    const { router, context, emitted } = harness()
+    router.route(dispatch('GUILD_CREATE', apiGuild()), shard, false)
+    const held = context.cache.guilds.get(GUILD_ID)
+
+    router.route(dispatch('GUILD_UPDATE', apiGuild({ name: 'Vestra Dev' })), shard, false)
+
+    assert.equal(held?.name, 'Vestra Dev')
+    assert.equal(context.cache.guilds.get(GUILD_ID), held)
+    assert.equal(emitted.at(-1)?.event, 'guildUpdate')
+  })
+
+  it('G5: keeps the GUILD_CREATE-only fields across an update that omits them', () => {
+    // joined_at, large and member_count are sent once, on the create. A patch that assigned
+    // them unconditionally would blank all three on every guild edit, so a bot reading
+    // `guild.memberCount` gets a number until somebody renames the server.
+    const { router, context } = harness()
+    router.route(
+      dispatch('GUILD_CREATE', {
+        ...apiGuild(),
+        joined_at: JOINED_AT,
+        large: true,
+        member_count: 4200,
+      }),
+      shard,
+      false,
+    )
+
+    router.route(dispatch('GUILD_UPDATE', apiGuild({ name: 'Renamed' })), shard, false)
+
+    const guild = context.cache.guilds.get(GUILD_ID)
+    assert.equal(guild?.name, 'Renamed')
+    assert.equal(guild.memberCount, 4200)
+    assert.equal(guild.large, true)
+    assert.equal(guild.joinedTimestamp, JOINED_AT)
+  })
+
+  it('G6: constructs a guild from an update it never saw created', () => {
+    const { router, context, emitted } = harness()
+    router.route(dispatch('GUILD_UPDATE', apiGuild()), shard, false)
+
+    assert.equal(context.cache.guilds.get(GUILD_ID)?.name, 'Vestra')
+    assert.equal(emitted.at(-1)?.event, 'guildUpdate')
+  })
+
+  it('G7: keeps a guild that went unavailable during an outage', () => {
+    // An outage is not a departure. Dropping the guild here would empty the cache during
+    // every Discord incident and refill it minutes later, which is the opposite of what a
+    // cache is for.
+    const { router, context, emitted } = harness()
+    router.route(dispatch('GUILD_CREATE', apiGuild()), shard, false)
+    router.route(dispatch('GUILD_DELETE', { id: GUILD_ID, unavailable: true }), shard, false)
+
+    assert.equal(context.cache.guilds.get(GUILD_ID)?.name, 'Vestra')
+    assert.equal(context.cache.roles.get('41771983423143936')?.name, 'Moderator')
+    assert.deepEqual(emitted.at(-1), { event: 'guildUnavailable', args: [GUILD_ID] })
+  })
+
+  it('G8: drops a departed guild and only that guild', () => {
+    // Roles are keyed by role ID in a flat store, so dropping a guild has to go through the
+    // group index. Dropping the wrong set would evict a live guild's roles, and dropping none
+    // would leak every role of every guild the bot is ever removed from.
+    const { router, context, emitted } = harness()
+    router.route(dispatch('GUILD_CREATE', apiGuild()), shard, false)
+    router.route(
+      dispatch(
+        'GUILD_CREATE',
+        apiGuild({ id: OTHER_GUILD_ID, roles: [apiRole({ id: '900000000000000000' })] }),
+      ),
+      shard,
+      false,
+    )
+
+    router.route(dispatch('GUILD_DELETE', { id: GUILD_ID }), shard, false)
+
+    assert.equal(context.cache.guilds.get(GUILD_ID), undefined)
+    assert.equal(context.cache.roles.get('41771983423143936'), undefined)
+    assert.equal(context.cache.guilds.get(OTHER_GUILD_ID)?.name, 'Vestra')
+    assert.equal(context.cache.roles.get('900000000000000000')?.name, 'Moderator')
+    assert.deepEqual(emitted.at(-1), { event: 'guildDelete', args: [GUILD_ID] })
+  })
+
+  it('G9: still emits with the guilds scope switched off', () => {
+    // The cache is opt-out per ADR 4, and an event that only fires when caching is on would
+    // make `cache: { guilds: false }` silently disable the bot's join handling.
+    const { router, context, emitted } = harness({ guilds: false })
+    router.route(dispatch('GUILD_CREATE', apiGuild()), shard, false)
+
+    assert.equal(context.cache.guilds.get(GUILD_ID), undefined)
+    assert.equal(emitted.at(-1)?.event, 'guildCreate')
+    assert.ok(emitted.at(-1)?.args[0] instanceof Guild)
+  })
+})
+
+describe('Guild structure', () => {
+  it('GS1: keeps a stable shape whatever the payload omits', () => {
+    const sparse = new Guild(apiGuild(), undefined)
+    const full = new Guild(
+      { ...apiGuild(), joined_at: JOINED_AT, large: true, member_count: 2 },
+      undefined,
+    )
+
+    assert.deepEqual(Object.keys(sparse), Object.keys(full))
+  })
+
+  it('GS2: derives creation time from the snowflake and join time from the payload', () => {
+    const guild = new Guild({ ...apiGuild(), joined_at: JOINED_AT }, undefined)
+
+    // (613425648685547541 >> 22) + 1420070400000, computed outside the library.
+    assert.equal(guild.createdTimestamp, 1566322471544)
+    assert.equal(guild.joinedAt?.getTime(), Date.parse(JOINED_AT))
+    assert.equal(new Guild(apiGuild(), undefined).joinedAt, null)
+  })
+})

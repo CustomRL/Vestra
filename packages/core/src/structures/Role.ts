@@ -42,6 +42,16 @@ function toRoleColors(colors: APIRoleColors): RoleColors {
 export class Role<Client = unknown> extends Base<Client> {
   /** The role's ID. */
   declare readonly id: Snowflake
+  /**
+   * The guild the role belongs to.
+   *
+   * @remarks
+   * Not on the payload — a role arrives either inside its guild or on a dispatch that
+   * carries `guild_id` beside it — so the caller supplies it. It is a field because the
+   * roles scope is grouped by guild, and `CacheStore.add` derives the group from the value
+   * alone; without it `guild.roles` could not be answered from the cache at all.
+   */
+  declare readonly guildId: Snowflake
   /** The role's name. */
   declare name: string
   /**
@@ -81,12 +91,14 @@ export class Role<Client = unknown> extends Base<Client> {
 
   /**
    * @param data - The payload to mirror.
+   * @param guildId - The guild the role belongs to.
    * @param client - The client that produced this structure.
    */
-  constructor(data: APIRole, client: Client) {
+  constructor(data: APIRole, guildId: Snowflake, client: Client) {
     super(client)
 
     this.id = data.id
+    this.guildId = guildId
     this.name = data.name
     this.color = data.color
     this.colors = toRoleColors(data.colors)
@@ -116,10 +128,10 @@ export class Role<Client = unknown> extends Base<Client> {
    * @remarks
    * Discord gives it the guild's own ID rather than marking it, so this is the only way to
    * tell. Worth a named accessor because the alternative is every consumer rediscovering
-   * the trick.
+   * the trick — and now that the role knows its guild, it needs no argument.
    */
-  isEveryone(guildId: Snowflake): boolean {
-    return this.id === guildId
+  isEveryone(): boolean {
+    return this.id === this.guildId
   }
 
   /**

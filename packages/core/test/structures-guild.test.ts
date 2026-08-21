@@ -48,6 +48,7 @@ describe('Role structure', () => {
     // conversion rule exists to prevent.
     const role = new Role(
       apiRole({ colors: { primary_color: 1, secondary_color: 2, tertiary_color: 3 } }),
+      GUILD_ID,
       client,
     )
 
@@ -57,14 +58,17 @@ describe('Role structure', () => {
   it('R2: identifies the @everyone role by its guild ID', () => {
     // Discord marks it by giving it the guild's own ID rather than a flag, so this is the
     // only way to tell.
+    // The role carries its guild rather than being asked for one. A role that has to be
+    // told which guild it belongs to can be told the wrong one, and `isEveryone(otherGuild)`
+    // answering `false` about a role that is @everyone is a silent wrong answer.
     const guildId = '41771983423143937'
-    assert.equal(new Role(apiRole({ id: guildId }), client).isEveryone(guildId), true)
-    assert.equal(new Role(apiRole(), client).isEveryone(guildId), false)
+    assert.equal(new Role(apiRole({ id: guildId }), guildId, client).isEveryone(), true)
+    assert.equal(new Role(apiRole(), guildId, client).isEveryone(), false)
   })
 
   it('R3: keeps a stable shape across construction and patch', () => {
-    const sparse = new Role(apiRole(), client)
-    const full = new Role(apiRole({ icon: 'hash', unicode_emoji: '🛡' }), client)
+    const sparse = new Role(apiRole(), GUILD_ID, client)
+    const full = new Role(apiRole({ icon: 'hash', unicode_emoji: '🛡' }), GUILD_ID, client)
     assert.deepEqual(Object.keys(sparse), Object.keys(full))
 
     const before = Object.keys(sparse)
@@ -73,8 +77,15 @@ describe('Role structure', () => {
     assert.equal(sparse.name, 'Admin')
   })
 
+  it('R5: carries the guild it came from', () => {
+    // Role dispatches name their guild in the envelope, not in the role, so a role built
+    // from one and then cached loses the association unless the structure keeps it. The
+    // roles cache groups on this field, so losing it makes `roles.group(id)` empty.
+    assert.equal(new Role(apiRole(), GUILD_ID, client).guildId, GUILD_ID)
+  })
+
   it('R4: renders a role mention', () => {
-    assert.equal(String(new Role(apiRole(), client)), '<@&41771983423143936>')
+    assert.equal(String(new Role(apiRole(), GUILD_ID, client)), '<@&41771983423143936>')
   })
 })
 
