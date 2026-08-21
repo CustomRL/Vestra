@@ -12,6 +12,7 @@ import { Base } from './Base.js'
 import type { CacheCapable, RestCapable } from './capabilities.js'
 import type { Channel } from './channels/Channel.js'
 import type { Guild } from './Guild.js'
+import { messageLink } from './links.js'
 import { GuildMember } from './GuildMember.js'
 import { User } from './User.js'
 import { snowflakeDate, snowflakeTimestamp } from './snowflake.js'
@@ -336,6 +337,12 @@ export class Message<Client = unknown> extends Base<Client> {
    * produces and what its link parser accepts.
    */
   get url(): string {
-    return `https://discord.com/channels/${this.guildId ?? '@me'}/${this.channelId}/${this.id}`
+    // Delegates rather than inlining the template: `parseMessageLink` has to agree with this
+    // exactly, and two spellings of one URL shape drift the first time either is touched.
+    return messageLink({
+      guildId: this.guildId,
+      channelId: this.channelId,
+      messageId: this.id,
+    })
   }
 }
