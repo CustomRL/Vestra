@@ -127,9 +127,22 @@ export class Client extends EventEmitter<ClientEvents> {
    */
   async login(): Promise<ClientUser> {
     const ready = this.#firstReady()
-    await this.shards.connect()
+
+    try {
+      await this.shards.connect()
+    } catch (error) {
+      // **Cancelled, not abandoned.** `connect()` can throw after some shards are already
+      // live — a session store that rejects on shard 1 while shard 0 is up — and an orphaned
+      // readiness promise stays armed with its two listeners. A later fatal close then
+      // rejects a promise nobody is awaiting, which Node reports as an unhandled rejection
+      // and, by default, exits on. Retrying `login()` in a loop also stacked a pair of
+      // listeners per attempt until Node started warning about the leak.
+      ready.cancel()
+      throw error
+    }
+
     this.#sweeper.start()
-    return await ready
+    return await ready.promise
   }
 
   /**
@@ -289,12 +302,21 @@ export class Client extends EventEmitter<ClientEvents> {
     // anybody writes is a boolean to suppress the extras.
     this.#readyShards.add(shardId)
 
-    // The identity itself is the READY handler's job, and it has already run by the time
-    // this hook fires. Assigning it here as well would give two owners for one field.
+    // The identity itself is the READY handler's job, and it has normally run by the time this
+    // hook fires. Assigning it here as well would give two owners for one field.
+    //
+    // **The identity is checked before the flag is spent, not after.** The router emits `raw`
+    // inside the same `try` as the handler, so a consumer `raw` listener that throws skips the
+    // READY handler and leaves the identity unset — and burning the once-per-client flag on
+    // that pass meant `ready` could never fire again. The fleet came up, the identity became
+    // known on the next shard, and `login()` stayed pending forever: a consumer-side bug
+    // wedging the client, which is the class `EventRouter` contains everywhere else.
+    const user = this.#context.user
+    if (user === undefined) return
+
     if (this.#announcedReady) return
     this.#announcedReady = true
-    const user = this.#context.user
-    if (user !== undefined) this.emit('ready', user)
+    this.emit('ready', user)
   }
 
   #onShardError(error: Error, shardId: number): void {
@@ -310,20 +332,46 @@ export class Client extends EventEmitter<ClientEvents> {
     void this.destroy(false)
   }
 
-  #firstReady(): Promise<ClientUser> {
-    return new Promise<ClientUser>((resolve, reject) => {
+  /**
+   * The promise `login()` resolves, plus a way to take it back down.
+   *
+   * @remarks
+   * Both listeners are removed on every exit — resolve, reject and cancel — because each one
+   * used to remove only the *other*. `onError` in particular stayed attached forever, so a
+   * retry loop accumulated one pair per attempt until Node warned about the leak.
+   */
+  #firstReady(): { promise: Promise<ClientUser>; cancel: () => void } {
+    let detach = (): void => undefined
+
+    const promise = new Promise<ClientUser>((resolve, reject) => {
       const onReady = (user: ClientUser): void => {
-        this.off('error', onError)
+        detach()
         resolve(user)
       }
       const onError = (error: Error): void => {
+        // Only a fleet-wide fault ends the wait. One shard losing its network is not a login
+        // failure, and rejecting on it would fail a fleet that is otherwise coming up.
         if (!(error instanceof FatalGatewayError) || error.code === undefined) return
-        this.off('ready', onReady)
+        detach()
         reject(error)
+      }
+
+      detach = (): void => {
+        this.off('ready', onReady)
+        this.off('error', onError)
       }
 
       this.once('ready', onReady)
       this.on('error', onError)
     })
+
+    return {
+      promise,
+      cancel: () => {
+        detach()
+        // Handled, so an orphan cannot surface later as an unhandled rejection.
+        promise.catch(() => undefined)
+      },
+    }
   }
 }

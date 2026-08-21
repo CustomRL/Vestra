@@ -226,7 +226,22 @@ export class ShardBridge {
   }
 }
 
-/** Whether a shard is in a state that can still carry traffic. */
+/**
+ * Whether a shard is in a state that can still carry traffic.
+ *
+ * @remarks
+ * `Replaying` belongs here and was missing, which had it backwards: `Resuming` means a Resume
+ * has been sent and the session is *not yet confirmed*, while `Replaying` means it **is**
+ * confirmed and the backlog is arriving. The socket is open and accepts sends in both. A shard
+ * draining a long backlog was therefore skipped by {@link Client.setPresence}, leaving the bot
+ * showing one presence on that shard and another everywhere else — the exact failure that
+ * method exists to make impossible.
+ *
+ * The identifying and handshaking states are deliberately excluded: the socket is open, but
+ * Discord rejects anything sent before READY.
+ */
 export function isConnected(state: ShardState): boolean {
-  return state === ShardState.Ready || state === ShardState.Resuming
+  return (
+    state === ShardState.Ready || state === ShardState.Resuming || state === ShardState.Replaying
+  )
 }

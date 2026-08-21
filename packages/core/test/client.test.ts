@@ -117,3 +117,27 @@ describe('fleet readiness', () => {
     })
   })
 })
+
+describe('listener hygiene', () => {
+  it('CL21: leaves no listeners behind when login fails', async () => {
+    // Found by review. A retry loop used to stack one `ready` and one `error` listener per
+    // attempt — `onError` removed `onReady` but never itself — until Node warned about the
+    // leak. Worse, the orphaned readiness promise stayed armed, so a later fatal close
+    // rejected something nobody was awaiting, which Node reports as an unhandled rejection and
+    // exits on by default.
+    const client = new Client({
+      token: TOKEN,
+      intents: 0,
+      gateway: { fetchGatewayBot: () => Promise.reject(new Error('gateway is down')) },
+    })
+
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      await assert.rejects(async () => await client.login())
+    }
+
+    assert.equal(client.listenerCount('ready'), 0, 'ready listeners accumulated')
+    assert.equal(client.listenerCount('error'), 0, 'error listeners accumulated')
+
+    await client.destroy()
+  })
+})
