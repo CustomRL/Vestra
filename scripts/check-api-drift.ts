@@ -44,6 +44,14 @@ const MAPPINGS: { ours: string; theirs: string }[] = [
   { ours: 'APIStickerItem', theirs: 'MessageStickerItemResponse' },
   { ours: 'APIRoleColors', theirs: 'GuildRoleColorsResponse' },
   { ours: 'APIIncidentsData', theirs: 'GuildIncidentsDataResponse' },
+  { ours: 'APIStageInstance', theirs: 'StageInstanceResponse' },
+  { ours: 'APISoundboardSound', theirs: 'SoundboardSoundResponse' },
+  { ours: 'APIEntitlement', theirs: 'EntitlementResponse' },
+  { ours: 'APISubscription', theirs: 'SubscriptionResponse' },
+  { ours: 'APIAuditLogEntry', theirs: 'AuditLogEntryResponse' },
+  { ours: 'APIGuildScheduledEvent', theirs: 'ScheduledEventResponse' },
+  { ours: 'APIApplicationCommand', theirs: 'ApplicationCommandResponse' },
+  { ours: 'APIGuildApplicationCommandPermissions', theirs: 'CommandPermissionsResponse' },
 ]
 
 /**

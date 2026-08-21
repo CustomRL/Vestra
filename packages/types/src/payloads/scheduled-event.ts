@@ -6,6 +6,7 @@ import type {
   GuildScheduledEventRecurrenceRuleMonth,
   GuildScheduledEventRecurrenceRuleWeekday,
   GuildScheduledEventStatus,
+  GuildScheduledEventUserResponse,
 } from '../enums/scheduled-event.js'
 import type { APIGuildMember } from './member.js'
 import type { APIUser } from './user.js'
@@ -90,6 +91,61 @@ export interface APIGuildScheduledEvent {
   image?: string | null
   /** How often the event repeats, or `null` if it happens once. */
   recurrence_rule: APIGuildScheduledEventRecurrenceRule | null
+  /**
+   * Occurrences of a recurring event that differ from the rule.
+   *
+   * @remarks
+   * Always sent, and empty for an event that does not recur. A recurrence rule alone does
+   * not describe the schedule: a single occurrence can be moved or cancelled without
+   * touching the rule, and only these exceptions record that.
+   */
+  guild_scheduled_event_exceptions: APIGuildScheduledEventException[]
+  /**
+   * The requesting user's RSVP, or `null` if they have not responded.
+   *
+   * @remarks
+   * Only populated on endpoints that take a user context; absent elsewhere.
+   */
+  user_rsvp?: APIGuildScheduledEventUserRsvp | null
+}
+
+/**
+ * One occurrence of a recurring event that departs from its recurrence rule.
+ */
+export interface APIGuildScheduledEventException {
+  /** The event this exception belongs to. */
+  event_id: Snowflake
+  /** The exception's own ID. */
+  event_exception_id: Snowflake
+  /** The overridden start time, or `null` to keep the one the rule implies. */
+  scheduled_start_time: ISO8601Timestamp | null
+  /** The overridden end time, or `null` to keep the one the rule implies. */
+  scheduled_end_time: ISO8601Timestamp | null
+  /** Whether this occurrence is cancelled rather than merely moved. */
+  is_canceled: boolean
+}
+
+/**
+ * A user's response to a scheduled event.
+ *
+ * @remarks
+ * Distinct from {@link APIGuildScheduledEventUser}, which is the subscriber form returned
+ * by the list endpoint. This one carries the RSVP itself, and which occurrence of a
+ * recurring event it applies to.
+ */
+export interface APIGuildScheduledEventUserRsvp {
+  /** The event responded to. */
+  guild_scheduled_event_id: Snowflake
+  /** The specific occurrence, or `null` when the response covers the series. */
+  guild_scheduled_event_exception_id?: Snowflake | null
+  /** The responding user. */
+  user_id: Snowflake
+  /** The user, when the endpoint includes it. */
+  user?: APIUser
+  /** The user's guild membership, when the endpoint includes it. */
+  member?: APIGuildMember
+  /** Whether the user is interested. */
+  response: GuildScheduledEventUserResponse
 }
 
 /**

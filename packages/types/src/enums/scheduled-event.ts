@@ -199,3 +199,23 @@ export const StageInstancePrivacyLevel = {
  */
 export type StageInstancePrivacyLevel =
   (typeof StageInstancePrivacyLevel)[keyof typeof StageInstancePrivacyLevel]
+
+/**
+ * A user's answer to a scheduled event invitation.
+ *
+ * @remarks
+ * Only two values, and neither means "attending". Discord tracks interest rather than
+ * attendance, so a bot cannot learn from this who actually turned up.
+ */
+export const GuildScheduledEventUserResponse = {
+  /** The user is not interested. */
+  Uninterested: 0,
+  /** The user is interested. */
+  Interested: 1,
+} as const
+
+/**
+ * A scheduled event RSVP.
+ */
+export type GuildScheduledEventUserResponse =
+  (typeof GuildScheduledEventUserResponse)[keyof typeof GuildScheduledEventUserResponse]
