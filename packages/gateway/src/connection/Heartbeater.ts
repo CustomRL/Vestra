@@ -177,8 +177,23 @@ export class Heartbeater {
     // timer: if the previous beat was never acknowledged, sending another would only add
     // traffic to a connection that has already stopped carrying it.
     if (this.#awaitingAck) {
-      this.stop()
-      this.#hooks.onZombie()
+      // **How long it has been outstanding, not merely that it is.** A beat Discord *requested*
+      // sets the same flag, so one arriving within a round trip of the scheduled beat left an
+      // ack legitimately in flight when this fired — and a healthy socket was abandoned and a
+      // resume spent. The window was about one RTT per interval, which on a busy shard is not
+      // rare.
+      //
+      // A beat outstanding for a whole interval is the condition Discord's own guidance
+      // describes, and it is what this now checks. Anything younger gets the rest of its
+      // interval instead.
+      const outstanding = this.#timers.now() - this.#lastBeatAt
+      if (outstanding >= this.#interval) {
+        this.stop()
+        this.#hooks.onZombie()
+        return
+      }
+
+      this.#schedule(this.#interval - outstanding)
       return
     }
 
