@@ -13,4 +13,5 @@ export {
 } from './EventHandler.js'
 export { EventRouter } from './EventRouter.js'
 export { handlers } from './registry.js'
+export { UnhandledEvents } from './unhandled.js'
 export type { ClientEventName, ClientEvents } from './ClientEvents.js'
