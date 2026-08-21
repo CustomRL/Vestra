@@ -14,6 +14,15 @@ export {
   type ResolvedCachePolicy,
 } from './CachePolicy.js'
 export { CacheIndex } from './CacheIndex.js'
+export {
+  CacheRegistry,
+  DefaultCacheOptions,
+  type CacheOptions,
+  type CacheValue,
+  type CacheValueMap,
+  type AnyCacheStore,
+  type CachedScope,
+} from './CacheRegistry.js'
 export { guildUserKey, parseGuildUserKey } from './CacheKeys.js'
 export { CacheScope, CacheScopes } from './CacheScopes.js'
 export { CacheStore, type CacheStoreOptions } from './CacheStore.js'
