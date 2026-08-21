@@ -1,7 +1,7 @@
 import { guildUserKey } from '../../cache/CacheKeys.js'
 import { GuildMember } from '../../structures/GuildMember.js'
-import { User } from '../../structures/User.js'
 import { defineHandler } from '../EventHandler.js'
+import { upsertUser } from '../upsert.js'
 
 /**
  * Guild member dispatches.
@@ -31,6 +31,7 @@ export const guildMemberAdd = defineHandler('GUILD_MEMBER_ADD', (client, data) =
   const user = data.user
   if (user === undefined) return
 
+  upsertUser(client, user)
   const member = client.cache.members.add(new GuildMember(data, data.guild_id, user.id, client))
   client.emit('guildMemberAdd', member)
 })
@@ -44,6 +45,7 @@ export const guildMemberAdd = defineHandler('GUILD_MEMBER_ADD', (client, data) =
  * is the usual one — see `DefaultCacheOptions` and ADR 4.
  */
 export const guildMemberUpdate = defineHandler('GUILD_MEMBER_UPDATE', (client, data) => {
+  upsertUser(client, data.user)
   const cached = client.cache.member(data.guild_id, data.user.id)
 
   if (cached === undefined) {
@@ -70,5 +72,5 @@ export const guildMemberUpdate = defineHandler('GUILD_MEMBER_UPDATE', (client, d
  */
 export const guildMemberRemove = defineHandler('GUILD_MEMBER_REMOVE', (client, data) => {
   client.cache.members.delete(guildUserKey(data.guild_id, data.user.id))
-  client.emit('guildMemberRemove', data.guild_id, new User(data.user, client))
+  client.emit('guildMemberRemove', data.guild_id, upsertUser(client, data.user))
 })

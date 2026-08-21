@@ -142,7 +142,18 @@ export class CacheRegistry<Client = unknown> {
   readonly users: CacheStore<User<Client>>
   /** Roles, which permission checks need. On by default. */
   readonly roles: CacheStore<Role<Client>>
-  /** Guild members, grouped by guild. Off by default. */
+  /**
+   * Guild members, grouped by guild. Off by default.
+   *
+   * @remarks
+   * Seeded from `GUILD_CREATE` and then kept current by the member dispatches. How much the
+   * seed contains is Discord's decision and not an intuitive one: measured live, a guild well
+   * under `large_threshold` sends **only the bot** when the connection has `GuildMembers` but
+   * not `GuildPresences`, and sends every member once `GuildPresences` is added. Discord
+   * builds that list from the presence set. Switching this scope on and finding one member
+   * per guild is that, not a cache fault; the full list needs a member request, which is
+   * `client.fetchMembers()`.
+   */
   readonly members: CacheStore<GuildMember<Client>>
   /** Messages, grouped by channel. Off by default. */
   readonly messages: CacheStore<Message<Client>>
