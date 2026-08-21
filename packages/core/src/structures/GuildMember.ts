@@ -24,6 +24,27 @@ import { User } from './User.js'
  */
 export class GuildMember<Client = unknown> extends Base<Client> {
   /**
+   * The guild this membership is in.
+   *
+   * @remarks
+   * Not on the payload — Discord puts `guild_id` on the dispatch, not on the member — so
+   * the caller supplies it. It is a field rather than something derived because the
+   * `members` cache is keyed by `guildId:userId`, and a key that cannot be computed from
+   * the value alone cannot be computed by `CacheStore.add`.
+   */
+  declare readonly guildId: Snowflake
+  /**
+   * The user this membership belongs to.
+   *
+   * @remarks
+   * Also supplied rather than read from {@link user}, which is absent on an embedded
+   * member — `message.member` carries no user, because the author sits beside it. Deriving
+   * the ID from `user` would make it `undefined` in exactly the most common case, and an
+   * `id` that is usually `undefined` is the single most common source of runtime errors
+   * when porting from a library where it never was.
+   */
+  declare readonly userId: Snowflake
+  /**
    * The underlying user.
    *
    * @remarks
@@ -31,13 +52,13 @@ export class GuildMember<Client = unknown> extends Base<Client> {
    * — because the user is carried alongside it rather than inside it. Present on
    * `GUILD_MEMBER_ADD` and on anything fetched.
    */
-  user: User<Client> | undefined
+  declare user: User<Client> | undefined
   /** The member's guild-specific nickname. */
-  nick: string | null | undefined
+  declare nick: string | null | undefined
   /** The member's guild-specific avatar hash. */
-  avatar: string | null | undefined
+  declare avatar: string | null | undefined
   /** The member's guild-specific banner hash. */
-  banner: string | null | undefined
+  declare banner: string | null | undefined
   /**
    * The IDs of the roles the member has.
    *
@@ -46,17 +67,17 @@ export class GuildMember<Client = unknown> extends Base<Client> {
    * came out of `JSON.parse` moments ago and nothing else aliases it. Resolving to `Role`
    * objects would need the cache, which may be off — see ADR 4.
    */
-  roles: readonly Snowflake[]
+  declare roles: readonly Snowflake[]
   /** When the member joined the guild, as the raw ISO string. */
-  joinedTimestamp: ISO8601Timestamp
+  declare joinedTimestamp: ISO8601Timestamp
   /** When the member started boosting the guild, as the raw ISO string. */
-  premiumSinceTimestamp: ISO8601Timestamp | null | undefined
+  declare premiumSinceTimestamp: ISO8601Timestamp | null | undefined
   /** Whether the member is server-deafened in voice channels. */
-  deaf: boolean
+  declare deaf: boolean
   /** Whether the member is server-muted in voice channels. */
-  mute: boolean
+  declare mute: boolean
   /** The member's flags, as a bit set. */
-  flags: number
+  declare flags: number
   /**
    * Whether the member has passed the guild's membership screening.
    *
@@ -67,19 +88,23 @@ export class GuildMember<Client = unknown> extends Base<Client> {
    * something like `screened`. A rename would hide the trap rather than flag it, and would
    * break grep against Discord's own documentation.
    */
-  pending: boolean | undefined
+  declare pending: boolean | undefined
   /** The member's computed permissions, present only inside an interaction payload. */
-  permissions: string | undefined
+  declare permissions: string | undefined
   /** When the member's timeout expires, as the raw ISO string. */
-  communicationDisabledUntilTimestamp: ISO8601Timestamp | null | undefined
+  declare communicationDisabledUntilTimestamp: ISO8601Timestamp | null | undefined
 
   /**
    * @param data - The payload to mirror.
+   * @param guildId - The guild the membership is in.
+   * @param userId - The user the membership belongs to.
    * @param client - The client that produced this structure.
    */
-  constructor(data: APIGuildMember, client: Client) {
+  constructor(data: APIGuildMember, guildId: Snowflake, userId: Snowflake, client: Client) {
     super(client)
 
+    this.guildId = guildId
+    this.userId = userId
     this.user = data.user === undefined ? undefined : new User(data.user, client)
     this.nick = data.nick
     this.avatar = data.avatar
@@ -95,9 +120,16 @@ export class GuildMember<Client = unknown> extends Base<Client> {
     this.communicationDisabledUntilTimestamp = data.communication_disabled_until
   }
 
-  /** The user's ID, when the user was carried with the member. */
-  get id(): Snowflake | undefined {
-    return this.user?.id
+  /**
+   * The user's ID.
+   *
+   * @remarks
+   * Always present, because it is supplied rather than read from {@link user}. An earlier
+   * version returned `this.user?.id`, which was `undefined` for `message.member` — the most
+   * common member a bot ever touches.
+   */
+  get id(): Snowflake {
+    return this.userId
   }
 
   /** When the member joined the guild. Allocates. */
@@ -105,7 +137,14 @@ export class GuildMember<Client = unknown> extends Base<Client> {
     return new Date(this.joinedTimestamp)
   }
 
-  /** When the member started boosting, or `null` if they are not. Allocates. */
+  /**
+   * When the member started boosting, or `null` if they are not. Allocates.
+   *
+   * @remarks
+   * Absent and `null` both read as `null` here, which loses a distinction the payload
+   * makes: absent means the field was not sent, `null` means Discord said they are not
+   * boosting. {@link premiumSinceTimestamp} keeps it for anyone who needs it.
+   */
   get premiumSince(): Date | null {
     const raw = this.premiumSinceTimestamp
     return raw === undefined || raw === null ? null : new Date(raw)
@@ -174,10 +213,14 @@ export class GuildMember<Client = unknown> extends Base<Client> {
    * The mention form.
    *
    * @remarks
-   * A plain user mention. Discord retired the `<@!id>` nickname form and renders both
-   * identically, so there is nothing to choose between them.
+   * Built from {@link userId}, so it works on an embedded member with no `user`. It
+   * previously returned the empty string in that case, which meant interpolating
+   * `message.member` into a reply silently produced nothing.
+   *
+   * Discord retired the `<@!id>` nickname form and renders both identically, so there is
+   * nothing to choose between them.
    */
   override toString(): string {
-    return this.user === undefined ? '' : `<@${this.user.id}>`
+    return `<@${this.userId}>`
   }
 }

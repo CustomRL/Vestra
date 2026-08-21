@@ -41,9 +41,9 @@ function toRoleColors(colors: APIRoleColors): RoleColors {
  */
 export class Role<Client = unknown> extends Base<Client> {
   /** The role's ID. */
-  readonly id: Snowflake
+  declare readonly id: Snowflake
   /** The role's name. */
-  name: string
+  declare name: string
   /**
    * The role's colour as a single integer.
    *
@@ -53,15 +53,15 @@ export class Role<Client = unknown> extends Base<Client> {
    * only part of the appearance. Mirrored because Discord still sends it on every role, but
    * {@link colors} is the one to read.
    */
-  color: number
+  declare color: number
   /** The role's full colour definition, covering gradients and holographic styles. */
-  colors: RoleColors
+  declare colors: RoleColors
   /** Whether members with this role are listed separately in the member sidebar. */
-  hoist: boolean
+  declare hoist: boolean
   /** The role's icon hash. */
-  icon: string | null | undefined
+  declare icon: string | null | undefined
   /** The role's unicode emoji, shown in place of an icon. */
-  unicodeEmoji: string | null | undefined
+  declare unicodeEmoji: string | null | undefined
   /**
    * The role's position.
    *
@@ -69,15 +69,15 @@ export class Role<Client = unknown> extends Base<Client> {
    * Higher is more senior. Positions are not unique — several roles can share one, and
    * Discord breaks the tie by ID.
    */
-  position: number
+  declare position: number
   /** The role's permissions, as a decimal string bit set. */
-  permissions: string
+  declare permissions: string
   /** Whether the role is managed by an integration and cannot be edited. */
-  managed: boolean
+  declare managed: boolean
   /** Whether anybody may mention the role. */
-  mentionable: boolean
+  declare mentionable: boolean
   /** The role's flags, as a bit set. */
-  flags: number
+  declare flags: number
 
   /**
    * @param data - The payload to mirror.

@@ -71,19 +71,15 @@ describe('User structure', () => {
   })
 
   it('S7: gives every declared field a slot, whatever the payload omits', () => {
-    // The hidden-class invariant, but not for the reason the design document gives.
+    // The hidden-class invariant, and under `declare` it works for the reason the design
+    // document originally gave. `declare` emits nothing, so the constructor is the only
+    // thing that creates properties: skip a field for one payload variant and that variant
+    // gets its own shape, which turns `user.username` polymorphic in consumer code.
     //
-    // Under `useDefineForClassFields` — the default at target ES2023 — a bare field
-    // declaration emits `bot;` into the class body, which defines the property as
-    // `undefined` before the constructor runs. So the shape is fixed by the DECLARATION
-    // list, and a constructor that skipped an absent field would not change it. Verified by
-    // injecting `if (data.bot !== undefined)` around an assignment: this test still passed.
-    //
-    // A missing declaration cannot compile while the constructor still assigns it, so the
-    // mistake this actually catches is the one that DOES compile: switching a field to
-    // `declare` — which emits nothing — and then assigning it conditionally. Confirmed by
-    // doing exactly that and watching this fail with a clean build. §4.16's `declare` form
-    // is therefore the shape that needs this guard most.
+    // Written plainly instead, the emit would define every property up front and this could
+    // not fail — which is exactly what happened before CONTRIBUTING.md:114 was followed.
+    // Confirmed by injecting `if (data.bot !== undefined)` around an assignment and
+    // watching this fail on a clean build.
     const sparse = new User(apiUser(), client)
     const full = new User(
       apiUser({ bot: true, system: false, banner: 'hash', accent_color: 1, public_flags: 64 }),

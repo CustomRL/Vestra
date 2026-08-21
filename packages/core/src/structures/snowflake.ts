@@ -13,6 +13,9 @@ import type { Snowflake } from '@vestra/types'
 /** How far the timestamp is shifted within a snowflake. */
 const TIMESTAMP_SHIFT = 22n
 
+/** The epoch, hoisted for the same reason as the shift: this runs per snowflake read. */
+const EPOCH = BigInt(DiscordEpoch)
+
 /**
  * When a snowflake was created.
  *
@@ -25,12 +28,17 @@ const TIMESTAMP_SHIFT = 22n
  * bits. The arithmetic goes through `BigInt` and only the result, which is a millisecond
  * timestamp and comfortably inside the safe range, becomes a number.
  *
- * No validation: a malformed ID throws from `BigInt` with a clearer message than anything
- * this could add, and validating every ID on a hot path to catch a bug that would show up
- * immediately is not a trade worth making.
+ * Mostly unvalidated: a malformed ID throws from `BigInt` with a clearer message than
+ * anything this could add, and checking every ID on a hot path to catch a bug that would
+ * surface immediately is not a trade worth making.
+ *
+ * Two inputs slip through rather than throwing, because `BigInt` accepts them: an empty
+ * string is `0n` and a padded one is trimmed, so `snowflakeTimestamp('')` returns the
+ * Discord epoch rather than failing. Neither can arrive from a payload — `Snowflake` is
+ * populated only from Discord IDs — so this is documented rather than guarded.
  */
 export function snowflakeTimestamp(id: Snowflake): number {
-  return Number((BigInt(id) >> TIMESTAMP_SHIFT) + BigInt(DiscordEpoch))
+  return Number((BigInt(id) >> TIMESTAMP_SHIFT) + EPOCH)
 }
 
 /**
