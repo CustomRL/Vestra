@@ -7,6 +7,7 @@ import type { GuildMember } from '../structures/GuildMember.js'
 import type { Message } from '../structures/Message.js'
 import type { Role } from '../structures/Role.js'
 import type { User } from '../structures/User.js'
+import type { VoiceState } from '../structures/VoiceState.js'
 
 /**
  * What the client emits, and what each event carries.
@@ -149,6 +150,20 @@ export interface ClientEvents<Client = unknown> {
   roleUpdate: [role: Role<Client>, guildId: Snowflake]
   /** A role was deleted. */
   roleDelete: [roleId: Snowflake, guildId: Snowflake]
+
+  /**
+   * Somebody joined, left or changed their voice state.
+   *
+   * @remarks
+   * Carries both states, which is the one place this library hands a listener an "old"
+   * object. `previous` is `undefined` on a join and `current` is `undefined` on a leave, so
+   * the pair also says which of the three things happened. See {@link VoiceState.clone} for
+   * why the usual objection to old-object arguments does not apply here.
+   */
+  voiceStateUpdate: [
+    previous: VoiceState<Client> | undefined,
+    current: VoiceState<Client> | undefined,
+  ]
 
   /** The current user was updated. */
   userUpdate: [user: ClientUser<Client>]
