@@ -50,8 +50,17 @@ export const ALL_PERMISSIONS: bigint = Object.values(PermissionFlagsBits).reduce
  * is there for the rarer question of what was literally granted.
  */
 export class PermissionsBitField {
-  /** The raw bits. */
-  readonly bits: bigint
+  /**
+   * The raw bits.
+   *
+   * @remarks
+   * `declare` rather than a bare declaration, per CONTRIBUTING's rule for structure fields.
+   * A bare one emits `bits;` into the class body under `useDefineForClassFields`, so every
+   * instance is defined as `undefined` and then immediately assigned — and `add`, `remove` and
+   * every permission computation construct one, so this is a per-operation object rather than
+   * a per-process one.
+   */
+  declare readonly bits: bigint
 
   /**
    * @param value - What to build from. Defaults to nothing granted.
