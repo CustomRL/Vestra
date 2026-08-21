@@ -94,6 +94,27 @@ const MESSAGE = {
   pinned: false,
   type: 0,
 }
+const STAGE_INSTANCE = {
+  id: '840647391636226060',
+  guild_id: GUILD_ID,
+  channel_id: CHANNEL_ID,
+  topic: 'Office hours',
+  privacy_level: 2,
+  discoverable_disabled: true,
+  guild_scheduled_event_id: null,
+}
+const INVITE = {
+  channel_id: CHANNEL_ID,
+  code: 'vestra',
+  created_at: '2024-03-01T12:00:00.000000+00:00',
+  guild_id: GUILD_ID,
+  inviter: USER,
+  max_age: 86_400,
+  max_uses: 25,
+  temporary: false,
+  uses: 0,
+  expires_at: null,
+}
 const GUILD = {
   id: GUILD_ID,
   name: 'Vestra',
@@ -242,6 +263,15 @@ const FIXTURES: Readonly<Record<string, unknown>> = {
     member: MEMBER,
   },
   USER_UPDATE: { ...USER, bot: true },
+
+  // Neither of these two groups touches the cache, so their deletes belong in the replayed
+  // stream rather than in DELETES: nothing they remove could make the comparison vacuous.
+  INVITE_CREATE: INVITE,
+  INVITE_DELETE: { channel_id: CHANNEL_ID, guild_id: GUILD_ID, code: INVITE.code },
+
+  STAGE_INSTANCE_CREATE: STAGE_INSTANCE,
+  STAGE_INSTANCE_UPDATE: { ...STAGE_INSTANCE, topic: 'Now: questions' },
+  STAGE_INSTANCE_DELETE: STAGE_INSTANCE,
 
   // Deletes, applied only in the dedicated test below.
   GUILD_DELETE: { id: GUILD_ID },

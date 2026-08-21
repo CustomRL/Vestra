@@ -11,6 +11,7 @@ import {
 } from './handlers/channels.js'
 import { guildEmojisUpdate, guildStickersUpdate } from './handlers/expressions.js'
 import { guildCreate, guildDelete, guildUpdate } from './handlers/guilds.js'
+import { inviteCreate, inviteDelete } from './handlers/invites.js'
 import { presenceUpdate } from './handlers/presence.js'
 import {
   messageReactionAdd,
@@ -24,6 +25,7 @@ import { guildMemberAdd, guildMemberRemove, guildMemberUpdate } from './handlers
 import { messageCreate, messageDelete, messageUpdate } from './handlers/messages.js'
 import { ready, userUpdate } from './handlers/ready.js'
 import { roleCreate, roleDelete, roleUpdate } from './handlers/roles.js'
+import { stageInstanceCreate, stageInstanceDelete, stageInstanceUpdate } from './handlers/stage.js'
 
 /**
  * Every dispatch that has a handler.
@@ -85,4 +87,11 @@ export const handlers: readonly AnyEventHandler[] = [
   roleCreate,
   roleUpdate,
   roleDelete,
+
+  inviteCreate,
+  inviteDelete,
+
+  stageInstanceCreate,
+  stageInstanceUpdate,
+  stageInstanceDelete,
 ]

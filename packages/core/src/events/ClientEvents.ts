@@ -5,10 +5,12 @@ import type { ThreadChannel } from '../structures/channels/ThreadChannel.js'
 import type { Emoji } from '../structures/Emoji.js'
 import type { Guild } from '../structures/Guild.js'
 import type { GuildMember } from '../structures/GuildMember.js'
+import type { Invite } from '../structures/Invite.js'
 import type { Message } from '../structures/Message.js'
 import type { Presence } from '../structures/Presence.js'
 import type { ReactionEmoji } from '../structures/ReactionEmoji.js'
 import type { Role } from '../structures/Role.js'
+import type { StageInstance } from '../structures/StageInstance.js'
 import type { Sticker } from '../structures/Sticker.js'
 import type { User } from '../structures/User.js'
 import type { VoiceState } from '../structures/VoiceState.js'
@@ -267,6 +269,41 @@ export interface ClientEvents<Client = unknown> {
     previous: VoiceState<Client> | undefined,
     current: VoiceState<Client> | undefined,
   ]
+
+  /**
+   * An invite was created.
+   *
+   * @remarks
+   * Needs the `GuildInvites` intent, and fires only for invites made while the bot is
+   * connected — so the invites a bot learns of this way are never the guild's whole set.
+   */
+  inviteCreate: [invite: Invite<Client>]
+  /**
+   * An invite was deleted, expired, or ran out of uses.
+   *
+   * @remarks
+   * Carries the code rather than an {@link Invite}, because the dispatch carries nothing else
+   * and nothing is cached to fill the gap in — the same reasoning as
+   * {@link ClientEvents.messageDelete}, and the opposite outcome to
+   * {@link ClientEvents.channelDelete}, which has a cached channel to hand over. Discord does
+   * not say which of the three things happened, and an invite exhausted by its last use
+   * produces no event at all.
+   */
+  inviteDelete: [code: string, channelId: Snowflake, guildId: Snowflake | undefined]
+
+  /** A stage went live. */
+  stageInstanceCreate: [stageInstance: StageInstance<Client>]
+  /** A live stage's topic or privacy level changed. */
+  stageInstanceUpdate: [stageInstance: StageInstance<Client>]
+  /**
+   * A stage ended.
+   *
+   * @remarks
+   * Carries the instance, unlike {@link ClientEvents.inviteDelete}, because
+   * `STAGE_INSTANCE_DELETE` carries the whole object rather than a stub. Fires when Discord
+   * closes a stage that has had no speakers as well as when somebody ends it.
+   */
+  stageInstanceDelete: [stageInstance: StageInstance<Client>]
 
   /** The current user was updated. */
   userUpdate: [user: ClientUser<Client>]
