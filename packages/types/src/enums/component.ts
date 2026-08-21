@@ -41,6 +41,23 @@ export const ComponentType = {
   Separator: 14,
   /** A container that visually groups child components behind an accent colour. */
   Container: 17,
+  /**
+   * A label and optional description wrapping one interactive component.
+   *
+   * @remarks
+   * The modal building block. Every interactive component in a modal sits inside one of
+   * these, which is why a submitted modal's components are labels rather than the action
+   * rows older modals used.
+   */
+  Label: 18,
+  /** A file upload field, valid inside a modal label. */
+  FileUpload: 19,
+  /** A set of options where exactly one may be chosen. */
+  RadioGroup: 21,
+  /** A set of checkboxes where any number may be chosen. */
+  CheckboxGroup: 22,
+  /** A single yes-or-no checkbox. */
+  Checkbox: 23,
 } as const
 
 /**

@@ -1,3 +1,5 @@
+import type { APIGuildApplicationCommandPermissions } from '../payloads/application-command.js'
+import type { APIInteraction } from '../payloads/interaction.js'
 import type {
   GatewayChannelPinsUpdateDispatchData,
   GatewayGuildAuditLogEntryCreateDispatchData,
@@ -236,6 +238,18 @@ export interface GatewayDispatchEventMap {
 
   /** A user's presence or activities changed. */
   PRESENCE_UPDATE: APIPresenceUpdate
+
+  /**
+   * A slash command, component or modal was used.
+   *
+   * @remarks
+   * The gateway sends the interaction resource unchanged, so this points straight at it.
+   * Narrow on `data` by the interaction's `type` before reading it — the three interaction
+   * kinds carry entirely different data.
+   */
+  INTERACTION_CREATE: APIInteraction
+  /** A command's permission overwrites changed in a guild. */
+  APPLICATION_COMMAND_PERMISSIONS_UPDATE: APIGuildApplicationCommandPermissions
 }
 
 /**

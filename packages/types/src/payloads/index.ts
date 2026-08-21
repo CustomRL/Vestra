@@ -7,6 +7,7 @@
  * here would make these types a translation layer rather than a description.
  */
 
+export * from './application-command.js'
 export * from './attachment.js'
 export * from './audit-log.js'
 export * from './auto-moderation.js'
@@ -16,6 +17,7 @@ export * from './embed.js'
 export * from './emoji.js'
 export * from './guild.js'
 export * from './integration.js'
+export * from './interaction.js'
 export * from './member.js'
 export * from './message-interaction.js'
 export * from './message.js'
