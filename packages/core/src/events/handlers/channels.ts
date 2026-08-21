@@ -1,4 +1,5 @@
 import type { APIChannel, Snowflake } from '@vestra/types'
+import { evictChannel } from '../../cache/evictGuild.js'
 import type { Channel } from '../../structures/channels/Channel.js'
 import type { ThreadChannel } from '../../structures/channels/ThreadChannel.js'
 import { createChannel } from '../../structures/channels/createChannel.js'
@@ -51,10 +52,9 @@ export const channelUpdate = defineHandler('CHANNEL_UPDATE', (client, data) => {
 export const channelDelete = defineHandler('CHANNEL_DELETE', (client, data) => {
   const cached = findChannel(client, data.id)
 
-  // Both scopes, because the dispatch does not say which one held it and deleting from the
-  // wrong one would leave the channel cached forever.
-  client.cache.channels.delete(data.id)
-  client.cache.threads.delete(data.id)
+  // Both scopes, because the dispatch does not say which one held it — and everything that
+  // hung off the channel, because its messages and threads are unreachable the moment it goes.
+  evictChannel(client.cache, data.id)
 
   if (cached === undefined) return
   client.emit('channelDelete', cached)
@@ -92,7 +92,8 @@ export const threadUpdate = defineHandler('THREAD_UPDATE', (client, data) => {
  */
 export const threadDelete = defineHandler('THREAD_DELETE', (client, data) => {
   const cached = client.cache.threads.get(data.id)
-  client.cache.threads.delete(data.id)
+  // A thread is a channel, so its messages are grouped under its own ID and go with it.
+  evictChannel(client.cache, data.id)
 
   if (cached === undefined) return
   client.emit('threadDelete', cached)

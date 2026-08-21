@@ -36,4 +36,4 @@ export type {
   CacheCodec,
   CacheScopeContext,
 } from './CacheAdapter.js'
-export { evictGuild } from './evictGuild.js'
+export { evictChannel, evictGuild, evictMember } from './evictGuild.js'
