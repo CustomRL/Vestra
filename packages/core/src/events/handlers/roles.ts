@@ -54,5 +54,21 @@ export const roleUpdate = defineHandler('GUILD_ROLE_UPDATE', (client, data) => {
  */
 export const roleDelete = defineHandler('GUILD_ROLE_DELETE', (client, data) => {
   client.cache.roles.delete(data.role_id)
+
+  // Discord sends no member updates when a role is deleted — the role simply stops existing,
+  // and every cached member goes on listing it. `member.roles.includes(deletedRole)` then
+  // answers `true` forever, which is a wrong answer rather than a stale one.
+  //
+  // Permission computation is unaffected either way, because it skips role IDs the cache does
+  // not hold. This is for the consumers who read `roles` directly.
+  //
+  // Bounded and rare: only the members cached for this one guild, only on a role deletion. The
+  // array is copied rather than spliced because {@link GuildMember.roles} holds the payload's
+  // own array by reference, and mutating it would edit the dispatch.
+  for (const member of client.cache.members.group(data.guild_id)) {
+    if (!member.roles.includes(data.role_id)) continue
+    member.roles = member.roles.filter((roleId) => roleId !== data.role_id)
+  }
+
   client.emit('roleDelete', data.role_id, data.guild_id)
 })

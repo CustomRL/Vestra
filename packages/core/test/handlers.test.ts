@@ -186,3 +186,62 @@ describe('handler registry', () => {
     assert.equal(context.cache.member('9', USER.id)?.userId, USER.id)
   })
 })
+
+describe('role deletion and cached members', () => {
+  const GUILD_ID = '613425648685547541'
+  const ROLE_ID = '41771983423143936'
+  const OTHER_ROLE = '900000000000000000'
+
+  function member(userId: string): unknown {
+    return {
+      guild_id: GUILD_ID,
+      user: { ...USER, id: userId },
+      roles: [ROLE_ID, OTHER_ROLE],
+      joined_at: '2021-03-14T12:00:00.000000+00:00',
+      deaf: false,
+      mute: false,
+      flags: 0,
+    }
+  }
+
+  it('RD1: takes a deleted role out of the members that held it', () => {
+    // Discord sends no member updates when a role is deleted, so every cached member goes on
+    // listing it and `member.roles.includes(deletedRole)` answers `true` forever.
+    const { router, context } = harness({ members: true, roles: true, users: true })
+    router.route(dispatch('GUILD_MEMBER_ADD', member('1')), shard)
+    router.route(dispatch('GUILD_MEMBER_ADD', member('2')), shard)
+
+    router.route(dispatch('GUILD_ROLE_DELETE', { guild_id: GUILD_ID, role_id: ROLE_ID }), shard)
+
+    for (const userId of ['1', '2']) {
+      const cached = context.cache.member(GUILD_ID, userId)
+      assert.deepEqual(cached?.roles, [OTHER_ROLE], `member ${userId} kept the deleted role`)
+    }
+  })
+
+  it('RD2: leaves members in other guilds alone', () => {
+    const { router, context } = harness({ members: true, roles: true, users: true })
+    router.route(dispatch('GUILD_MEMBER_ADD', member('1')), shard)
+    router.route(
+      dispatch('GUILD_MEMBER_ADD', { ...(member('1') as object), guild_id: '999' }),
+      shard,
+    )
+
+    router.route(dispatch('GUILD_ROLE_DELETE', { guild_id: GUILD_ID, role_id: ROLE_ID }), shard)
+
+    assert.deepEqual(context.cache.member('999', '1')?.roles, [ROLE_ID, OTHER_ROLE])
+  })
+
+  it('RD3: does not edit the payload it was handed', () => {
+    // `GuildMember.roles` holds the dispatch's own array by reference, so splicing it in place
+    // would edit the payload — which the raw listener may still be looking at.
+    const { router, context } = harness({ members: true, roles: true, users: true })
+    const payload = member('1') as { roles: string[] }
+    router.route(dispatch('GUILD_MEMBER_ADD', payload), shard)
+
+    router.route(dispatch('GUILD_ROLE_DELETE', { guild_id: GUILD_ID, role_id: ROLE_ID }), shard)
+
+    assert.deepEqual(payload.roles, [ROLE_ID, OTHER_ROLE], 'the dispatch payload was mutated')
+    assert.deepEqual(context.cache.member(GUILD_ID, '1')?.roles, [OTHER_ROLE])
+  })
+})
