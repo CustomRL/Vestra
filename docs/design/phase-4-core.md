@@ -2892,11 +2892,22 @@ implemented against would be guessing.
   one context object per client instead. `EventContext.user` is a plain writable field the
   handlers assign; `Client.user` is a getter that reads through to it. One owner, no runtime
   assignment to a getter, and the narrowing the interface existed for is unchanged.
-- **E5. Serial mode has no stated mechanism. STILL OPEN, and unbuilt.** Nothing in
-  `packages/core/src` implements serial mode, so the contradiction has not been resolved so much
-  as deferred: `EventContext.emit` still returns `boolean` and there is still nothing for a queue
-  to await. Whoever builds it settles it, and the honest reading of §4.8 today is that it
-  describes a feature that does not exist.
+- **E5. Serial mode has no stated mechanism. OPEN, and now known to be unbuildable as
+  specified.** Nothing in `packages/core/src` implements it, and the reason is sharper than
+  "nobody has got to it": §4.8 says serial mode "changes `emit`, not `handle`", and `emit`
+  cannot do the job. Measured on Node 25: `EventEmitter.prototype.emit` returns `boolean` and
+  returns **before** an async listener settles, and nothing in the class exposes the promise
+  that listener returned. A queue built on `emit` therefore has nothing to await and would
+  serialise only the synchronous part of dispatch handling — which routing already does, since
+  `EventRouter.route` is synchronous. It would be a no-op with a configuration flag.
+
+  A workable design does exist, and it is not the specified one: invoke `rawListeners(event)`
+  directly and await what each returns. The cost is that the queue then owns `once` semantics,
+  listener ordering and error routing — everything `emit` does for free — and it changes what
+  a listener returning a promise _means_, which today is nothing. That is a public API decision
+  rather than an implementation detail, so it is left for whoever wants the feature. §4.8 should
+  be read as describing something that does not exist.
+
 - **E6. `raw` is emitted outside the `try` in `routeDispatch` (§4.7). RESOLVED: it is emitted
   inside.** `EventRouter.route` puts it in the same `try` as the handler and says why — it runs
   consumer listeners like everything else, and a throwing `raw` listener escaping while a
