@@ -158,6 +158,99 @@ describe('channel handlers', () => {
     assert.equal(context.cache.threads.get(THREAD_ID), undefined)
   })
 
+  it('CD6b: takes a deleted channel messages and threads with it', () => {
+    // The same leak as issue #15 one level down. A deleted channel's messages and the threads
+    // hanging off it are unreachable the moment it goes: every dispatch that could name them is
+    // about a channel that no longer exists.
+    const { router, context } = harness({ channels: true, threads: true, messages: true })
+    router.route(dispatch('CHANNEL_CREATE', channelPayload(ChannelType.GuildText)), shard, false)
+    router.route(dispatch('THREAD_CREATE', threadPayload()), shard, false)
+    router.route(
+      dispatch('MESSAGE_CREATE', {
+        id: 'm1',
+        channel_id: CHANNEL_ID,
+        guild_id: GUILD_ID,
+        author: { id: '1', username: 'n', discriminator: '0', global_name: null, avatar: null },
+        content: 'hi',
+        timestamp: '2023-01-01T00:00:00+00:00',
+        edited_timestamp: null,
+        tts: false,
+        mention_everyone: false,
+        mentions: [],
+        mention_roles: [],
+        attachments: [],
+        embeds: [],
+        pinned: false,
+        type: 0,
+      }),
+      shard,
+      false,
+    )
+    // A message in the thread, which is grouped under the thread's own ID rather than the
+    // parent's — the case a non-recursive eviction misses.
+    router.route(
+      dispatch('MESSAGE_CREATE', {
+        id: 'm2',
+        channel_id: THREAD_ID,
+        guild_id: GUILD_ID,
+        author: { id: '1', username: 'n', discriminator: '0', global_name: null, avatar: null },
+        content: 'in the thread',
+        timestamp: '2023-01-01T00:00:00+00:00',
+        edited_timestamp: null,
+        tts: false,
+        mention_everyone: false,
+        mentions: [],
+        mention_roles: [],
+        attachments: [],
+        embeds: [],
+        pinned: false,
+        type: 0,
+      }),
+      shard,
+      false,
+    )
+
+    assert.equal(context.cache.messages.size, 2)
+    assert.equal(context.cache.threads.size, 1)
+
+    router.route(dispatch('CHANNEL_DELETE', channelPayload(ChannelType.GuildText)), shard, false)
+
+    assert.equal(context.cache.channels.size, 0)
+    assert.equal(context.cache.threads.size, 0, 'the threads under it leaked')
+    assert.equal(context.cache.messages.size, 0, 'its messages leaked')
+  })
+
+  it('CD6c: takes a deleted thread messages with it', () => {
+    const { router, context } = harness({ threads: true, messages: true })
+    router.route(dispatch('THREAD_CREATE', threadPayload()), shard, false)
+    router.route(
+      dispatch('MESSAGE_CREATE', {
+        id: 'm1',
+        channel_id: THREAD_ID,
+        guild_id: GUILD_ID,
+        author: { id: '1', username: 'n', discriminator: '0', global_name: null, avatar: null },
+        content: 'hi',
+        timestamp: '2023-01-01T00:00:00+00:00',
+        edited_timestamp: null,
+        tts: false,
+        mention_everyone: false,
+        mentions: [],
+        mention_roles: [],
+        attachments: [],
+        embeds: [],
+        pinned: false,
+        type: 0,
+      }),
+      shard,
+      false,
+    )
+
+    router.route(dispatch('THREAD_DELETE', threadPayload()), shard, false)
+
+    assert.equal(context.cache.threads.size, 0)
+    assert.equal(context.cache.messages.size, 0, 'the thread messages leaked')
+  })
+
   it('CD7: emits nothing for a delete it never had cached', () => {
     const { router, emitted } = harness()
     router.route(dispatch('CHANNEL_DELETE', channelPayload(ChannelType.GuildText)), shard, false)

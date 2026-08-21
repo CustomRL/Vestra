@@ -181,6 +181,48 @@ describe('voice state handler', () => {
   })
 })
 
+describe('leaving a guild', () => {
+  it('V11: takes the departing member voice state and presence with them', () => {
+    // Both are keyed `guildId:userId`, so both die with the membership. Leaving them behind
+    // means `voiceState(guild, user)` keeps reporting somebody as connected to a channel in a
+    // guild they are no longer in.
+    const { router, context } = harness({
+      voiceStates: true,
+      members: true,
+      presences: true,
+      users: true,
+    })
+    router.route(dispatch('VOICE_STATE_UPDATE', voiceState()), shard, false)
+    router.route(
+      dispatch('PRESENCE_UPDATE', {
+        user: { id: USER_ID },
+        guild_id: GUILD_ID,
+        status: 'online',
+        activities: [],
+        client_status: {},
+      }),
+      shard,
+      false,
+    )
+    assert.equal(context.cache.voiceStates.size, 1)
+    assert.equal(context.cache.presences.size, 1)
+
+    router.route(
+      dispatch('GUILD_MEMBER_REMOVE', {
+        guild_id: GUILD_ID,
+        user: { id: USER_ID, username: 'n', discriminator: '0', global_name: null, avatar: null },
+      }),
+      shard,
+      false,
+    )
+
+    assert.equal(context.cache.voiceStates.size, 0, 'the voice state leaked')
+    assert.equal(context.cache.presences.size, 0, 'the presence leaked')
+    // The user survives: they may still be in other guilds.
+    assert.equal(context.cache.users.size, 1)
+  })
+})
+
 describe('VoiceState structure', () => {
   it('V9: clones through the constructor, keeping one shape', () => {
     const original = new VoiceState(voiceState() as never, GUILD_ID, undefined)

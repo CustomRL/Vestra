@@ -53,3 +53,53 @@ export function evictGuild(cache: CacheRegistry, guildId: Snowflake): void {
     if (message.guildId === guildId) cache.messages.delete(message.id)
   }
 }
+
+/**
+ * Drops everything cached for a channel that is gone.
+ *
+ * @param cache - The registry to evict from.
+ * @param channelId - The channel that is gone.
+ *
+ * @remarks
+ * The same problem as {@link evictGuild} one level down: a deleted channel's messages and the
+ * threads hanging off it are unreachable the moment it goes, because every dispatch that could
+ * name them is about a channel that no longer exists.
+ *
+ * Both are a plain `group()` call here, unlike in `evictGuild` — `messages` groups by channel
+ * and `threads` group by their parent channel, so this is exactly the key both indexes use.
+ *
+ * A thread's own messages are handled by recursing, because a thread is a channel: its
+ * messages are grouped under the thread's ID, not the parent's.
+ */
+export function evictChannel(cache: CacheRegistry, channelId: Snowflake): void {
+  cache.channels.delete(channelId)
+
+  for (const thread of cache.threads.group(channelId)) evictChannel(cache, thread.id)
+  cache.threads.delete(channelId)
+
+  for (const message of cache.messages.group(channelId)) cache.messages.delete(message.id)
+}
+
+/**
+ * Drops everything cached for a membership that has ended.
+ *
+ * @param cache - The registry to evict from.
+ * @param guildId - The guild they left.
+ * @param userId - Who left.
+ *
+ * @remarks
+ * A presence and a voice state are per-membership, not per user — both are keyed
+ * `guildId:userId` — so both die with the membership. Leaving them behind means
+ * `voiceState(guild, user)` keeps reporting somebody as connected to a channel in a guild they
+ * are no longer in.
+ *
+ * The user itself is kept, for the same reason {@link evictGuild} keeps it: they may still be
+ * in other guilds, and a user is not guild-scoped.
+ */
+export function evictMember(cache: CacheRegistry, guildId: Snowflake, userId: Snowflake): void {
+  const key = guildUserKey(guildId, userId)
+
+  cache.members.delete(key)
+  cache.presences.delete(key)
+  cache.voiceStates.delete(key)
+}

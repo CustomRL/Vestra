@@ -1,4 +1,4 @@
-import { guildUserKey } from '../../cache/CacheKeys.js'
+import { evictMember } from '../../cache/evictGuild.js'
 import { GuildMember } from '../../structures/GuildMember.js'
 import { defineHandler } from '../EventHandler.js'
 import { upsertUser } from '../upsert.js'
@@ -71,6 +71,6 @@ export const guildMemberUpdate = defineHandler('GUILD_MEMBER_UPDATE', (client, d
  * the account, which may still be in every other guild the bot is in.
  */
 export const guildMemberRemove = defineHandler('GUILD_MEMBER_REMOVE', (client, data) => {
-  client.cache.members.delete(guildUserKey(data.guild_id, data.user.id))
+  evictMember(client.cache, data.guild_id, data.user.id)
   client.emit('guildMemberRemove', data.guild_id, upsertUser(client, data.user))
 })
