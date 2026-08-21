@@ -181,6 +181,20 @@ export interface AnyCacheStore {
   readonly expires: boolean
   /** How many entries it holds. */
   readonly size: number
+  /**
+   * Every entry, as key and value.
+   *
+   * @remarks
+   * Typed `unknown` on the value because this view exists precisely to iterate stores whose
+   * value types differ. Anything reading through it either does not care what the values are —
+   * counting, dumping, serialising — or narrows by {@link AnyCacheStore.scope}.
+   *
+   * Present so the whole cache can be walked without naming every scope, which is what a
+   * persistence adapter, a diagnostic dump and the replay-idempotency test all need. Naming
+   * scopes instead would mean each of those quietly stops covering a scope the day one is
+   * added.
+   */
+  entries: () => IterableIterator<[string, unknown]>
   /** Drops expired entries, returning how many. */
   sweep: (now: number) => number
   /** Drops everything. */
