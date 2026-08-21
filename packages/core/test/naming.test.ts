@@ -145,6 +145,7 @@ const STRUCTURE_SOURCES: { structure: string; api: string }[] = [
   { structure: 'User', api: 'APIUser' },
   { structure: 'Role', api: 'APIRole' },
   { structure: 'GuildMember', api: 'APIGuildMember' },
+  { structure: 'Message', api: 'APIMessage' },
 ]
 
 /**
@@ -159,6 +160,15 @@ const STRUCTURE_SOURCES: { structure: string; api: string }[] = [
  * Removing an entry is how you decide a rename was wrong.
  */
 const RENAMES: Record<string, Record<string, string>> = {
+  Message: {
+    createdTimestamp:
+      'timestamp. A bare `timestamp` sitting next to `editedTimestamp` reads as "the ' +
+      'relevant one", which it is not, and the suffix rule then matches the other ISO ' +
+      'fields.',
+    partial:
+      'Not a payload field. The discriminant `isComplete()` narrows on, recording that ' +
+      'the payload did not carry every field.',
+  },
   GuildMember: {
     guildId:
       'Not on the payload at all — Discord puts guild_id on the dispatch, not on the ' +
