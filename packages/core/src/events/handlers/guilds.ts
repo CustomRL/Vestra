@@ -1,7 +1,9 @@
 import { Guild } from '../../structures/Guild.js'
 import { GuildMember } from '../../structures/GuildMember.js'
+import { createEmoji } from '../../structures/Emoji.js'
 import { Presence } from '../../structures/Presence.js'
 import { Role } from '../../structures/Role.js'
+import { Sticker } from '../../structures/Sticker.js'
 import { VoiceState } from '../../structures/VoiceState.js'
 import { defineHandler } from '../EventHandler.js'
 import { cacheChannel } from './channels.js'
@@ -54,6 +56,17 @@ export const guildCreate = defineHandler('GUILD_CREATE', (client, data) => {
   // started while people were already in voice would otherwise see an empty set.
   for (const state of data.voice_states) {
     client.cache.voiceStates.add(new VoiceState(state, data.id, client))
+  }
+
+  // Emojis and stickers ride along here and nowhere else short of a REST call, exactly as
+  // roles do. `createEmoji` refuses one with no ID, which is a standard Unicode emoji rather
+  // than a guild emoji and has nothing to cache.
+  for (const payload of data.emojis) {
+    const emoji = createEmoji(payload, data.id, client)
+    if (emoji !== undefined) client.cache.emojis.add(emoji)
+  }
+  if (data.stickers !== undefined) {
+    for (const sticker of data.stickers) client.cache.stickers.add(new Sticker(sticker, client))
   }
 
   // Presences arrive without their `guild_id`, so it is put back: the structure keys on it,

@@ -18,10 +18,12 @@ export {
   type ActivityTimestamps,
 } from './Activity.js'
 export * from './channels/index.js'
+export { createEmoji, Emoji } from './Emoji.js'
 export { GuildMember } from './GuildMember.js'
 export { Presence, type ClientStatus } from './Presence.js'
 export { Message, type CompleteMessage } from './Message.js'
 export { Role, type RoleColors } from './Role.js'
+export { Sticker } from './Sticker.js'
 export { User } from './User.js'
 export { VoiceState } from './VoiceState.js'
 export { snowflakeDate, snowflakeTimestamp } from './snowflake.js'

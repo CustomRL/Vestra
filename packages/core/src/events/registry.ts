@@ -7,6 +7,7 @@ import {
   threadDelete,
   threadUpdate,
 } from './handlers/channels.js'
+import { guildEmojisUpdate, guildStickersUpdate } from './handlers/expressions.js'
 import { guildCreate, guildDelete, guildUpdate } from './handlers/guilds.js'
 import { presenceUpdate } from './handlers/presence.js'
 import { voiceStateUpdate } from './handlers/voice.js'
@@ -53,6 +54,9 @@ export const handlers: readonly AnyEventHandler[] = [
   messageDeleteBulk,
   channelPinsUpdate,
   typingStart,
+
+  guildEmojisUpdate,
+  guildStickersUpdate,
 
   presenceUpdate,
   voiceStateUpdate,
