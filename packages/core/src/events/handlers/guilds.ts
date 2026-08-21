@@ -2,6 +2,7 @@ import { Guild } from '../../structures/Guild.js'
 import { GuildMember } from '../../structures/GuildMember.js'
 import { Role } from '../../structures/Role.js'
 import { defineHandler } from '../EventHandler.js'
+import { cacheChannel } from './channels.js'
 import { upsertUser } from '../upsert.js'
 
 /**
@@ -39,6 +40,12 @@ export const guildCreate = defineHandler('GUILD_CREATE', (client, data) => {
   // Roles ride along inside the guild rather than arriving as their own dispatches, so this
   // is the only chance to cache them short of a REST call per guild.
   for (const role of data.roles) client.cache.roles.add(new Role(role, data.id, client))
+
+  // Channels and threads arrive nested here with no `guild_id` of their own, which is why
+  // the guild's ID is threaded through: without it every channel learnt at startup would be
+  // unkeyable, and that is almost all of them.
+  for (const channel of data.channels) cacheChannel(client, channel, data.id)
+  for (const thread of data.threads) cacheChannel(client, thread, data.id)
 
   // Members are seeded but deliberately not announced. They are not joins — the list is who
   // was already there — and emitting `guildMemberAdd` for each would fire a join handler
