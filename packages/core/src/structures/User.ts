@@ -1,5 +1,6 @@
 import type { APIUser, PremiumType, Snowflake } from '@vestra/types'
 import { Base } from './Base.js'
+import { defaultAvatarUrl, userAvatarUrl, userBannerUrl, type ImageOptions } from './cdn.js'
 import { snowflakeDate, snowflakeTimestamp } from './snowflake.js'
 
 /**
@@ -114,6 +115,43 @@ export class User<Client = unknown> extends Base<Client> {
     this.accentColor = data.accent_color
     this.publicFlags = data.public_flags
     this.premiumType = data.premium_type
+  }
+
+  /**
+   * The user's avatar, falling back to the one Discord assigns.
+   *
+   * @param options - The format and size to request.
+   * @returns A URL that always resolves to something.
+   *
+   * @remarks
+   * Never `undefined`, unlike most accessors here: every user has an avatar, because Discord
+   * assigns one to anybody who has not set their own. An accessor returning `undefined` would
+   * put a fallback in every consumer, and half of them would get the default-avatar rule wrong
+   * — see {@link defaultAvatarUrl} for why there are two of them.
+   *
+   * The format defaults to GIF for an animated avatar and PNG otherwise, decided by the `a_`
+   * prefix on the hash, which is the only thing that marks one.
+   */
+  avatarUrl(options?: ImageOptions): string {
+    const hash = this.avatar
+    if (hash === null) return defaultAvatarUrl(this.id, this.discriminator)
+    return userAvatarUrl(this.id, hash, options)
+  }
+
+  /**
+   * The user's profile banner, or `undefined` if they have none.
+   *
+   * @param options - The format and size to request.
+   * @returns The URL, or `undefined`.
+   *
+   * @remarks
+   * `undefined` rather than a fallback, because Discord assigns no default banner — a user
+   * without one has a solid colour the CDN does not serve.
+   */
+  bannerUrl(options?: ImageOptions): string | undefined {
+    const hash = this.banner
+    if (hash === null || hash === undefined) return undefined
+    return userBannerUrl(this.id, hash, options)
   }
 
   /** The mention form, which Discord renders as a link. */
