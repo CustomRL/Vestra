@@ -1,5 +1,7 @@
-import type { APIDMChannel, Snowflake } from '@vestra/types'
+import type { APIDMChannel, RESTPostAPIChannelMessageJSONBody, Snowflake } from '@vestra/types'
 import { User } from '../User.js'
+import type { RestCapable } from '../capabilities.js'
+import { Message } from '../Message.js'
 import { Channel, type TextBased } from './Channel.js'
 
 /**
@@ -29,6 +31,28 @@ export class DMChannel<Client = unknown> extends Channel<Client> implements Text
 
     this.lastMessageId = data.last_message_id
     this.recipients = toRecipients(data, client)
+  }
+
+  /**
+   * Sends a message here.
+   *
+   * @param body - What to send.
+   * @param options - Request options, such as an abort signal.
+   * @returns The message that was sent.
+   *
+   * @remarks
+   * Named `send` rather than `createMessage`, which is what the REST route is called. The two
+   * names keep the two vocabularies visibly apart: the route hands back an `APIMessage` and
+   * this hands back a {@link Message}. Giving them one name would make "I fetched it through
+   * REST, why is my cache stale" a question people have to ask.
+   */
+  async send<C extends RestCapable>(
+    this: DMChannel<C>,
+    body: RESTPostAPIChannelMessageJSONBody,
+    options: { signal?: AbortSignal } = {},
+  ): Promise<Message<C>> {
+    const sent = await this.client.rest.channels.createMessage(this.id, body, options)
+    return new Message(sent, this.client)
   }
 
   /**

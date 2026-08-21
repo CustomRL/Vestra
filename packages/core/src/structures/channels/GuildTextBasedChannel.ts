@@ -2,9 +2,12 @@ import type {
   APITextBasedChannelBase,
   ChannelType,
   ISO8601Timestamp,
+  RESTPostAPIChannelMessageJSONBody,
   Snowflake,
 } from '@vestra/types'
 import type { TextBased } from './Channel.js'
+import type { RestCapable } from '../capabilities.js'
+import { Message } from '../Message.js'
 import { GuildChannel } from './GuildChannel.js'
 
 /**
@@ -60,6 +63,28 @@ export abstract class GuildTextBasedChannel<Client = unknown>
     this.lastPinTimestamp = data.last_pin_timestamp
     this.rateLimitPerUser = data.rate_limit_per_user
     this.topic = data.topic
+  }
+
+  /**
+   * Sends a message here.
+   *
+   * @param body - What to send.
+   * @param options - Request options, such as an abort signal.
+   * @returns The message that was sent.
+   *
+   * @remarks
+   * Named `send` rather than `createMessage`, which is what the REST route is called. The two
+   * names keep the two vocabularies visibly apart: the route hands back an `APIMessage` and
+   * this hands back a {@link Message}. Giving them one name would make "I fetched it through
+   * REST, why is my cache stale" a question people have to ask.
+   */
+  async send<C extends RestCapable>(
+    this: GuildTextBasedChannel<C>,
+    body: RESTPostAPIChannelMessageJSONBody,
+    options: { signal?: AbortSignal } = {},
+  ): Promise<Message<C>> {
+    const sent = await this.client.rest.channels.createMessage(this.id, body, options)
+    return new Message(sent, this.client)
   }
 
   /** When the last pinned message here was pinned, or `null` if nothing is pinned. Allocates. */

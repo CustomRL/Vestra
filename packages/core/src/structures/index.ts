@@ -17,6 +17,7 @@ export {
   type ActivitySecrets,
   type ActivityTimestamps,
 } from './Activity.js'
+export type { CacheCapable, RestCapable } from './capabilities.js'
 export * from './channels/index.js'
 export { createEmoji, Emoji } from './Emoji.js'
 export { GuildMember } from './GuildMember.js'

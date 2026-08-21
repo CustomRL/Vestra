@@ -11,6 +11,10 @@ import type {
   VerificationLevel,
 } from '@vestra/types'
 import { Base } from './Base.js'
+import type { CacheCapable } from './capabilities.js'
+import type { Channel } from './channels/Channel.js'
+import type { GuildMember } from './GuildMember.js'
+import type { Role } from './Role.js'
 import { snowflakeDate, snowflakeTimestamp } from './snowflake.js'
 
 /**
@@ -168,6 +172,56 @@ export class Guild<Client = unknown> extends Base<Client> {
   get joinedAt(): Date | null {
     const raw = this.joinedTimestamp
     return raw === undefined ? null : new Date(raw)
+  }
+
+  /**
+   * The guild's cached roles.
+   *
+   * @param this - A structure whose client can reach the cache.
+   * @returns The roles, or an empty array when the scope is off.
+   *
+   * @remarks
+   * A method rather than a getter, and it takes no arguments — the `this` parameter is a type
+   * constraint, not something a caller passes. A getter cannot carry one, and without it this
+   * would have to either import the client (closing a module cycle) or promise a cache the
+   * structure has no way to reach.
+   *
+   * An empty array means "nothing cached", which under `roles: false` is every guild. That is
+   * ADR 4 rather than caution, and it is why this is not called `getRoles`: it reads the cache
+   * and never fetches, so a caller who needs the authoritative list uses
+   * `client.rest.guilds.getRoles(guild.id)`.
+   */
+  roles<C extends CacheCapable>(this: Guild<C>): Role[] {
+    return this.client.cache.roles.group(this.id)
+  }
+
+  /**
+   * The guild's cached channels, threads excluded.
+   *
+   * @param this - A structure whose client can reach the cache.
+   * @returns The channels, or an empty array when the scope is off.
+   *
+   * @remarks
+   * Threads are a separate scope with a separate bound, so they are not folded in here — see
+   * {@link CacheRegistry.threads} for why.
+   */
+  channels<C extends CacheCapable>(this: Guild<C>): Channel[] {
+    return this.client.cache.channels.group(this.id)
+  }
+
+  /**
+   * The guild's cached members.
+   *
+   * @param this - A structure whose client can reach the cache.
+   * @returns The members, or an empty array when the scope is off.
+   *
+   * @remarks
+   * Off by default, and even switched on this is only who the library has seen. What arrives at
+   * startup depends on an intent in a way that surprises people — see
+   * {@link CacheRegistry.members}. `client.fetchMembers(guild.id)` is the way to ask Discord.
+   */
+  members<C extends CacheCapable>(this: Guild<C>): GuildMember[] {
+    return this.client.cache.members.group(this.id)
   }
 
   /**
