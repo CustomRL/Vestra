@@ -16,6 +16,8 @@ import type { APIGuild, APIUnavailableGuild } from '../payloads/guild.js'
 import type { APIGuildMember, APIVoiceState } from '../payloads/member.js'
 import type { APIIntegration } from '../payloads/integration.js'
 import type { APIMessage } from '../payloads/message.js'
+import type { APIStageInstance } from '../payloads/stage-instance.js'
+import type { APIGuildScheduledEvent } from '../payloads/scheduled-event.js'
 import type { APIPresenceUpdate } from '../payloads/presence.js'
 import type { APIRole } from '../payloads/role.js'
 import type { APISoundboardSound } from '../payloads/soundboard.js'
@@ -82,12 +84,12 @@ export interface GatewayGuildCreateExtraFields {
    * has to narrow by hand.
    */
   presences: Omit<APIPresenceUpdate, 'guild_id'>[]
-  /** Stage instances in the guild. Not modelled yet. */
-  stage_instances: unknown[]
-  /** Scheduled events in the guild. Not modelled yet. */
-  guild_scheduled_events: unknown[]
-  /** Soundboard sounds in the guild. Not modelled yet. */
-  soundboard_sounds: unknown[]
+  /** Stage instances in the guild. */
+  stage_instances: APIStageInstance[]
+  /** Scheduled events in the guild. */
+  guild_scheduled_events: APIGuildScheduledEvent[]
+  /** Soundboard sounds in the guild. */
+  soundboard_sounds: APISoundboardSound[]
 }
 
 /**
@@ -111,8 +113,14 @@ export interface GatewayGuildMembersChunkDispatchData {
   chunk_count: number
   /** IDs from `user_ids` that matched no member. */
   not_found?: Snowflake[]
-  /** Presences of the returned members, if requested. */
-  presences?: unknown[]
+  /**
+   * Presences of the returned members, if requested.
+   *
+   * @remarks
+   * `guild_id` is omitted for the same reason it is on the `GUILD_CREATE` presences: the
+   * guild is already named by the payload these arrive in.
+   */
+  presences?: Omit<APIPresenceUpdate, 'guild_id'>[]
   /** The `nonce` from the request, which is the only way to correlate chunks. */
   nonce?: string
 }
