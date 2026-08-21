@@ -19,6 +19,7 @@ import {
 } from './ratelimit/SequentialHandler.js'
 import { ChannelRoutes } from './routes/channels.js'
 import { GatewayRoutes } from './routes/gateway.js'
+import { InteractionRoutes } from './routes/interactions.js'
 import { GuildRoutes } from './routes/guilds.js'
 import { UserRoutes } from './routes/users.js'
 
@@ -76,6 +77,14 @@ export class REST extends EventEmitter<RESTEvents> {
   readonly users: UserRoutes
   /** Gateway bootstrap endpoints. */
   readonly gateway: GatewayRoutes
+  /**
+   * Interaction response endpoints.
+   *
+   * @remarks
+   * These authenticate with the interaction token rather than the bot token, and are the one
+   * family the rate limiter does not queue — the initial response has a three-second deadline.
+   */
+  readonly interactions: InteractionRoutes
 
   /**
    * @param options - Overrides for the client defaults.
@@ -96,6 +105,7 @@ export class REST extends EventEmitter<RESTEvents> {
     }
 
     this.channels = new ChannelRoutes(this)
+    this.interactions = new InteractionRoutes(this)
     this.guilds = new GuildRoutes(this)
     this.users = new UserRoutes(this)
     this.gateway = new GatewayRoutes(this)

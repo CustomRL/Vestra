@@ -14,4 +14,5 @@
 export * from './channel.js'
 export * from './gateway.js'
 export * from './guild.js'
+export * from './interaction.js'
 export * from './user.js'
