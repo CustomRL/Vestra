@@ -1,6 +1,7 @@
 import { Guild } from '../../structures/Guild.js'
 import { GuildMember } from '../../structures/GuildMember.js'
 import { Role } from '../../structures/Role.js'
+import { VoiceState } from '../../structures/VoiceState.js'
 import { defineHandler } from '../EventHandler.js'
 import { cacheChannel } from './channels.js'
 import { upsertUser } from '../upsert.js'
@@ -46,6 +47,13 @@ export const guildCreate = defineHandler('GUILD_CREATE', (client, data) => {
   // unkeyable, and that is almost all of them.
   for (const channel of data.channels) cacheChannel(client, channel, data.id)
   for (const thread of data.threads) cacheChannel(client, thread, data.id)
+
+  // Voice states arrive here without their `guild_id` too, and this is the only bulk source
+  // of them: VOICE_STATE_UPDATE reports changes, never the current picture, so a bot that
+  // started while people were already in voice would otherwise see an empty set.
+  for (const state of data.voice_states) {
+    client.cache.voiceStates.add(new VoiceState(state, data.id, client))
+  }
 
   // Members are seeded but deliberately not announced. They are not joins — the list is who
   // was already there — and emitting `guildMemberAdd` for each would fire a join handler

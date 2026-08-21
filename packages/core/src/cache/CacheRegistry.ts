@@ -7,6 +7,7 @@ import { CacheStore } from './CacheStore.js'
 import type { Channel } from '../structures/channels/Channel.js'
 import type { ThreadChannel } from '../structures/channels/ThreadChannel.js'
 import type { Guild } from '../structures/Guild.js'
+import type { VoiceState } from '../structures/VoiceState.js'
 import type { GuildMember } from '../structures/GuildMember.js'
 import type { Message } from '../structures/Message.js'
 import type { Role } from '../structures/Role.js'
@@ -39,6 +40,8 @@ export interface CacheValueMap<Client> {
   members: GuildMember<Client>
   /** Messages, keyed by message ID. */
   messages: Message<Client>
+  /** Voice states, keyed by `guildId:userId`. */
+  voiceStates: VoiceState<Client>
 }
 
 /** The scopes the registry currently serves. */
@@ -81,6 +84,10 @@ const CacheKeys = {
     keyOf: (value: GuildMember) => guildUserKey(value.guildId, value.userId),
     groupKeyOf: (value: GuildMember) => value.guildId,
   },
+  voiceStates: {
+    keyOf: (value: VoiceState) => guildUserKey(value.guildId, value.userId),
+    groupKeyOf: (value: VoiceState) => value.guildId,
+  },
   messages: {
     keyOf: (value: Message) => value.id,
     groupKeyOf: (value: Message) => value.channelId,
@@ -115,6 +122,7 @@ export type CacheOptions<Client = unknown> = {
  */
 export const DefaultCacheOptions: Record<CachedScope, CacheOption<never>> = {
   guilds: true,
+  voiceStates: false,
   channels: true,
   threads: false,
   users: false,
@@ -187,6 +195,16 @@ export class CacheRegistry<Client = unknown> {
    * `client.fetchMembers()`.
    */
   readonly members: CacheStore<GuildMember<Client>>
+  /**
+   * Voice states, grouped by guild. Off by default.
+   *
+   * @remarks
+   * Off despite being small and bounded — at most one entry per connected member — because
+   * ADR 4's rule is that a scope earns being on by being needed by most bots, and most bots
+   * never look at voice. A bot that does turns it on and gets an accurate picture, since
+   * Discord seeds the whole set on `GUILD_CREATE`.
+   */
+  readonly voiceStates: CacheStore<VoiceState<Client>>
   /** Messages, grouped by channel. Off by default. */
   readonly messages: CacheStore<Message<Client>>
 
@@ -215,6 +233,7 @@ export class CacheRegistry<Client = unknown> {
     }
 
     this.guilds = build(CacheScope.Guilds)
+    this.voiceStates = build(CacheScope.VoiceStates)
     this.channels = build(CacheScope.Channels)
     this.threads = build(CacheScope.Threads)
     this.users = build(CacheScope.Users)
@@ -232,6 +251,7 @@ export class CacheRegistry<Client = unknown> {
       this.users,
       this.roles,
       this.members,
+      this.voiceStates,
       this.messages,
     ]
   }
@@ -272,5 +292,20 @@ export class CacheRegistry<Client = unknown> {
    */
   member(guildId: Snowflake, userId: Snowflake): GuildMember<Client> | undefined {
     return this.members.get(guildUserKey(guildId, userId))
+  }
+
+  /**
+   * A voice state by its two-part key.
+   *
+   * @param guildId - The guild.
+   * @param userId - The user.
+   * @returns The cached state, or `undefined`.
+   *
+   * @remarks
+   * Exists for the same reason {@link CacheRegistry.member} does: the key is composite, and
+   * making every caller remember the separator is how two spellings of one key appear.
+   */
+  voiceState(guildId: Snowflake, userId: Snowflake): VoiceState<Client> | undefined {
+    return this.voiceStates.get(guildUserKey(guildId, userId))
   }
 }
