@@ -2,12 +2,14 @@
  * The Vestra client: structures, pluggable cache and typed events.
  *
  * @remarks
- * Still a skeleton. The client, structures, cache adapters and event handlers arrive in
- * Phase 4; for now this package re-exports the layers beneath it so that `vestra` is a
- * single usable install.
+ * Being built out in Phase 4. The cache layer is here; the client, structures and event
+ * handlers follow. Until then this package also re-exports the layers beneath it, so that
+ * `vestra` stays a single usable install.
  *
  * @packageDocumentation
  */
+
+export * from './cache/index.js'
 
 export * from '@vestra/gateway'
 export * from '@vestra/rest'
