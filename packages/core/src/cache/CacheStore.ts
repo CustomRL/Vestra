@@ -126,6 +126,18 @@ export class CacheStore<V> {
     return this.#policy.enabled
   }
 
+  /**
+   * Whether entries in this scope can expire.
+   *
+   * @remarks
+   * Lets the sweeper skip a scope entirely rather than walking it to discover it has no
+   * deadlines. A scope with no TTL can never hold an expired entry, so visiting it is pure
+   * cost — and under the default configuration that is every scope.
+   */
+  get expires(): boolean {
+    return this.#policy.enabled && this.#policy.ttl > 0
+  }
+
   /** How many entries are stored, including any expired but not yet swept. */
   get size(): number {
     return this.#adapter.size

@@ -26,6 +26,7 @@ export {
 export { guildUserKey, parseGuildUserKey } from './CacheKeys.js'
 export { CacheScope, CacheScopes } from './CacheScopes.js'
 export { CacheStore, type CacheStoreOptions } from './CacheStore.js'
+export { CacheSweeper } from './CacheSweeper.js'
 export { MemoryCacheAdapter } from './MemoryCacheAdapter.js'
 export { NullCacheAdapter } from './NullCacheAdapter.js'
 export type {

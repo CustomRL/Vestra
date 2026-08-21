@@ -109,6 +109,8 @@ export interface AnyCacheStore {
   readonly scope: CacheScope
   /** Whether it stores anything at all. */
   readonly enabled: boolean
+  /** Whether its entries can expire. */
+  readonly expires: boolean
   /** How many entries it holds. */
   readonly size: number
   /** Drops expired entries, returning how many. */
