@@ -2799,6 +2799,31 @@ each item is cross-referenced from the rule that depends on it.
 
 ---
 
+### 8-F. Corrections from implementation
+
+Found while building the slice, and recorded here because each contradicts something stated
+above.
+
+- **F1. The fixed-field-order rationale is imprecise, and the mechanism is not the constructor.**
+  §4.15 argues that assigning every field in a fixed constructor order is what keeps one hidden
+  class, and that "a constructor that skips absent fields produces a different shape". Under
+  `useDefineForClassFields` — the default at `target: es2023`, which `tsconfig.base.json` sets —
+  a bare field declaration emits `bot;` into the class body, and that defines the property as
+  `undefined` **before the constructor runs**. So the shape is fixed by the _declaration list_;
+  a constructor that conditionally assigns a declared field does not change it. Verified by
+  injecting a conditional assignment and watching the shape test still pass.
+
+  This does not make the rule wrong, it makes its reason different, and the difference matters
+  for §4.16: fields written with `declare` emit nothing, so for those the constructor **is** the
+  only thing creating properties and its completeness is exactly what the argument claims.
+  Structures should therefore either declare fields plainly and rely on the emit, or use
+  `declare` and treat constructor completeness as load-bearing — but the document should say
+  which, because the guard needed differs.
+
+  `packages/core/test/structures.test.ts` **S7** covers it. A missing declaration cannot compile
+  while the constructor assigns it, so the mistake actually guarded is `declare` plus a
+  conditional assignment, which compiles cleanly and was confirmed to fail the test.
+
 ### 8-E. Inconsistencies found by review, unresolved here
 
 An adversarial review of this document against the real source in `packages/gateway/src`,
