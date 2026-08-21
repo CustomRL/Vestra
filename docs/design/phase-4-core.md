@@ -2216,6 +2216,31 @@ be in the root solution `tsconfig.json`** or none of them run.
 `@ts-expect-error` is the mechanism throughout: if the error stops occurring, the directive
 becomes an unused-directive error and the test fails in the correct direction.
 
+**Two things this section did not anticipate, learned from writing the tests it specifies.**
+
+_`pnpm build` does not run any of this._ It is `turbo run build`, and each package's build task
+compiles that package's `src` only — the test projects are in the root solution but are not
+turbo tasks. A green `pnpm build` is compatible with a test file that does not compile at all.
+`pnpm typecheck` is the one that covers them, and it is what CI runs. CONTRIBUTING.md now says
+so; the sentence above about the solution `tsconfig.json` was necessary but not sufficient.
+
+_The guards that earned their keep are the sweeps, not the cases._ Almost every real defect this
+phase was an **absence** — a cache scope nothing wrote to, an entity nothing evicted when its
+container went, a dispatch nobody had decided about — and an absence is invisible to a test that
+checks a value. So the tests that found things enumerate a surface and assert nothing is missing
+from it: every scope has a writer, every dispatch is handled or explained, every channel type
+builds a class or is recorded as unsupported, every structure emits one shape, every re-export is
+the same object the lower package exports. Each names the missing thing when it fails.
+
+They come with a hazard the case-based tests do not have: a sweep that enumerates nothing passes
+silently. Every one of them therefore asserts its own surface is non-empty first — and every
+guard in the package is proven by mutation, reverting the fix and requiring the test to fail
+naming the thing, because a guard that cannot fail is worse than no guard.
+
+The suite is 34 files. The IDs below are the specification's; the implementation added families
+it did not name — `CC` for cache coverage, `EC` for dispatch coverage, `SH` for structure shape,
+`ER` for the error hierarchy, `PK` for barrel identity.
+
 ### 7.1 Test doubles
 
 **The REST double is free.** Verified: `RESTOptions.fetch?: typeof globalThis.fetch` exists and is
