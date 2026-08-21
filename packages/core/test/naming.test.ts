@@ -53,11 +53,36 @@ function readApiFieldNames(): Map<string, Set<string>> {
   const fields = new Map<string, Set<string>>()
   for (const exported of checker.getExportsOfModule(moduleSymbol)) {
     const name = exported.getName()
-    if (!name.startsWith('API')) continue
+    // `Gateway*` as well as `API*`: a structure mirrors the dispatch payload, not only the
+    // resource. `Guild.large` comes from `GatewayGuildCreateExtraFields` and nothing else, and
+    // reading only `API*` reported it as a rename with no reason — a false positive that would
+    // have been paid for with a fictional entry in RENAMES.
+    //
+    // The `Gateway*` half is restricted to interfaces, and the `API*` half deliberately is not.
+    // `Gateway*` also covers `GatewayDispatchEvents` (a const object of SCREAMING_SNAKE names)
+    // and several string-union aliases, and `getPropertiesOfType` on a string type hands back
+    // `charAt` and friends. Widening without this filter reports the whole String prototype as
+    // API surface.
+    const isApi = name.startsWith('API')
+    const isGatewayInterface =
+      name.startsWith('Gateway') &&
+      (exported.getDeclarations() ?? []).some((declaration) =>
+        ts.isInterfaceDeclaration(declaration),
+      )
+    if (!isApi && !isGatewayInterface) continue
 
     const declared = checker.getDeclaredTypeOfSymbol(exported)
     for (const property of checker.getPropertiesOfType(declared)) {
       const field = property.getName()
+      // Symbol-keyed properties are not wire fields. Some `Gateway*` exports are iterable, and
+      // their `__@iterator@N` entries are neither snake_case nor camelCase — they fail the
+      // mechanical-rule checks for a reason that has nothing to do with naming.
+      if (field.startsWith('__@')) continue
+      // Enum-like constants, not wire fields. `Gateway*` includes `GatewayDispatchEvents`,
+      // whose members are SCREAMING_SNAKE event names — a wire field is lowercase snake_case
+      // and never all-caps, so this cannot exclude a real one.
+      if (/^[A-Z0-9_]+$/.test(field)) continue
+
       const owners = fields.get(field) ?? new Set<string>()
       owners.add(name)
       fields.set(field, owners)
@@ -146,6 +171,20 @@ const STRUCTURE_SOURCES: { structure: string; api: string }[] = [
   { structure: 'Role', api: 'APIRole' },
   { structure: 'GuildMember', api: 'APIGuildMember' },
   { structure: 'Message', api: 'APIMessage' },
+  { structure: 'Guild', api: 'APIGuild' },
+  { structure: 'VoiceState', api: 'APIVoiceState' },
+  { structure: 'Presence', api: 'APIPresenceUpdate' },
+  { structure: 'Activity', api: 'APIActivity' },
+  { structure: 'Emoji', api: 'APIEmoji' },
+  { structure: 'Sticker', api: 'APISticker' },
+  { structure: 'ReactionEmoji', api: 'APIPartialEmoji' },
+  { structure: 'TextChannel', api: 'APITextChannel' },
+  { structure: 'VoiceChannel', api: 'APIVoiceChannel' },
+  { structure: 'ThreadChannel', api: 'APIThreadChannel' },
+  { structure: 'ForumChannel', api: 'APIForumChannel' },
+  { structure: 'DMChannel', api: 'APIDMChannel' },
+  { structure: 'GroupDMChannel', api: 'APIGroupDMChannel' },
+  { structure: 'CategoryChannel', api: 'APICategoryChannel' },
 ]
 
 /**
@@ -160,6 +199,26 @@ const STRUCTURE_SOURCES: { structure: string; api: string }[] = [
  * Removing an entry is how you decide a rename was wrong.
  */
 const RENAMES: Record<string, Record<string, string>> = {
+  Guild: {
+    joinedTimestamp:
+      'joined_at. The mechanical result, joinedAt, collides with the Date getter of the ' +
+      'same name — the same collision GuildMember.joinedTimestamp resolves the same way.',
+  },
+  Activity: {
+    createdTimestamp:
+      'created_at. The suffix rule for raw timestamps, and createdAt is the Date getter ' +
+      'beside it. Note this one is epoch milliseconds rather than an ISO string, which is ' +
+      'what the payload sends.',
+  },
+  ForumChannel: {
+    lastThreadId:
+      'last_message_id, which is what it is not. The posts in a forum are threads, so ' +
+      'mirroring the name would make lastMessageId mean the newest message on a text ' +
+      'channel and the newest thread on a forum — one name for two things.',
+  },
+  MediaChannel: {
+    lastThreadId: 'last_message_id. The same rename as ForumChannel, from the same shared base.',
+  },
   Message: {
     createdTimestamp:
       'timestamp. A bare `timestamp` sitting next to `editedTimestamp` reads as "the ' +
