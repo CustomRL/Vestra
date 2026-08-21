@@ -1,5 +1,6 @@
 import type { APIChannel, Snowflake } from '@vestra/types'
 import type { Channel } from '../../structures/channels/Channel.js'
+import type { ThreadChannel } from '../../structures/channels/ThreadChannel.js'
 import { createChannel } from '../../structures/channels/createChannel.js'
 import type { EventContext } from '../EventHandler.js'
 import { defineHandler } from '../EventHandler.js'
@@ -95,6 +96,55 @@ export const threadDelete = defineHandler('THREAD_DELETE', (client, data) => {
 
   if (cached === undefined) return
   client.emit('threadDelete', cached)
+})
+
+/**
+ * The bot regained access to threads, or joined a channel that has some.
+ *
+ * @remarks
+ * **Reconciles rather than adds, and only within the channels the payload names.** Discord
+ * sends the active threads it can see, and `channel_ids` says which parent channels that
+ * covers — so a thread cached under one of those parents that is *not* in the payload has been
+ * archived or lost, and stays cached forever if this only adds. Same shape as the emoji
+ * reconciliation, and for the same reason.
+ *
+ * `channel_ids` being absent means the whole guild was synced, which makes an empty `threads`
+ * array mean "this guild has no active threads" rather than "nothing to report". Treating the
+ * two the same would either leave every thread cached forever or drop threads that are still
+ * live, depending on which way it was got wrong.
+ */
+export const threadListSync = defineHandler('THREAD_LIST_SYNC', (client, data) => {
+  const scoped = data.channel_ids
+  const arrived = new Set<Snowflake>()
+  const synced: ThreadChannel[] = []
+
+  for (const payload of data.threads) {
+    const channel = createChannel(payload, client, data.guild_id)
+    if (channel?.isThread() !== true) continue
+
+    arrived.add(channel.id)
+    const cached = client.cache.threads.get(channel.id)
+    if (cached === undefined) {
+      synced.push(client.cache.threads.add(channel))
+      continue
+    }
+
+    cached.patch(payload)
+    synced.push(cached)
+  }
+
+  for (const thread of client.cache.threads.values()) {
+    if (arrived.has(thread.id)) continue
+    // Only threads this sync actually covers. A guild-wide sync covers all of them; a scoped
+    // one must leave the rest alone, or regaining access to one channel would evict the
+    // threads of every other.
+    if (thread.guildId !== data.guild_id) continue
+    if (scoped !== undefined && !scoped.includes(thread.parentId ?? '')) continue
+
+    client.cache.threads.delete(thread.id)
+  }
+
+  client.emit('threadListSync', data.guild_id, synced)
 })
 
 /**

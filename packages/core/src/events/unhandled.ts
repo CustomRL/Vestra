@@ -88,18 +88,9 @@ export const UnhandledEvents: Readonly<Partial<Record<GatewayDispatchEvents, str
   APPLICATION_COMMAND_PERMISSIONS_UPDATE:
     'Deliberate. Nothing in the cache changes, and a bot that cares is already managing its ' +
     'own commands through REST.',
-  GUILD_BAN_ADD:
-    'Deliberate for now. A ban is not a cache change — `GUILD_MEMBER_REMOVE` fires alongside ' +
-    'it and does the eviction — so this would be a typed event carrying a `User` and nothing ' +
-    'else. Cheap to add when somebody wants it.',
-  GUILD_BAN_REMOVE: 'Deliberate for now. The same as `GUILD_BAN_ADD`.',
   GUILD_INTEGRATIONS_UPDATE:
     'Deliberate. Carries a guild ID and nothing else — it is a hint to re-fetch integrations, ' +
     'which are not modelled.',
-  THREAD_LIST_SYNC:
-    'Deliberate for now. Would seed the threads scope on regaining access to a channel, which ' +
-    'is worth doing; it needs a reconciliation like the emoji one rather than a plain add, ' +
-    'because the payload is authoritative for the channels it names.',
   VOICE_SERVER_UPDATE:
     'Deliberate. Carries the voice gateway endpoint and token, which are only useful to a ' +
     'voice connection implementation. Vestra has none, and surfacing credentials as a typed ' +
