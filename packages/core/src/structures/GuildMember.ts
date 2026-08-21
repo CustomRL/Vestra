@@ -11,6 +11,7 @@ import {
   type PermissionsBitField,
 } from '../permissions/index.js'
 import { Base } from './Base.js'
+import { memberAvatarUrl, memberBannerUrl, type ImageOptions } from './cdn.js'
 import type { CacheCapable } from './capabilities.js'
 import { User } from './User.js'
 
@@ -201,6 +202,36 @@ export class GuildMember<Client = unknown> extends Base<Client> {
     // same rule, and two copies of it would eventually disagree about a member's timeout
     // between what this reports and what `permissionsIn()` allows.
     return isTimedOut(this, now)
+  }
+
+  /**
+   * The avatar shown for this member, preferring their guild-specific one.
+   *
+   * @param options - The format and size to request.
+   * @returns A URL that always resolves to something.
+   *
+   * @remarks
+   * A member who has set a per-guild avatar has two, and the guild one wins inside that guild
+   * — which is what the Discord client shows, and what a bot rendering a member should match.
+   * Falls through to the user's own avatar, and then to the default, so this never returns
+   * `undefined`.
+   *
+   * `undefined` when the member carries no user at all, which is the embedded case:
+   * `message.member` has no user because the author sits beside it.
+   */
+  displayAvatarUrl(options?: ImageOptions): string | undefined {
+    const guildAvatar = this.avatar
+    if (guildAvatar !== null && guildAvatar !== undefined) {
+      return memberAvatarUrl(this.guildId, this.userId, guildAvatar, options)
+    }
+    return this.user?.avatarUrl(options)
+  }
+
+  /** The member's guild-specific banner, or `undefined` if they have none. */
+  bannerUrl(options?: ImageOptions): string | undefined {
+    const hash = this.banner
+    if (hash === null || hash === undefined) return undefined
+    return memberBannerUrl(this.guildId, this.userId, hash, options)
   }
 
   /** The display name, preferring the guild nickname. */

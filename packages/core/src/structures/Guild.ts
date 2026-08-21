@@ -11,6 +11,13 @@ import type {
   VerificationLevel,
 } from '@vestra/types'
 import { Base } from './Base.js'
+import {
+  guildBannerUrl,
+  guildDiscoverySplashUrl,
+  guildIconUrl,
+  guildSplashUrl,
+  type ImageOptions,
+} from './cdn.js'
 import type { CacheCapable } from './capabilities.js'
 import type { Channel } from './channels/Channel.js'
 import type { GuildMember } from './GuildMember.js'
@@ -172,6 +179,37 @@ export class Guild<Client = unknown> extends Base<Client> {
   get joinedAt(): Date | null {
     const raw = this.joinedTimestamp
     return raw === undefined ? null : new Date(raw)
+  }
+
+  /**
+   * The guild's icon, or `undefined` if it has none.
+   *
+   * @param options - The format and size to request.
+   * @returns The URL, or `undefined`.
+   *
+   * @remarks
+   * Unlike a user's avatar there is no default to fall back to — Discord renders a guild
+   * without an icon as its initials, client-side, and the CDN serves nothing for it.
+   */
+  iconUrl(options?: ImageOptions): string | undefined {
+    return this.icon === null ? undefined : guildIconUrl(this.id, this.icon, options)
+  }
+
+  /** The guild's banner, or `undefined` if it has none. */
+  bannerUrl(options?: ImageOptions): string | undefined {
+    return this.banner === null ? undefined : guildBannerUrl(this.id, this.banner, options)
+  }
+
+  /** The guild's invite splash, or `undefined` if it has none. */
+  splashUrl(options?: ImageOptions): string | undefined {
+    return this.splash === null ? undefined : guildSplashUrl(this.id, this.splash, options)
+  }
+
+  /** The guild's discovery splash, or `undefined` if it has none. */
+  discoverySplashUrl(options?: ImageOptions): string | undefined {
+    return this.discoverySplash === null
+      ? undefined
+      : guildDiscoverySplashUrl(this.id, this.discoverySplash, options)
   }
 
   /**

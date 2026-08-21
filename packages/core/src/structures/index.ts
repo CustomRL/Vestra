@@ -18,6 +18,21 @@ export {
   type ActivityTimestamps,
 } from './Activity.js'
 export type { CacheCapable, RestCapable } from './capabilities.js'
+export {
+  defaultAvatarUrl,
+  guildBannerUrl,
+  guildDiscoverySplashUrl,
+  guildIconUrl,
+  guildSplashUrl,
+  isAnimatedHash,
+  memberAvatarUrl,
+  memberBannerUrl,
+  roleIconUrl,
+  userAvatarUrl,
+  userBannerUrl,
+  type ImageFormat,
+  type ImageOptions,
+} from './cdn.js'
 export * from './channels/index.js'
 export { createEmoji, Emoji } from './Emoji.js'
 export { GuildMember } from './GuildMember.js'

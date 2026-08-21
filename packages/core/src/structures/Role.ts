@@ -1,5 +1,6 @@
 import type { APIRole, APIRoleColors, Snowflake } from '@vestra/types'
 import { Base } from './Base.js'
+import { roleIconUrl, type ImageOptions } from './cdn.js'
 import { snowflakeDate, snowflakeTimestamp } from './snowflake.js'
 
 /**
@@ -151,6 +152,13 @@ export class Role<Client = unknown> extends Base<Client> {
     this.managed = data.managed
     this.mentionable = data.mentionable
     this.flags = data.flags
+  }
+
+  /** The role's icon, or `undefined` if it has none. */
+  iconUrl(options?: ImageOptions): string | undefined {
+    const hash = this.icon
+    if (hash === null || hash === undefined) return undefined
+    return roleIconUrl(this.id, hash, options)
   }
 
   /** The mention form, which Discord renders as a coloured pill. */
