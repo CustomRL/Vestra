@@ -1,5 +1,6 @@
 import { Guild } from '../../structures/Guild.js'
 import { GuildMember } from '../../structures/GuildMember.js'
+import { Presence } from '../../structures/Presence.js'
 import { Role } from '../../structures/Role.js'
 import { VoiceState } from '../../structures/VoiceState.js'
 import { defineHandler } from '../EventHandler.js'
@@ -53,6 +54,12 @@ export const guildCreate = defineHandler('GUILD_CREATE', (client, data) => {
   // started while people were already in voice would otherwise see an empty set.
   for (const state of data.voice_states) {
     client.cache.voiceStates.add(new VoiceState(state, data.id, client))
+  }
+
+  // Presences arrive without their `guild_id`, so it is put back: the structure keys on it,
+  // and one presence exists per membership rather than per user.
+  for (const presence of data.presences) {
+    client.cache.presences.add(new Presence({ ...presence, guild_id: data.id }, client))
   }
 
   // Members are seeded but deliberately not announced. They are not joins — the list is who

@@ -9,8 +9,17 @@
 export { Base } from './Base.js'
 export { ClientUser } from './ClientUser.js'
 export { Guild, type APIGuildLike } from './Guild.js'
+export {
+  Activity,
+  type ActivityAssets,
+  type ActivityEmoji,
+  type ActivityParty,
+  type ActivitySecrets,
+  type ActivityTimestamps,
+} from './Activity.js'
 export * from './channels/index.js'
 export { GuildMember } from './GuildMember.js'
+export { Presence, type ClientStatus } from './Presence.js'
 export { Message, type CompleteMessage } from './Message.js'
 export { Role, type RoleColors } from './Role.js'
 export { User } from './User.js'

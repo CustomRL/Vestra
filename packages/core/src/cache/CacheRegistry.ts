@@ -7,6 +7,7 @@ import { CacheStore } from './CacheStore.js'
 import type { Channel } from '../structures/channels/Channel.js'
 import type { ThreadChannel } from '../structures/channels/ThreadChannel.js'
 import type { Guild } from '../structures/Guild.js'
+import type { Presence } from '../structures/Presence.js'
 import type { VoiceState } from '../structures/VoiceState.js'
 import type { GuildMember } from '../structures/GuildMember.js'
 import type { Message } from '../structures/Message.js'
@@ -21,7 +22,7 @@ import type { User } from '../structures/User.js'
  * That is deliberate staging rather than an oversight: a scope is added here when its
  * structure exists, so the map never promises a type nothing can produce.
  *
- * The scopes still to arrive are `presences`,
+ * The scopes still to arrive are
  * `voiceStates`, `emojis` and `stickers` — each lands with its structure. Adding one is a
  * line here and a row in {@link CacheKeys}, not a change to anything below.
  */
@@ -40,6 +41,8 @@ export interface CacheValueMap<Client> {
   members: GuildMember<Client>
   /** Messages, keyed by message ID. */
   messages: Message<Client>
+  /** Presences, keyed by `guildId:userId`. */
+  presences: Presence<Client>
   /** Voice states, keyed by `guildId:userId`. */
   voiceStates: VoiceState<Client>
 }
@@ -84,6 +87,10 @@ const CacheKeys = {
     keyOf: (value: GuildMember) => guildUserKey(value.guildId, value.userId),
     groupKeyOf: (value: GuildMember) => value.guildId,
   },
+  presences: {
+    keyOf: (value: Presence) => guildUserKey(value.guildId, value.userId),
+    groupKeyOf: (value: Presence) => value.guildId,
+  },
   voiceStates: {
     keyOf: (value: VoiceState) => guildUserKey(value.guildId, value.userId),
     groupKeyOf: (value: VoiceState) => value.guildId,
@@ -122,6 +129,7 @@ export type CacheOptions<Client = unknown> = {
  */
 export const DefaultCacheOptions: Record<CachedScope, CacheOption<never>> = {
   guilds: true,
+  presences: false,
   voiceStates: false,
   channels: true,
   threads: false,
@@ -196,6 +204,16 @@ export class CacheRegistry<Client = unknown> {
    */
   readonly members: CacheStore<GuildMember<Client>>
   /**
+   * Presences, grouped by guild. Off by default, and the most expensive scope there is.
+   *
+   * @remarks
+   * One entry per *membership*, not per user: a user in five guilds the bot shares produces
+   * five presences, each with its own activity list. On a large bot this is the scope that
+   * decides the memory footprint, which is why ADR 4 has it off and why `max` and a `filter`
+   * are worth reaching for before switching it on.
+   */
+  readonly presences: CacheStore<Presence<Client>>
+  /**
    * Voice states, grouped by guild. Off by default.
    *
    * @remarks
@@ -233,6 +251,7 @@ export class CacheRegistry<Client = unknown> {
     }
 
     this.guilds = build(CacheScope.Guilds)
+    this.presences = build(CacheScope.Presences)
     this.voiceStates = build(CacheScope.VoiceStates)
     this.channels = build(CacheScope.Channels)
     this.threads = build(CacheScope.Threads)
@@ -251,6 +270,7 @@ export class CacheRegistry<Client = unknown> {
       this.users,
       this.roles,
       this.members,
+      this.presences,
       this.voiceStates,
       this.messages,
     ]
@@ -307,5 +327,16 @@ export class CacheRegistry<Client = unknown> {
    */
   voiceState(guildId: Snowflake, userId: Snowflake): VoiceState<Client> | undefined {
     return this.voiceStates.get(guildUserKey(guildId, userId))
+  }
+
+  /**
+   * A presence by its two-part key.
+   *
+   * @param guildId - The guild.
+   * @param userId - The user.
+   * @returns The cached presence, or `undefined`.
+   */
+  presence(guildId: Snowflake, userId: Snowflake): Presence<Client> | undefined {
+    return this.presences.get(guildUserKey(guildId, userId))
   }
 }

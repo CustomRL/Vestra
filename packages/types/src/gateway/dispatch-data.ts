@@ -16,6 +16,7 @@ import type { APIGuild, APIUnavailableGuild } from '../payloads/guild.js'
 import type { APIGuildMember, APIVoiceState } from '../payloads/member.js'
 import type { APIIntegration } from '../payloads/integration.js'
 import type { APIMessage } from '../payloads/message.js'
+import type { APIPresenceUpdate } from '../payloads/presence.js'
 import type { APIRole } from '../payloads/role.js'
 import type { APISoundboardSound } from '../payloads/soundboard.js'
 import type { APISticker } from '../payloads/sticker.js'
@@ -75,10 +76,12 @@ export interface GatewayGuildCreateExtraFields {
    * Presences of members, as partial presence updates.
    *
    * @remarks
-   * Typed loosely because presences are not modelled yet; `unknown` forces a consumer to
-   * narrow rather than trusting a shape this package cannot yet promise.
+   * `guild_id` is omitted because the guild is already known from the payload these are
+   * nested in. Was typed `unknown[]` while presences went unmodelled; they are modelled now,
+   * and leaving it loose would make the one bulk source of presences the only one a consumer
+   * has to narrow by hand.
    */
-  presences: unknown[]
+  presences: Omit<APIPresenceUpdate, 'guild_id'>[]
   /** Stage instances in the guild. Not modelled yet. */
   stage_instances: unknown[]
   /** Scheduled events in the guild. Not modelled yet. */
