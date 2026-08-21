@@ -4,6 +4,7 @@ import { ShardState } from '@vestra/gateway'
 import { GatewayOpcodes, type GatewayDispatchPayload } from '@vestra/types'
 import {
   CacheRegistry,
+  EventHandlerError,
   EventRouter,
   defineHandler,
   type DispatchShard,
@@ -29,7 +30,11 @@ function context(): { context: EventContext; emitted: Emitted[] } {
         emitted.push({ event, args })
         return true
       },
-      listenerCount: () => 0,
+      // One, so failures take the emit path and land in `emitted` where these tests can read
+      // them. Zero is a different scenario — the router then rethrows on a clean tick rather
+      // than emitting into nothing — and `errors.test.ts` ER9 covers it, out of process,
+      // because that throw lands after an in-process test has finished.
+      listenerCount: () => 1,
     },
   }
 }
@@ -102,7 +107,12 @@ describe('event router', () => {
 
     const error = emitted.find((entry) => entry.event === 'error')
     assert.ok(error !== undefined, 'the failure must be reported')
-    assert.equal((error.args[0] as Error).message, 'handler exploded')
+    // Wrapped rather than passed through: a stack from inside a handler says almost nothing
+    // on its own, because every handler is reached through the same two lines of the router.
+    // The original is kept as `cause`.
+    assert.ok(error.args[0] instanceof EventHandlerError)
+    assert.equal(error.args[0].event, 'MESSAGE_CREATE')
+    assert.equal((error.args[0].cause as Error).message, 'handler exploded')
     assert.deepEqual(error.args[1], { event: 'MESSAGE_CREATE', shardId: 0 })
   })
 
@@ -142,6 +152,8 @@ describe('event router', () => {
     router.route(dispatch('MESSAGE_CREATE'), shard)
     const error = emitted.find((entry) => entry.event === 'error')
     assert.ok(error?.args[0] instanceof Error)
+    // The string survives as the cause, so nothing is lost by wrapping it.
+    assert.equal((error.args[0] as EventHandlerError).cause, 'a string')
   })
 
   it('EV7: refuses a second handler for one event', () => {

@@ -1,4 +1,5 @@
 import type { GatewayDispatchPayload } from '@vestra/types'
+import { EventHandlerError } from '../errors/EventHandlerError.js'
 import type { AnyEventHandler, DispatchShard, EventContext } from './EventHandler.js'
 
 /**
@@ -93,12 +94,45 @@ export class EventRouter<Client = unknown> {
       ) => void
       handle(this.#context, payload.d, shard)
     } catch (error) {
-      // Reported rather than rethrown. The gateway does not await listener return values,
-      // so a throw here would surface as an unhandled rejection somewhere unrelated, with
-      // no indication of which dispatch caused it.
-      this.#context.emit('error', error instanceof Error ? error : new Error(String(error)), {
-        event: payload.t,
-        shardId: shard.id,
+      this.#report(new EventHandlerError(payload.t, error), payload.t, shard.id)
+    }
+  }
+
+  /**
+   * Reports a handler failure without letting it reach the socket.
+   *
+   * @param error - What went wrong.
+   * @param event - The dispatch being handled.
+   * @param shardId - Which shard delivered it.
+   *
+   * @remarks
+   * **The listener count is checked first, and that is the whole point.** Node's
+   * `EventEmitter` throws an unhandled `'error'` *synchronously, into whoever called `emit`* —
+   * measured, not assumed. Here that caller is the router, called by the shard bridge, called
+   * from the shard's dispatch emit, called from the socket read. So on a client with no error
+   * listener, one throw in one handler unwound all the way into the read path and could take
+   * the connection with it: a consumer-side bug becoming a disconnect.
+   *
+   * Rethrowing on a clean tick keeps the failure loud — it surfaces as an `uncaughtException`
+   * with a stack, which is what Node does with an unhandled `'error'` anyway — while leaving
+   * the socket alone. Loud is correct here; silent is not, and neither is taking the
+   * connection down.
+   *
+   * A listener that throws is given the same treatment, for the same reason.
+   */
+  #report(error: EventHandlerError, event: string, shardId: number): void {
+    if (this.#context.listenerCount('error') === 0) {
+      setImmediate(() => {
+        throw error
+      })
+      return
+    }
+
+    try {
+      this.#context.emit('error', error, { event, shardId })
+    } catch (secondary) {
+      setImmediate(() => {
+        throw secondary
       })
     }
   }
