@@ -54,7 +54,7 @@ describe('cache registry', () => {
     for (const store of cache.stores) {
       assert.equal(typeof store.sweep, 'function', `${store.scope} must be a real store`)
     }
-    assert.equal(cache.stores.length, 4)
+    assert.equal(cache.stores.length, 5)
   })
 
   it('CR2: applies the documented defaults', () => {

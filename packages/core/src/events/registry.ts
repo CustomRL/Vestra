@@ -1,4 +1,5 @@
 import type { AnyEventHandler } from './EventHandler.js'
+import { guildCreate, guildDelete, guildUpdate } from './handlers/guilds.js'
 import { guildMemberAdd, guildMemberRemove, guildMemberUpdate } from './handlers/members.js'
 import { messageCreate, messageDelete, messageUpdate } from './handlers/messages.js'
 import { ready, userUpdate } from './handlers/ready.js'
@@ -25,6 +26,10 @@ export const handlers: readonly AnyEventHandler[] = [
   messageCreate,
   messageUpdate,
   messageDelete,
+
+  guildCreate,
+  guildUpdate,
+  guildDelete,
 
   guildMemberAdd,
   guildMemberUpdate,
