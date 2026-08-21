@@ -68,7 +68,28 @@ const GUILD_CREATE = dispatch('GUILD_CREATE', {
       flags: 0,
     },
   ],
-  emojis: [],
+  emojis: [
+    {
+      id: '77',
+      name: 'vestra',
+      roles: [],
+      require_colons: true,
+      managed: false,
+      animated: false,
+      available: true,
+    },
+  ],
+  stickers: [
+    {
+      id: '88',
+      name: 'wave',
+      description: null,
+      tags: 'wave, hello',
+      type: 2,
+      format_type: 1,
+      guild_id: GUILD_ID,
+    },
+  ],
   features: [],
   mfa_level: 0,
   application_id: null,
@@ -174,6 +195,8 @@ describe('cache scope coverage', () => {
   it('CC1: fills every scope from a representative dispatch set', () => {
     const cache = new CacheRegistry({
       guilds: true,
+      emojis: true,
+      stickers: true,
       presences: true,
       voiceStates: true,
       channels: true,
@@ -215,6 +238,8 @@ describe('cache scope coverage', () => {
     // here. That is a property of the design, not a gap in the test.
     const cache = new CacheRegistry({
       guilds: false,
+      emojis: false,
+      stickers: false,
       presences: false,
       voiceStates: false,
       channels: false,

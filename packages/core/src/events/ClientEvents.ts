@@ -2,11 +2,13 @@ import type { GatewayDispatchPayload, GatewayReadyDispatchData, Snowflake } from
 import type { ClientUser } from '../structures/ClientUser.js'
 import type { Channel } from '../structures/channels/Channel.js'
 import type { ThreadChannel } from '../structures/channels/ThreadChannel.js'
+import type { Emoji } from '../structures/Emoji.js'
 import type { Guild } from '../structures/Guild.js'
 import type { GuildMember } from '../structures/GuildMember.js'
 import type { Message } from '../structures/Message.js'
 import type { Presence } from '../structures/Presence.js'
 import type { Role } from '../structures/Role.js'
+import type { Sticker } from '../structures/Sticker.js'
 import type { User } from '../structures/User.js'
 import type { VoiceState } from '../structures/VoiceState.js'
 
@@ -144,6 +146,19 @@ export interface ClientEvents<Client = unknown> {
   guildMemberUpdate: [member: GuildMember<Client>]
   /** A member left or was removed. */
   guildMemberRemove: [guildId: Snowflake, user: User<Client>]
+
+  /**
+   * A guild's emojis changed.
+   *
+   * @remarks
+   * Discord sends the whole set rather than saying what changed, so `emojis` is the guild's
+   * complete list. `removed` is what the library dropped from cache as a result — there is no
+   * "previous" list, because producing an honest one would mean cloning every surviving emoji
+   * on every rename.
+   */
+  guildEmojisUpdate: [guildId: Snowflake, emojis: Emoji<Client>[], removed: Emoji<Client>[]]
+  /** A guild's stickers changed. The same whole-set shape as {@link ClientEvents.guildEmojisUpdate}. */
+  guildStickersUpdate: [guildId: Snowflake, stickers: Sticker<Client>[], removed: Sticker<Client>[]]
 
   /** A role was created. */
   roleCreate: [role: Role<Client>, guildId: Snowflake]

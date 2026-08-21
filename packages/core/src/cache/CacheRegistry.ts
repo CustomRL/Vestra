@@ -7,7 +7,9 @@ import { CacheStore } from './CacheStore.js'
 import type { Channel } from '../structures/channels/Channel.js'
 import type { ThreadChannel } from '../structures/channels/ThreadChannel.js'
 import type { Guild } from '../structures/Guild.js'
+import type { Emoji } from '../structures/Emoji.js'
 import type { Presence } from '../structures/Presence.js'
+import type { Sticker } from '../structures/Sticker.js'
 import type { VoiceState } from '../structures/VoiceState.js'
 import type { GuildMember } from '../structures/GuildMember.js'
 import type { Message } from '../structures/Message.js'
@@ -22,9 +24,10 @@ import type { User } from '../structures/User.js'
  * That is deliberate staging rather than an oversight: a scope is added here when its
  * structure exists, so the map never promises a type nothing can produce.
  *
- * The scopes still to arrive are
- * `voiceStates`, `emojis` and `stickers` — each lands with its structure. Adding one is a
- * line here and a row in {@link CacheKeys}, not a change to anything below.
+ * Every scope {@link CacheScope} declares now has an entry here, a row in {@link CacheKeys}
+ * and at least one handler that writes to it — `packages/core/test/cache-coverage.test.ts`
+ * fails naming any scope where that stops being true. Adding a scope is a line here and a row
+ * there, not a change to anything below.
  */
 export interface CacheValueMap<Client> {
   /** Guilds, keyed by guild ID. */
@@ -41,6 +44,10 @@ export interface CacheValueMap<Client> {
   members: GuildMember<Client>
   /** Messages, keyed by message ID. */
   messages: Message<Client>
+  /** Custom emojis, keyed by emoji ID. */
+  emojis: Emoji<Client>
+  /** Guild stickers, keyed by sticker ID. */
+  stickers: Sticker<Client>
   /** Presences, keyed by `guildId:userId`. */
   presences: Presence<Client>
   /** Voice states, keyed by `guildId:userId`. */
@@ -87,6 +94,16 @@ const CacheKeys = {
     keyOf: (value: GuildMember) => guildUserKey(value.guildId, value.userId),
     groupKeyOf: (value: GuildMember) => value.guildId,
   },
+  emojis: {
+    keyOf: (value: Emoji) => value.id,
+    groupKeyOf: (value: Emoji) => value.guildId,
+  },
+  stickers: {
+    keyOf: (value: Sticker) => value.id,
+    // A standard sticker belongs to a pack rather than a guild, so it is left ungrouped
+    // rather than filed under a made-up key.
+    groupKeyOf: (value: Sticker) => value.guildId,
+  },
   presences: {
     keyOf: (value: Presence) => guildUserKey(value.guildId, value.userId),
     groupKeyOf: (value: Presence) => value.guildId,
@@ -129,6 +146,8 @@ export type CacheOptions<Client = unknown> = {
  */
 export const DefaultCacheOptions: Record<CachedScope, CacheOption<never>> = {
   guilds: true,
+  emojis: true,
+  stickers: false,
   presences: false,
   voiceStates: false,
   channels: true,
@@ -204,6 +223,23 @@ export class CacheRegistry<Client = unknown> {
    */
   readonly members: CacheStore<GuildMember<Client>>
   /**
+   * Custom emojis, grouped by guild. On by default.
+   *
+   * @remarks
+   * On for the same reason `roles` is, and ADR 4 does not list either: a bot that posts a
+   * guild's own emoji needs the ID, the set is small and bounded, and the alternative is a
+   * REST call to learn something every `GUILD_CREATE` already carried.
+   */
+  readonly emojis: CacheStore<Emoji<Client>>
+  /**
+   * Guild stickers, grouped by guild. Off by default.
+   *
+   * @remarks
+   * Off where `emojis` is on, and the asymmetry is deliberate: a sticker is a much rarer thing
+   * for a bot to send, and the payload is several times larger.
+   */
+  readonly stickers: CacheStore<Sticker<Client>>
+  /**
    * Presences, grouped by guild. Off by default, and the most expensive scope there is.
    *
    * @remarks
@@ -251,6 +287,8 @@ export class CacheRegistry<Client = unknown> {
     }
 
     this.guilds = build(CacheScope.Guilds)
+    this.emojis = build(CacheScope.Emojis)
+    this.stickers = build(CacheScope.Stickers)
     this.presences = build(CacheScope.Presences)
     this.voiceStates = build(CacheScope.VoiceStates)
     this.channels = build(CacheScope.Channels)
@@ -270,6 +308,8 @@ export class CacheRegistry<Client = unknown> {
       this.users,
       this.roles,
       this.members,
+      this.emojis,
+      this.stickers,
       this.presences,
       this.voiceStates,
       this.messages,
