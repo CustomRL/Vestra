@@ -164,12 +164,27 @@ export class WebSocketTransport implements Transport {
    *
    * @param code - The close code. Must be 1000 or in 3000-4999.
    * @param reason - An optional reason.
+   *
+   * @throws RangeError - If `code` is one a client may not send.
+   *
+   * @remarks
+   * **The code is validated outside the `try`, and before the socket is looked at.** Inside
+   * it, a caller passing an unsendable code — a programmer error, and one that would make the
+   * close silently not happen — arrived as an asynchronous error event instead of throwing,
+   * which is the opposite of useful. The `try` is there to contain a throw from the socket
+   * itself, such as closing one that has already gone, and it still does exactly that.
+   *
+   * Validating before the null check is deliberate too: an invalid code is invalid whether or
+   * not a socket happens to be attached, and deciding by connection state would make the same
+   * bug throw or not depending on timing.
    */
   close(code: number, reason?: string): void {
+    const sendable = assertSendableCloseCode(code)
+
     const socket = this.#socket
     if (socket === null) return
     try {
-      socket.close(assertSendableCloseCode(code), reason)
+      socket.close(sendable, reason)
     } catch (error) {
       this.#listeners.onError(this.#describe(error))
     }

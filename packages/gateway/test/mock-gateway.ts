@@ -17,8 +17,18 @@ import type { AddressInfo, Socket } from 'node:net'
  * dependency that implements the exact protocol under test would be its own hazard.
  */
 
-/** The GUID every RFC 6455 handshake concatenates before hashing. */
-const WS_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B16'
+/**
+ * The GUID every RFC 6455 handshake concatenates before hashing.
+ *
+ * @remarks
+ * Fixed verbatim from RFC 6455 section 1.3, and worth checking character by character if the
+ * conformance suite ever starts skipping again: this was wrong in the last digit for the whole
+ * of Phase 3, which made every `Sec-WebSocket-Accept` the mock computed invalid. A client that
+ * validates the header — Node's global `WebSocket`, which is undici's — refuses the handshake
+ * with an empty `TypeError` that names nothing, and a hand-written raw client connects happily
+ * because it never checks. That combination read as a runtime bug rather than a typo.
+ */
+const WS_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11'
 
 /** Opcodes this server understands. */
 const Opcode = {
@@ -321,48 +331,6 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
         })
       })
     },
-  }
-}
-
-/**
- * Whether this runtime's global `WebSocket` can complete a handshake with a local server.
- *
- * @returns `true` if a connection opened.
- *
- * @remarks
- * Node 25.8.1 on Windows aborts the upgrade against a locally hosted server — `ws` and
- * `wss` alike, at any response timing — while connecting to Discord's gateway from the
- * same process without trouble. The server here is not at fault: a hand-written raw client
- * completes the handshake against it and reads both whole and fragmented frames.
- *
- * The conformance suite calls this first and skips rather than reporting failures that say
- * nothing about the code under test.
- */
-export async function websocketClientCanConnect(): Promise<boolean> {
-  const mock = await startMockGateway()
-  try {
-    const socket = new WebSocket(mock.url)
-    return await new Promise<boolean>((resolve) => {
-      const settle = (value: boolean): void => {
-        clearTimeout(timer)
-        resolve(value)
-      }
-      const timer = setTimeout(() => {
-        settle(false)
-      }, 2_000)
-      socket.addEventListener('open', () => {
-        socket.close()
-        settle(true)
-      })
-      socket.addEventListener('error', () => {
-        settle(false)
-      })
-      socket.addEventListener('close', () => {
-        settle(false)
-      })
-    })
-  } finally {
-    await mock.close()
   }
 }
 
