@@ -173,6 +173,9 @@ const STRUCTURE_SOURCES: { structure: string; api: string }[] = [
   { structure: 'Message', api: 'APIMessage' },
   { structure: 'Guild', api: 'APIGuild' },
   { structure: 'AutoModerationRule', api: 'APIAutoModerationRule' },
+  { structure: 'AuditLogEntry', api: 'APIAuditLogEntry' },
+  { structure: 'Interaction', api: 'APIInteraction' },
+  { structure: 'GuildScheduledEvent', api: 'APIGuildScheduledEvent' },
   { structure: 'AutoModerationActionExecution', api: 'APIAutoModerationActionExecution' },
   { structure: 'VoiceState', api: 'APIVoiceState' },
   { structure: 'Presence', api: 'APIPresenceUpdate' },
@@ -201,6 +204,12 @@ const STRUCTURE_SOURCES: { structure: string; api: string }[] = [
  * Removing an entry is how you decide a rename was wrong.
  */
 const RENAMES: Record<string, Record<string, string>> = {
+  GuildScheduledEvent: {
+    scheduledStartTimestamp:
+      'scheduled_start_time. The suffix rule for raw ISO strings, with scheduledStartAt as ' +
+      'the Date getter beside it.',
+    scheduledEndTimestamp: 'scheduled_end_time. The same rule, from the same pair.',
+  },
   Guild: {
     joinedTimestamp:
       'joined_at. The mechanical result, joinedAt, collides with the Date getter of the ' +

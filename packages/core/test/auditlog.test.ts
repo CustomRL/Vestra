@@ -5,12 +5,12 @@ import { AuditLogEvent, GatewayOpcodes, type GatewayDispatchPayload } from '@ves
 import {
   CacheRegistry,
   EventRouter,
+  handlers,
   type CacheOptions,
   type DispatchShard,
   type EventContext,
 } from '@vestra/core'
-import { guildAuditLogEntryCreate } from '../dist/events/handlers/auditlog.js'
-import { AuditLogEntry } from '../dist/structures/AuditLogEntry.js'
+import { AuditLogEntry } from '@vestra/core'
 
 /**
  * The audit log entry structure and its dispatch.
@@ -68,7 +68,7 @@ function harness(): {
     listenerCount: () => 0,
   } as EventContext
 
-  return { router: new EventRouter(context, [guildAuditLogEntryCreate]), context, emitted }
+  return { router: new EventRouter(context, handlers), context, emitted }
 }
 
 function dispatch(t: string, d: unknown): GatewayDispatchPayload {

@@ -1,5 +1,6 @@
 import type { GatewayDispatchPayload, GatewayReadyDispatchData, Snowflake } from '@vestra/types'
 import type { ClientUser } from '../structures/ClientUser.js'
+import type { AuditLogEntry } from '../structures/AuditLogEntry.js'
 import type {
   AutoModerationActionExecution,
   AutoModerationRule,
@@ -8,6 +9,8 @@ import type { Channel } from '../structures/channels/Channel.js'
 import type { ThreadChannel } from '../structures/channels/ThreadChannel.js'
 import type { Emoji } from '../structures/Emoji.js'
 import type { Guild } from '../structures/Guild.js'
+import type { GuildScheduledEvent } from '../structures/GuildScheduledEvent.js'
+import type { Interaction } from '../structures/Interaction.js'
 import type { GuildMember } from '../structures/GuildMember.js'
 import type { Invite } from '../structures/Invite.js'
 import type { Message } from '../structures/Message.js'
@@ -148,6 +151,57 @@ export interface ClientEvents<Client = unknown> {
     channelId: Snowflake,
     guildId: Snowflake | undefined,
   ]
+
+  /** A scheduled event was created. */
+  guildScheduledEventCreate: [scheduledEvent: GuildScheduledEvent<Client>]
+  /** A scheduled event was updated. */
+  guildScheduledEventUpdate: [scheduledEvent: GuildScheduledEvent<Client>]
+  /**
+   * A scheduled event was deleted.
+   *
+   * @remarks
+   * Carries the whole event, because the dispatch does.
+   */
+  guildScheduledEventDelete: [scheduledEvent: GuildScheduledEvent<Client>]
+  /**
+   * Somebody subscribed to a scheduled event.
+   *
+   * @remarks
+   * IDs only, because the dispatch carries only IDs. Deliberately not accumulated into a
+   * subscriber count anywhere: a resume replays a contiguous suffix, so replayed additions
+   * would double-count — and a derived total is exactly the kind of state the replay guard
+   * exists to keep out of the cache.
+   */
+  guildScheduledEventUserAdd: [
+    guildScheduledEventId: Snowflake,
+    userId: Snowflake,
+    guildId: Snowflake,
+  ]
+  /** Somebody unsubscribed from a scheduled event. */
+  guildScheduledEventUserRemove: [
+    guildScheduledEventId: Snowflake,
+    userId: Snowflake,
+    guildId: Snowflake,
+  ]
+
+  /**
+   * An interaction was received.
+   *
+   * @remarks
+   * **Three seconds.** A listener that has not responded by then leaves the user looking at
+   * "this interaction failed" and the token spent. Anything slower defers first — see
+   * {@link Interaction.deferReply} — which buys fifteen minutes.
+   */
+  interactionCreate: [interaction: Interaction<Client>]
+
+  /**
+   * An entry was written to a guild's audit log.
+   *
+   * @remarks
+   * Carries the entry alone, which names its own guild. The entry gives IDs rather than
+   * resolved users: the payload has no nested user object, so anything else would be invented.
+   */
+  guildAuditLogEntryCreate: [entry: AuditLogEntry<Client>]
 
   /** An Auto Moderation rule was created. */
   autoModerationRuleCreate: [rule: AutoModerationRule<Client>]

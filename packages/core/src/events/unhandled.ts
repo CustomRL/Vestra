@@ -22,8 +22,9 @@ import type { GatewayDispatchEvents } from '@vestra/types'
  *   regardless of what a consumer opts out of. These will never become handlers.
  * - **No structure.** The entity is not modelled yet. These become handlers when it is, and
  *   the reason names what is missing.
- * - **Needs REST first.** Handling it would promise an API surface that does not exist —
- *   `INTERACTION_CREATE` without the callback routes is the clear case.
+ * - **Needs REST first.** Handling it would promise an API surface that does not exist. This
+ *   category is currently empty: `INTERACTION_CREATE` was its only member, and the callback
+ *   routes it was waiting for now exist in `@vestra/rest`.
  * - **Deliberate.** Modelled and reachable, and still not worth a typed event.
  */
 export const UnhandledEvents: Readonly<Partial<Record<GatewayDispatchEvents, string>>> = {
@@ -39,12 +40,6 @@ export const UnhandledEvents: Readonly<Partial<Record<GatewayDispatchEvents, str
     'Mechanic. A gateway-level signal about the connection rather than an event about Discord, ' +
     'and the transport already reports it.',
 
-  // --- Needs REST first: handling would promise a surface that does not exist. ---
-  INTERACTION_CREATE:
-    'Needs REST first. An interaction that cannot be responded to is worse than none: Discord ' +
-    'shows the user "this interaction failed" after three seconds. The callback routes are not ' +
-    'in `@vestra/rest` yet, and this becomes a handler in the same change that adds them.',
-
   // --- No structure yet: each becomes a handler when its entity is modelled. ---
   ENTITLEMENT_CREATE: 'No structure. Entitlement is not modelled.',
   ENTITLEMENT_UPDATE: 'No structure. Entitlement is not modelled.',
@@ -52,12 +47,6 @@ export const UnhandledEvents: Readonly<Partial<Record<GatewayDispatchEvents, str
   SUBSCRIPTION_CREATE: 'No structure. Subscription is not modelled.',
   SUBSCRIPTION_UPDATE: 'No structure. Subscription is not modelled.',
   SUBSCRIPTION_DELETE: 'No structure. Subscription is not modelled.',
-  GUILD_AUDIT_LOG_ENTRY_CREATE: 'No structure. AuditLogEntry is not modelled.',
-  GUILD_SCHEDULED_EVENT_CREATE: 'No structure. GuildScheduledEvent is not modelled.',
-  GUILD_SCHEDULED_EVENT_UPDATE: 'No structure. GuildScheduledEvent is not modelled.',
-  GUILD_SCHEDULED_EVENT_DELETE: 'No structure. GuildScheduledEvent is not modelled.',
-  GUILD_SCHEDULED_EVENT_USER_ADD: 'No structure. GuildScheduledEvent is not modelled.',
-  GUILD_SCHEDULED_EVENT_USER_REMOVE: 'No structure. GuildScheduledEvent is not modelled.',
   GUILD_SOUNDBOARD_SOUND_CREATE: 'No structure. SoundboardSound is not modelled.',
   GUILD_SOUNDBOARD_SOUND_UPDATE: 'No structure. SoundboardSound is not modelled.',
   GUILD_SOUNDBOARD_SOUND_DELETE: 'No structure. SoundboardSound is not modelled.',

@@ -17,6 +17,7 @@ import {
 import {
   CacheRegistry,
   EventRouter,
+  handlers,
   Message,
   User,
   type CacheOptions,
@@ -26,8 +27,7 @@ import {
 } from '@vestra/core'
 // Not on the barrel yet — the registry line and the `structures/index.ts` export are the
 // caller's to add, so these come straight from the built output of their own files.
-import { interactionCreate } from '../dist/events/handlers/interactions.js'
-import { Interaction } from '../dist/structures/Interaction.js'
+import { Interaction } from '@vestra/core'
 
 const shard: DispatchShard = { id: 0, state: ShardState.Ready, guildsPending: false }
 const INTERACTION_ID = '1002960826007359488'
@@ -175,7 +175,7 @@ function harness(options: CacheOptions = { users: true }): {
 
   // Its own router, because the registry line that would put this handler in `handlers` is
   // not written yet.
-  return { router: new EventRouter(context, [interactionCreate]), context, emitted }
+  return { router: new EventRouter(context, handlers), context, emitted }
 }
 
 function dispatch(t: string, d: unknown): GatewayDispatchPayload {

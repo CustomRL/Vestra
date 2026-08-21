@@ -185,6 +185,23 @@ const AUTOMOD_RULE = {
   exempt_channels: [],
 }
 
+const SCHEDULED_EVENT = {
+  id: '964394640998400003',
+  guild_id: GUILD_ID,
+  channel_id: CHANNEL_ID,
+  creator_id: USER_ID,
+  name: 'Launch',
+  description: 'shipping it',
+  scheduled_start_time: '2024-01-01T00:00:00+00:00',
+  scheduled_end_time: null,
+  privacy_level: 2,
+  status: 1,
+  entity_type: 2,
+  entity_id: null,
+  entity_metadata: null,
+  image: null,
+}
+
 /**
  * One payload per handled event.
  *
@@ -277,6 +294,46 @@ const FIXTURES: Readonly<Record<string, unknown>> = {
     member: MEMBER,
   },
   USER_UPDATE: { ...USER, bot: true },
+
+  GUILD_SCHEDULED_EVENT_CREATE: SCHEDULED_EVENT,
+  GUILD_SCHEDULED_EVENT_UPDATE: { ...SCHEDULED_EVENT, name: 'Renamed' },
+  // Not in DELETES: it removes nothing from the cache.
+  GUILD_SCHEDULED_EVENT_DELETE: SCHEDULED_EVENT,
+  GUILD_SCHEDULED_EVENT_USER_ADD: {
+    guild_scheduled_event_id: SCHEDULED_EVENT.id,
+    user_id: USER_ID,
+    guild_id: GUILD_ID,
+  },
+  GUILD_SCHEDULED_EVENT_USER_REMOVE: {
+    guild_scheduled_event_id: SCHEDULED_EVENT.id,
+    user_id: USER_ID,
+    guild_id: GUILD_ID,
+  },
+
+  INTERACTION_CREATE: {
+    id: 'i1',
+    application_id: 'a1',
+    type: 2,
+    data: { id: '2', name: 'ping', type: 1 },
+    guild_id: GUILD_ID,
+    channel_id: CHANNEL_ID,
+    member: MEMBER,
+    token: 't',
+    version: 1,
+    app_permissions: '0',
+    entitlements: [],
+    authorizing_integration_owners: {},
+    attachment_size_limit: 8_388_608,
+  },
+  GUILD_AUDIT_LOG_ENTRY_CREATE: {
+    id: '964394640998400002',
+    guild_id: GUILD_ID,
+    action_type: 25,
+    user_id: USER_ID,
+    target_id: USER_ID,
+    reason: 'tidying up',
+    changes: [{ key: 'nick', old_value: 'old', new_value: 'new' }],
+  },
 
   AUTO_MODERATION_RULE_CREATE: AUTOMOD_RULE,
   AUTO_MODERATION_RULE_UPDATE: { ...AUTOMOD_RULE, name: 'No invites, really' },

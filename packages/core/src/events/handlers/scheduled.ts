@@ -1,4 +1,3 @@
-import type { Snowflake } from '@vestra/types'
 import { GuildScheduledEvent } from '../../structures/GuildScheduledEvent.js'
 import { defineHandler } from '../EventHandler.js'
 
@@ -8,28 +7,6 @@ import { defineHandler } from '../EventHandler.js'
 // file compiles before the registry wiring lands — an augmentation and a real declaration
 // merge silently when they agree, so nothing else will point this out.
 // ---------------------------------------------------------------------------------------
-declare module '../ClientEvents.js' {
-  interface ClientEvents<Client = unknown> {
-    /** A scheduled event was created. */
-    guildScheduledEventCreate: [scheduledEvent: GuildScheduledEvent<Client>]
-    /** A scheduled event was updated. */
-    guildScheduledEventUpdate: [scheduledEvent: GuildScheduledEvent<Client>]
-    /** A scheduled event was deleted. */
-    guildScheduledEventDelete: [scheduledEvent: GuildScheduledEvent<Client>]
-    /** Somebody subscribed to a scheduled event. */
-    guildScheduledEventUserAdd: [
-      guildScheduledEventId: Snowflake,
-      userId: Snowflake,
-      guildId: Snowflake,
-    ]
-    /** Somebody unsubscribed from a scheduled event. */
-    guildScheduledEventUserRemove: [
-      guildScheduledEventId: Snowflake,
-      userId: Snowflake,
-      guildId: Snowflake,
-    ]
-  }
-}
 
 /**
  * Guild scheduled event dispatches.

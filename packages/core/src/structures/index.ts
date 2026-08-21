@@ -17,6 +17,7 @@ export {
   type ActivitySecrets,
   type ActivityTimestamps,
 } from './Activity.js'
+export { AuditLogEntry, type AuditLogChange } from './AuditLogEntry.js'
 export {
   AutoModerationActionExecution,
   AutoModerationRule,
@@ -43,6 +44,14 @@ export {
 export * from './channels/index.js'
 export { createEmoji, Emoji } from './Emoji.js'
 export { GuildMember } from './GuildMember.js'
+export { GuildScheduledEvent } from './GuildScheduledEvent.js'
+export {
+  Interaction,
+  type AutocompleteInteraction,
+  type CommandInteraction,
+  type ComponentInteraction,
+  type ModalSubmitInteraction,
+} from './Interaction.js'
 export { Invite } from './Invite.js'
 export { Presence, type ClientStatus } from './Presence.js'
 export { messageLink, parseMessageLink, type MessageLinkTarget } from './links.js'

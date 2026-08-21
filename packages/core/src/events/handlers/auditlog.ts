@@ -6,24 +6,7 @@ import { defineHandler } from '../EventHandler.js'
 // `emit` is keyed by `ClientEvents`, so the handler below does not compile until the event
 // exists there. This augmentation is that declaration in the wrong file: it types listeners
 // correctly today and is a verbatim copy of the line `ClientEvents` needs.
-declare module '../ClientEvents.js' {
-  interface ClientEvents<Client = unknown> {
-    /**
-     * An administrative action was recorded in a guild's audit log.
-     *
-     * @remarks
-     * Needs `ViewAuditLog`; without it Discord sends nothing rather than erroring, so a
-     * listener that never fires is the permission and not the wiring. Carries the entry
-     * alone rather than a `(guildId, entry)` pair, because the entry names its own guild —
-     * the same call {@link ClientEvents.stageInstanceCreate} makes.
-     *
-     * This is where the moderator and the reason behind a ban live:
-     * {@link ClientEvents.guildBanAdd} carries neither, because the ban dispatch carries
-     * neither.
-     */
-    guildAuditLogEntryCreate: [entry: AuditLogEntry<Client>]
-  }
-}
+
 // --- end scaffolding ---
 
 /**

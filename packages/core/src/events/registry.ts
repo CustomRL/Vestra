@@ -1,4 +1,5 @@
 import type { AnyEventHandler } from './EventHandler.js'
+import { guildAuditLogEntryCreate } from './handlers/auditlog.js'
 import {
   autoModerationActionExecution,
   autoModerationRuleCreate,
@@ -6,6 +7,14 @@ import {
   autoModerationRuleUpdate,
 } from './handlers/automod.js'
 import { guildBanAdd, guildBanRemove } from './handlers/bans.js'
+import { interactionCreate } from './handlers/interactions.js'
+import {
+  guildScheduledEventCreate,
+  guildScheduledEventDelete,
+  guildScheduledEventUpdate,
+  guildScheduledEventUserAdd,
+  guildScheduledEventUserRemove,
+} from './handlers/scheduled.js'
 import {
   channelCreate,
   channelDelete,
@@ -82,6 +91,15 @@ export const handlers: readonly AnyEventHandler[] = [
 
   presenceUpdate,
   voiceStateUpdate,
+
+  interactionCreate,
+  guildAuditLogEntryCreate,
+
+  guildScheduledEventCreate,
+  guildScheduledEventUpdate,
+  guildScheduledEventDelete,
+  guildScheduledEventUserAdd,
+  guildScheduledEventUserRemove,
 
   autoModerationRuleCreate,
   autoModerationRuleUpdate,

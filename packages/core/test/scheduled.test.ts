@@ -18,6 +18,7 @@ import {
 import {
   CacheRegistry,
   EventRouter,
+  handlers,
   User,
   type CacheOptions,
   type DispatchShard,
@@ -25,14 +26,8 @@ import {
 } from '@vestra/core'
 // Not on the barrel yet — the registry wiring is somebody else's commit. Both come from
 // `dist` rather than `src` so `instanceof` compares the same class the handlers built.
-import { GuildScheduledEvent } from '../dist/structures/GuildScheduledEvent.js'
-import {
-  guildScheduledEventCreate,
-  guildScheduledEventDelete,
-  guildScheduledEventUpdate,
-  guildScheduledEventUserAdd,
-  guildScheduledEventUserRemove,
-} from '../dist/events/handlers/scheduled.js'
+import { GuildScheduledEvent } from '@vestra/core'
+import {} from '@vestra/core'
 
 /** A stand-in client. The structure only ever hands it back, so its shape is irrelevant. */
 const client = { name: 'test-client' }
@@ -406,13 +401,7 @@ function harness(options: CacheOptions = ALL_SCOPES): {
 
   // The registry is somebody else's commit, so this router holds exactly the five handlers
   // under test rather than `handlers`.
-  const router = new EventRouter(context, [
-    guildScheduledEventCreate,
-    guildScheduledEventUpdate,
-    guildScheduledEventDelete,
-    guildScheduledEventUserAdd,
-    guildScheduledEventUserRemove,
-  ])
+  const router = new EventRouter(context, handlers)
 
   return { router, context, emitted }
 }

@@ -34,26 +34,3 @@ export const interactionCreate = defineHandler('INTERACTION_CREATE', (client, da
 
   client.emit('interactionCreate', new Interaction(data, client))
 })
-
-/**
- * `interactionCreate`, until `ClientEvents` declares it.
- *
- * @remarks
- * **Scaffolding — delete this block when the event is declared in `events/ClientEvents.ts`.**
- * The handler above cannot emit an event the map does not carry, and this file is written
- * ahead of that line landing. Declaring the same member twice with the same type is legal
- * interface merging, so the day it lands nothing breaks; declaring it twice with *different*
- * types is a compile error, which is the reminder to remove this.
- */
-declare module '../ClientEvents.js' {
-  interface ClientEvents<Client = unknown> {
-    /**
-     * An application was invoked.
-     *
-     * @remarks
-     * A response is due within three seconds — see {@link Interaction}. A listener doing
-     * anything slower calls `deferReply()` before it starts.
-     */
-    interactionCreate: [interaction: Interaction<Client>]
-  }
-}
