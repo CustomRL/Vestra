@@ -13,6 +13,7 @@ export * from './cache/index.js'
 export { Client } from './Client.js'
 export * from './ClientOptions.js'
 export * from './events/index.js'
+export * from './permissions/index.js'
 export * from './gateway/index.js'
 export * from './structures/index.js'
 

@@ -4,7 +4,14 @@ import type {
   ISO8601Timestamp,
   Snowflake,
 } from '@vestra/types'
+import {
+  applyTimeout,
+  computeBasePermissions,
+  isTimedOut,
+  type PermissionsBitField,
+} from '../permissions/index.js'
 import { Base } from './Base.js'
+import type { CacheCapable } from './capabilities.js'
 import { User } from './User.js'
 
 /**
@@ -190,14 +197,52 @@ export class GuildMember<Client = unknown> extends Base<Client> {
    * clock is the only correct reading, and it is exactly the check consumers get wrong.
    */
   isTimedOut(now: number = Date.now()): boolean {
-    const until = this.communicationDisabledUntilTimestamp
-    if (until === undefined || until === null) return false
-    return Date.parse(until) > now
+    // Delegates rather than repeating the comparison: the permission calculation applies the
+    // same rule, and two copies of it would eventually disagree about a member's timeout
+    // between what this reports and what `permissionsIn()` allows.
+    return isTimedOut(this, now)
   }
 
   /** The display name, preferring the guild nickname. */
   get displayName(): string | undefined {
     return this.nick ?? this.user?.globalName ?? this.user?.username
+  }
+
+  /**
+   * The member's permissions across the guild, computed from cached roles.
+   *
+   * @param this - A structure whose client can reach the cache.
+   * @param now - The current time in epoch milliseconds, for the timeout rule.
+   * @returns The computed set.
+   *
+   * @remarks
+   * **Computed rather than read off `permissions`.** That field is only ever populated on an
+   * interaction payload, where Discord has already done this arithmetic for the channel the
+   * interaction happened in. Everywhere else it is `undefined`, and a structure that returned
+   * it would answer "no permissions" for every member outside an interaction.
+   *
+   * **Understates rather than overstates when the cache is incomplete.** A role the member
+   * holds that the cache has not seen contributes nothing, so with `roles: false` this returns
+   * an empty set for everybody who is not the guild owner. That is the safe direction for a
+   * check that gates an action, and it is why the roles scope is on by default.
+   *
+   * This is guild-wide. For what the member can do somewhere specific, pass a channel's
+   * overwrites to {@link computeOverwrites}.
+   */
+  permissionsIn<C extends CacheCapable>(
+    this: GuildMember<C>,
+    now: number = Date.now(),
+  ): PermissionsBitField {
+    const guild = this.client.cache.guilds.get(this.guildId)
+    const base = computeBasePermissions(
+      // A guild that is not cached still has a known ID, and its owner is the one fact that
+      // cannot be recovered — so an uncached guild yields role-derived permissions only. Using
+      // the member's own ID as the owner would hand everybody every permission.
+      { id: this.guildId, ownerId: guild?.ownerId ?? '' },
+      this,
+      this.client.cache.roles.group(this.guildId),
+    )
+    return applyTimeout(base, this, now)
   }
 
   /**
