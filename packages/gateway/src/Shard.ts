@@ -128,22 +128,22 @@ export class Shard extends EventEmitter<ShardEvents> {
     }
 
     // `Fatal` is terminal and stays terminal. Transitioning to `Closed` here made a shard that
-    // had failed on a rejected token reconnectable again — `connect()` throws in `Fatal` and
-    // resolves in `Closed` — so a shutdown quietly undid the one state that exists to stop a
-    // doomed reconnect loop.
-    const terminal = this.#state === ShardState.Fatal
-
+    // failed on a rejected token reconnectable again — `connect()` throws in `Fatal` and
+    // resolves in `Closed` — undoing the state that exists to stop a doomed reconnect loop.
+    //
+    // Only guarded here: a shard that went `Fatal` disposed its connection on the way, so it
+    // always takes this branch.
     if (connection === null) {
-      if (!terminal) this.#transition(ShardState.Closed)
+      if (this.#state !== ShardState.Fatal) this.#transition(ShardState.Closed)
       return
     }
 
     this.#closingIntent = ClosingIntent.User
-    if (!terminal) this.#transition(ShardState.Closing)
+    this.#transition(ShardState.Closing)
     connection.close(recover === 'resume' ? CLOSE_RESUMABLE : CLOSE_PERMANENT, 'shutting down')
     connection.dispose()
     this.#connection = null
-    if (!terminal) this.#transition(ShardState.Closed)
+    this.#transition(ShardState.Closed)
   }
 
   /**
@@ -384,10 +384,8 @@ export class Shard extends EventEmitter<ShardEvents> {
 
     if (verdict.action === ShardCloseAction.ReIdentify) void this.#session.forget()
 
-    // A 4008 means payloads were sent too quickly, and reconnecting immediately is the tight
-    // loop Discord revokes API access for. `Backoff.startAtCap` exists precisely for this and
-    // had no caller anywhere in the package, so a rate-limited close reconnected in under a
-    // second — the average was half of `baseMs`.
+    // 4008 means payloads went out too fast, and reconnecting straight away is the tight loop
+    // Discord revokes API access for. `startAtCap` exists for this and had no caller anywhere.
     if (code === GatewayCloseCodes.RateLimited) this.#backoff.startAtCap()
 
     this.#scheduleReconnect()
@@ -419,8 +417,8 @@ export class Shard extends EventEmitter<ShardEvents> {
     // The resume path is bounded: `resume_gateway_url` names one gateway node, so if that
     // node is what failed, retrying it forever is a loop against a host that will never
     // answer. Fall back to a fresh identify against the base URL.
-    // `>=`, not `>`. The attempt count is incremented before this runs, so `>` allowed one
-    // more resume than the option names — four for a configured three.
+    // `>=`, not `>`: the count is incremented before this runs, so `>` allowed one resume more
+    // than the option names — four for a configured three.
     if (this.#session.resumeAttempts >= this.#options.maxResumeAttempts) {
       void this.#session.forget()
     }
