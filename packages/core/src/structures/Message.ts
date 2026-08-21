@@ -5,9 +5,13 @@ import type {
   GatewayMessageUpdateDispatchData,
   ISO8601Timestamp,
   MessageType,
+  RESTPostAPIChannelMessageJSONBody,
   Snowflake,
 } from '@vestra/types'
 import { Base } from './Base.js'
+import type { CacheCapable, RestCapable } from './capabilities.js'
+import type { Channel } from './channels/Channel.js'
+import type { Guild } from './Guild.js'
 import { GuildMember } from './GuildMember.js'
 import { User } from './User.js'
 import { snowflakeDate, snowflakeTimestamp } from './snowflake.js'
@@ -182,6 +186,106 @@ export class Message<Client = unknown> extends Base<Client> {
    */
   isComplete(): this is CompleteMessage<Client> {
     return !this.partial
+  }
+
+  /**
+   * The cached channel this message was sent in.
+   *
+   * @param this - A structure whose client can reach the cache.
+   * @returns The channel, or `undefined` when it is not cached.
+   *
+   * @remarks
+   * **Returns `undefined`, and README examples must respect that.** A message in a thread with
+   * `threads: false`, or any message on a client with `channels: false`, has no cached channel
+   * — and both are configurations this library encourages. An accessor that asserted would
+   * make cache configuration a source of runtime exceptions in code that never mentions
+   * caching.
+   *
+   * Which is why {@link Message.send} and {@link Message.reply} do not go through this. They
+   * send by `channelId`, so replying works on a client that caches nothing at all.
+   *
+   * Both scopes are checked because a thread is a channel and the message does not say which
+   * store holds it.
+   */
+  channel<C extends CacheCapable>(this: Message<C>): Channel | undefined {
+    return (
+      this.client.cache.channels.get(this.channelId) ??
+      this.client.cache.threads.get(this.channelId)
+    )
+  }
+
+  /**
+   * The cached guild this message was sent in.
+   *
+   * @param this - A structure whose client can reach the cache.
+   * @returns The guild, or `undefined` in a direct message or when it is not cached.
+   */
+  guild<C extends CacheCapable>(this: Message<C>): Guild | undefined {
+    const guildId = this.guildId
+    return guildId === undefined ? undefined : this.client.cache.guilds.get(guildId)
+  }
+
+  /**
+   * Sends a new message to the same channel.
+   *
+   * @param body - What to send.
+   * @param options - Request options, such as an abort signal.
+   * @returns The message that was sent.
+   *
+   * @remarks
+   * Does **not** need the channel to be cached: it sends by `channelId`, which every message
+   * carries. That matters because the obvious spelling — reach for `message.channel`, then send
+   * — fails on a client with `channels: false`, and cache configuration should not decide
+   * whether a bot can reply.
+   *
+   * Returns a {@link Message}, not the `APIMessage` the route returns. That is the deliberate
+   * difference between the two vocabularies: `client.rest.channels.createMessage(...)` hands
+   * back the payload, and this hands back a structure.
+   */
+  async send<C extends RestCapable>(
+    this: Message<C>,
+    body: RESTPostAPIChannelMessageJSONBody,
+    options: { signal?: AbortSignal } = {},
+  ): Promise<Message<C>> {
+    const sent = await this.client.rest.channels.createMessage(this.channelId, body, options)
+    return new Message(sent, this.client)
+  }
+
+  /**
+   * Replies to this message.
+   *
+   * @param body - What to send.
+   * @param options - Request options, such as an abort signal.
+   * @returns The reply that was sent.
+   *
+   * @remarks
+   * A reply is an ordinary message carrying a `message_reference` that points here, which is
+   * why this is a few lines rather than a route of its own.
+   *
+   * `fail_if_not_exists` is deliberately left unset. Discord defaults it to `true`, so replying
+   * to a message somebody deleted mid-command errors rather than silently posting a detached
+   * message; flipping that here would turn a visible failure into a confusing one. A caller who
+   * wants the lenient behaviour asks for it.
+   *
+   * A `message_reference` the caller supplies wins. Overriding it would make replying across
+   * channels — which crossposting needs — impossible to express.
+   */
+  async reply<C extends RestCapable>(
+    this: Message<C>,
+    body: RESTPostAPIChannelMessageJSONBody,
+    options: { signal?: AbortSignal } = {},
+  ): Promise<Message<C>> {
+    return await this.send(
+      {
+        ...body,
+        message_reference: body.message_reference ?? {
+          message_id: this.id,
+          channel_id: this.channelId,
+          ...(this.guildId === undefined ? {} : { guild_id: this.guildId }),
+        },
+      },
+      options,
+    )
   }
 
   /**

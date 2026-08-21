@@ -38,21 +38,33 @@ removes the last dependency the gateway would otherwise need.
 ## The shape of it
 
 ```ts
-import { Client, GatewayIntents } from 'vestra'
+import { Client, GatewayIntentBits } from 'vestra'
 
 const client = new Client({
-  auth: `Bot ${process.env.TOKEN}`,
-  gateway: { intents: GatewayIntents.Guilds | GatewayIntents.GuildMessages },
+  token: process.env.TOKEN,
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    // Without this, `message.content` is an empty string for anything the bot was not
+    // mentioned in. It is a privileged intent, so it also has to be enabled in the
+    // Discord developer portal — enabling it there alone is not enough.
+    GatewayIntentBits.MessageContent,
+  ],
 })
 
 client.on('messageCreate', async (message) => {
   if (message.content === '!ping') {
-    await message.channel.createMessage({ content: 'pong' })
+    await message.reply({ content: 'pong' })
   }
 })
 
-await client.connect()
+await client.login()
 ```
+
+`message.reply` sends by channel ID rather than through the cache, so it works on a client
+that caches nothing. Cache-backed accessors are separate and honest about missing entries:
+`message.channel()` returns `Channel | undefined`, because caching is opt-in per scope and an
+accessor that asserted would turn cache configuration into runtime exceptions.
 
 ## Contributing
 
