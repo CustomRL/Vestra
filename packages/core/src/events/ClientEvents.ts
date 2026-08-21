@@ -5,6 +5,7 @@ import type { ThreadChannel } from '../structures/channels/ThreadChannel.js'
 import type { Guild } from '../structures/Guild.js'
 import type { GuildMember } from '../structures/GuildMember.js'
 import type { Message } from '../structures/Message.js'
+import type { Presence } from '../structures/Presence.js'
 import type { Role } from '../structures/Role.js'
 import type { User } from '../structures/User.js'
 import type { VoiceState } from '../structures/VoiceState.js'
@@ -150,6 +151,16 @@ export interface ClientEvents<Client = unknown> {
   roleUpdate: [role: Role<Client>, guildId: Snowflake]
   /** A role was deleted. */
   roleDelete: [roleId: Snowflake, guildId: Snowflake]
+
+  /**
+   * Somebody's status or activity changed.
+   *
+   * @remarks
+   * The highest-volume event Discord sends. A listener here runs for every status change of
+   * every member of every guild the bot is in, so anything expensive in it is expensive at
+   * that rate.
+   */
+  presenceUpdate: [presence: Presence<Client>]
 
   /**
    * Somebody joined, left or changed their voice state.

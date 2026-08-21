@@ -139,7 +139,14 @@ const GUILD_CREATE = dispatch('GUILD_CREATE', {
       request_to_speak_timestamp: null,
     },
   ],
-  presences: [],
+  presences: [
+    {
+      user: { id: USER.id },
+      status: 'online',
+      activities: [{ name: 'Vestra', type: 0, created_at: 1700000000000 }],
+      client_status: { desktop: 'online' },
+    },
+  ],
   stage_instances: [],
   guild_scheduled_events: [],
   soundboard_sounds: [],
@@ -167,6 +174,7 @@ describe('cache scope coverage', () => {
   it('CC1: fills every scope from a representative dispatch set', () => {
     const cache = new CacheRegistry({
       guilds: true,
+      presences: true,
       voiceStates: true,
       channels: true,
       threads: true,
@@ -207,6 +215,7 @@ describe('cache scope coverage', () => {
     // here. That is a property of the design, not a gap in the test.
     const cache = new CacheRegistry({
       guilds: false,
+      presences: false,
       voiceStates: false,
       channels: false,
       threads: false,
