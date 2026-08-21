@@ -1,12 +1,7 @@
 import assert from 'node:assert/strict'
 import { after, describe, it } from 'node:test'
 import { WebSocketTransport, type Transport, type TransportListeners } from '@vestra/gateway'
-import {
-  largePayload,
-  startMockGateway,
-  websocketClientCanConnect,
-  type MockGateway,
-} from './mock-gateway.ts'
+import { largePayload, startMockGateway, type MockGateway } from './mock-gateway.ts'
 
 /**
  * Transport conformance against a real websocket server (§7.3, X1–X9).
@@ -16,16 +11,17 @@ import {
  * very layer under test. Each one is a property of Node's global `WebSocket` that the shard
  * depends on and that would fail silently if it changed.
  *
- * The suite skips itself where the runtime's `WebSocket` cannot reach a locally hosted
- * server at all — see {@link websocketClientCanConnect}. Skipping is the honest outcome
- * there: every assertion would fail for a reason that says nothing about this code.
+ * **This suite used to skip itself**, behind a probe that asked whether the runtime's
+ * `WebSocket` could reach a locally hosted server. It could not, everywhere — Windows and
+ * Linux, Node 22 through 25 — and the reason was a single wrong digit in the mock's RFC 6455
+ * GUID, which made every `Sec-WebSocket-Accept` it computed invalid. The probe turned that
+ * into a skip, so nine conformance tests never ran once during Phase 3 and the failure was
+ * written up as a runtime quirk.
+ *
+ * The probe is gone rather than fixed. A guard that silently disables the tests it guards will
+ * hide the next such bug exactly as well as it hid this one; if a runtime genuinely cannot do
+ * this, the right outcome is a loud failure somebody looks at.
  */
-
-/** Whether these tests can run at all here. */
-const canConnect = await websocketClientCanConnect()
-const skip = canConnect
-  ? false
-  : "this runtime's WebSocket cannot connect to a local server; see mock-gateway.ts"
 
 interface Harness {
   transport: Transport
@@ -98,7 +94,7 @@ function harness(): Harness {
   }
 }
 
-describe('transport conformance', { skip }, () => {
+describe('transport conformance', () => {
   const running: MockGateway[] = []
 
   async function gateway(options?: Parameters<typeof startMockGateway>[0]): Promise<MockGateway> {
