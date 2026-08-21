@@ -38,6 +38,20 @@ function guildChannel(type: ChannelType, extra: Record<string, unknown> = {}): A
   } as APIChannel
 }
 
+/**
+ * Channel types this version cannot build, and why.
+ *
+ * @remarks
+ * Keyed by the numeric type so the entry cannot drift from the constant. Every one of these is
+ * a type `@vestra/types` has no payload shape for; when it gains one, the entry goes and
+ * `createChannel` grows an arm in the same change.
+ */
+const UNSUPPORTED: Readonly<Record<number, string>> = {
+  [ChannelType.GuildDirectory]:
+    'A hub directory listing servers. No payload shape in @vestra/types, and a bot cannot be ' +
+    'in a hub, so nothing has needed it.',
+}
+
 describe('channel factory', () => {
   it('CH1: builds the class that matches the payload type', () => {
     // The one ChannelType switch in the package. A wrong arm here is a channel that answers
@@ -62,6 +76,38 @@ describe('channel factory', () => {
         `type ${String(type)} built ${channel?.constructor.name ?? 'nothing'}`,
       )
     }
+  })
+
+  it('CH1b: accounts for every channel type Discord defines', () => {
+    // §7 S7, the channel analogue of the dispatch-coverage test. Discord adds channel types,
+    // and the failure mode without this is silent: `createChannel` returns `undefined`, the
+    // handler skips it, and the channel simply never appears in the cache with nothing
+    // reporting why. This fails instead, naming the type, so it becomes a decision.
+    const built = new Map<ChannelType, string>()
+    for (const type of Object.values(ChannelType)) {
+      const channel =
+        type === ChannelType.DM || type === ChannelType.GroupDM
+          ? createChannel({ id: '1', type } as APIChannel, client)
+          : createChannel(guildChannel(type), client, GUILD_ID)
+
+      if (channel !== undefined) built.set(type, channel.constructor.name)
+    }
+
+    const unaccounted = Object.values(ChannelType).filter(
+      (type) => !built.has(type) && !(type in UNSUPPORTED),
+    )
+    assert.deepEqual(
+      unaccounted,
+      [],
+      `these channel types build nothing and have no recorded reason: ${unaccounted.join(', ')}`,
+    )
+
+    // The other direction: a reason left behind after a type is supported reads as a decision
+    // the code has already walked back.
+    const contradictory = Object.keys(UNSUPPORTED)
+      .map(Number)
+      .filter((type) => built.has(type as ChannelType))
+    assert.deepEqual(contradictory, [], `these are supported but still listed unsupported`)
   })
 
   it('CH2: builds the two DM types without a guild', () => {
