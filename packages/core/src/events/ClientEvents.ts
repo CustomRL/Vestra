@@ -93,6 +93,48 @@ export interface ClientEvents<Client = unknown> {
   messageUpdate: [message: Message<Client>]
   /** A message was deleted. Carries IDs, because the message itself may never have been cached. */
   messageDelete: [messageId: Snowflake, channelId: Snowflake, guildId: Snowflake | undefined]
+  /**
+   * Several messages were deleted at once.
+   *
+   * @remarks
+   * Fires once for the batch rather than once per message. A moderator clearing a hundred
+   * messages would otherwise fire a hundred delete listeners, and a bot that logs deletions
+   * gets rate-limited by its own audit channel.
+   */
+  messageDeleteBulk: [
+    messageIds: readonly Snowflake[],
+    channelId: Snowflake,
+    guildId: Snowflake | undefined,
+  ]
+
+  /**
+   * A channel's pinned messages changed.
+   *
+   * @remarks
+   * Discord does not say which message was pinned or unpinned, only that something did — so
+   * neither does this. The timestamp is `null` when the channel now has nothing pinned.
+   */
+  channelPinsUpdate: [
+    channelId: Snowflake,
+    guildId: Snowflake | undefined,
+    lastPinTimestamp: string | null,
+  ]
+
+  /**
+   * Somebody started typing.
+   *
+   * @remarks
+   * The timestamp is in milliseconds, converted from the seconds Discord sends, so this is
+   * not the one event in the library with a different time unit. There is no matching
+   * "stopped typing": Discord sends none, and inventing one from a timer would be the library
+   * guessing.
+   */
+  typingStart: [
+    channelId: Snowflake,
+    userId: Snowflake,
+    guildId: Snowflake | undefined,
+    startedTimestamp: number,
+  ]
 
   /** A member joined a guild. */
   guildMemberAdd: [member: GuildMember<Client>]
