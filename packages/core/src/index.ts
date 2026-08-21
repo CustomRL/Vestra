@@ -12,6 +12,13 @@
 export * from './cache/index.js'
 export { Client } from './Client.js'
 export * from './ClientOptions.js'
+export {
+  presencePayload,
+  resolvePresence,
+  type ActivityOption,
+  type PresenceOptions,
+  type PresenceStatusOption,
+} from './ClientPresence.js'
 export * from './events/index.js'
 export * from './permissions/index.js'
 export * from './gateway/index.js'
