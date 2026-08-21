@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import { ShardState } from '@vestra/gateway'
 import {
+  ChannelType,
   GatewayOpcodes,
   type APIGuild,
   type APIGuildMember,
@@ -15,6 +16,7 @@ import {
   handlers,
   type CacheOptions,
   type DispatchShard,
+  type CacheScope,
   type EventContext,
 } from '@vestra/core'
 
@@ -22,6 +24,26 @@ const shard: DispatchShard = { id: 0, state: ShardState.Ready, guildsPending: fa
 const GUILD_ID = '613425648685547541'
 const OTHER_GUILD_ID = '81384788765712384'
 const JOINED_AT = '2021-03-14T12:00:00.000000+00:00'
+
+/**
+ * Every scope whose entries belong to one guild.
+ *
+ * @remarks
+ * `users` is not here, and that is the point of listing them rather than checking every store:
+ * a user in a departed guild may still be in others.
+ */
+const GUILD_SCOPED: readonly CacheScope[] = [
+  'guilds',
+  'channels',
+  'threads',
+  'roles',
+  'members',
+  'emojis',
+  'stickers',
+  'presences',
+  'voiceStates',
+  'messages',
+]
 
 function apiRole(overrides: Partial<APIRole> = {}): APIRole {
   return {
@@ -98,11 +120,31 @@ function apiMember(id: string, username: string): APIGuildMember {
 function guildCreatePayload(overrides: Partial<APIGuild> = {}): unknown {
   return {
     ...apiGuild(overrides),
+    emojis: [{ id: '77', name: 'vestra', roles: [], require_colons: true, animated: false }],
+    stickers: [
+      {
+        id: '88',
+        name: 'wave',
+        description: null,
+        tags: 'wave',
+        type: 2,
+        format_type: 1,
+        guild_id: GUILD_ID,
+      },
+    ],
     joined_at: JOINED_AT,
     large: false,
     member_count: 2,
     members: [apiMember('80351110224678912', 'nelly'), apiMember('82198898841029460', 'lilly')],
-    channels: [],
+    channels: [
+      {
+        id: '3',
+        type: ChannelType.GuildText,
+        name: 'general',
+        position: 0,
+        permission_overwrites: [],
+      },
+    ],
     threads: [],
     voice_states: [],
     presences: [],
@@ -267,6 +309,111 @@ describe('guild handlers', () => {
     assert.equal(context.cache.guilds.get(OTHER_GUILD_ID)?.name, 'Vestra')
     assert.equal(context.cache.roles.get('900000000000000000')?.name, 'Moderator')
     assert.deepEqual(emitted.at(-1), { event: 'guildDelete', args: [GUILD_ID] })
+  })
+
+  it('G8b: drops everything cached for a departed guild, not just its roles', () => {
+    // Issue #15. This began as "guilds and roles", which was complete when roles was the only
+    // other guild-scoped scope, and stayed that way while seven more were added. Everything
+    // else leaked for the life of the process — unreachable, because no dispatch would ever
+    // name those IDs again.
+    //
+    // The assertion is written over `cache.stores` rather than scope by scope on purpose: a
+    // guild-scoped scope added without a line in `evictGuild` fails here, which is the only
+    // thing that stops this recurring a third time.
+    const options: CacheOptions = {
+      guilds: true,
+      channels: true,
+      threads: true,
+      roles: true,
+      members: true,
+      emojis: true,
+      stickers: true,
+      presences: true,
+      voiceStates: true,
+      messages: true,
+      users: true,
+    }
+    const { router, context } = harness(options)
+
+    router.route(dispatch('GUILD_CREATE', guildCreatePayload()), shard, false)
+    router.route(
+      dispatch('THREAD_CREATE', {
+        id: '4242',
+        type: ChannelType.PublicThread,
+        guild_id: GUILD_ID,
+        name: 'a thread',
+        position: 0,
+        parent_id: '3',
+      }),
+      shard,
+      false,
+    )
+    router.route(
+      dispatch('MESSAGE_CREATE', {
+        id: '5151',
+        channel_id: '3',
+        guild_id: GUILD_ID,
+        author: { id: '1', username: 'n', discriminator: '0', global_name: null, avatar: null },
+        content: 'hi',
+        timestamp: '2023-01-01T00:00:00+00:00',
+        edited_timestamp: null,
+        tts: false,
+        mention_everyone: false,
+        mentions: [],
+        mention_roles: [],
+        attachments: [],
+        embeds: [],
+        pinned: false,
+        type: 0,
+      }),
+      shard,
+      false,
+    )
+    router.route(
+      dispatch('VOICE_STATE_UPDATE', {
+        guild_id: GUILD_ID,
+        channel_id: '3',
+        user_id: '80351110224678912',
+        session_id: 's',
+        deaf: false,
+        mute: false,
+        self_deaf: false,
+        self_mute: false,
+        self_video: false,
+        suppress: false,
+        request_to_speak_timestamp: null,
+      }),
+      shard,
+      false,
+    )
+    router.route(
+      dispatch('PRESENCE_UPDATE', {
+        user: { id: '80351110224678912' },
+        guild_id: GUILD_ID,
+        status: 'online',
+        activities: [],
+        client_status: {},
+      }),
+      shard,
+      false,
+    )
+
+    // Everything guild-scoped must actually have something in it, or the eviction below would
+    // pass by having nothing to do — which is how a vacuous version of this test looks.
+    const filled = context.cache.stores.filter((store) => store.size > 0).map((s) => s.scope)
+    for (const scope of GUILD_SCOPED) {
+      assert.ok(filled.includes(scope), `${scope} was never filled, so the check below is empty`)
+    }
+
+    router.route(dispatch('GUILD_DELETE', { id: GUILD_ID }), shard, false)
+
+    const leaked = context.cache.stores
+      .filter((store) => GUILD_SCOPED.includes(store.scope) && store.size > 0)
+      .map((store) => store.scope)
+    assert.deepEqual(leaked, [], `these scopes leaked a departed guild: ${leaked.join(', ')}`)
+
+    // Users are deliberately kept: somebody in a departed guild may still be in others.
+    assert.ok(context.cache.users.size > 0, 'users must survive a guild departure')
   })
 
   it('G9: seeds the members riding inside the payload, silently', () => {
