@@ -115,13 +115,25 @@ failure mode.
 Vestra's hot path is: socket frame → inflate → JSON parse → event handler → structure
 construction. These rules apply _there_; elsewhere, prefer clarity.
 
-- **Assign fields explicitly, in a fixed order,** in the constructor. `Object.assign` and
-  conditional field assignment produce megamorphic object shapes that defeat V8's inline
-  caches. This is lint-enforced.
+- **Assign fields explicitly, in a fixed order, in the constructor** — every field, every
+  time, including the ones the payload omitted. `Object.assign` and _conditional_ assignment
+  there produce a different object shape per payload variant, which defeats V8's inline caches
+  on exactly the objects the library builds most. `Object.assign` is lint-enforced; the order
+  and the unconditional-in-the-constructor half are not, and are on you.
+
+  **`patch` is the opposite, and deliberately so.** An update carries only what changed, so a
+  `patch` that assigned absent fields would blank them — turning an edit into data loss. That
+  is safe precisely because the constructor already created every property: a conditional
+  assignment in `patch` cannot add one, so it cannot change the shape. The rule is about where
+  the shape is established, not about the keyword.
+
 - **Never `delete`.** It deoptimises the object's shape permanently. Assign `undefined`, or
   use a `Map`. Also lint-enforced.
 - **Declare structure fields with `declare`** and assign them in the constructor, so no
-  redundant field initialisation is emitted before your assignment.
+  redundant field initialisation is emitted before your assignment. Enforced by
+  `packages/core/test/shape.test.ts`, which reads the compiled output rather than the source —
+  a bare declaration becomes `field;` in the class body under `useDefineForClassFields`, so
+  every instance is defined as `undefined` and then immediately assigned.
 - **Snowflakes stay `string`.** They are used as map keys and compared for equality, never
   for arithmetic. Converting to `bigint` costs on every payload and serialises badly.
 - **Reuse buffers in the inflator.** It runs on every single gateway frame.
