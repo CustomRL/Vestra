@@ -2363,6 +2363,15 @@ concentrating the dishonesty in one helper keeps it visible.
 - **S7** every value in `ChannelType` maps to a constructor or is listed explicitly as unsupported.
   The analogue of the dispatch-coverage test.
 - **S8** an unrecognised numeric channel type returns a base `Channel` and does not throw.
+  **Implemented the other way, deliberately — this line is superseded.** `createChannel` returns
+  `undefined` for a type it cannot build, and `packages/core/test/structures-channels.test.ts`
+  **CH4** asserts exactly that. Returning a bare `Channel` fails on the version after next:
+  `GuildDirectory` has no payload shape in `@vestra/types` today, so it would come back as
+  `Channel`, and the release that models it would start returning `DirectoryChannel` — a class
+  change for existing code, arriving as a bug fix. Every predicate on that placeholder would
+  also be answering about a payload nobody has modelled. `undefined` says the library did not
+  understand the channel, which is the truth, and a caller can act on it. The cost is that
+  `createChannel` has a `| undefined` return that callers must handle; the handlers do.
 - **S9** `JSON.stringify(structure)` does not throw when the client holds a reference cycle. The
   regression test for the `#client` rule; it would have caught the plain-field version instantly.
 - **S10** `Object.keys(structure)` and `util.inspect(structure)` do not include the client.
