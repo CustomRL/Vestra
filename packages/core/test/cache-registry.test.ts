@@ -26,6 +26,7 @@ function role(id = '2'): Role<typeof client> {
       mentionable: false,
       flags: 0,
     },
+    GUILD_ID,
     client,
   )
 }
