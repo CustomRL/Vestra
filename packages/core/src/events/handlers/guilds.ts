@@ -5,6 +5,7 @@ import { Presence } from '../../structures/Presence.js'
 import { Role } from '../../structures/Role.js'
 import { Sticker } from '../../structures/Sticker.js'
 import { VoiceState } from '../../structures/VoiceState.js'
+import { evictGuild } from '../../cache/evictGuild.js'
 import { defineHandler } from '../EventHandler.js'
 import { cacheChannel } from './channels.js'
 import { upsertUser } from '../upsert.js'
@@ -122,9 +123,9 @@ export const guildUpdate = defineHandler('GUILD_UPDATE', (client, data) => {
  * @remarks
  * The distinction is the whole handler. `unavailable: true` is a Discord outage and the
  * guild is coming back, so the cache keeps it — dropping it would empty the cache during
- * every incident and refill it minutes later. Anything else is a real departure, and the
- * guild's roles go with it, because a role cached for a guild the bot has left is
- * unreachable memory that nothing will ever evict.
+ * every incident and refill it minutes later. Anything else is a real departure, and
+ * everything cached for the guild goes with it — see {@link evictGuild}, which exists because
+ * this handler used to drop the guild and its roles and leak the other seven scopes.
  */
 export const guildDelete = defineHandler('GUILD_DELETE', (client, data) => {
   if (data.unavailable === true) {
@@ -132,8 +133,7 @@ export const guildDelete = defineHandler('GUILD_DELETE', (client, data) => {
     return
   }
 
-  client.cache.guilds.delete(data.id)
-  for (const role of client.cache.roles.group(data.id)) client.cache.roles.delete(role.id)
+  evictGuild(client.cache, data.id)
 
   client.emit('guildDelete', data.id)
 })
