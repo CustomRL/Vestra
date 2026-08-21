@@ -43,8 +43,25 @@ export interface CacheScopeContext<V> {
    * @remarks
    * Optional because the secondary indexes above are correct without it — they verify
    * against the adapter on read. Implementing it makes them faster, not correct.
+   *
+   * An adapter that implements it must fire it for **every** way an entry leaves: the
+   * bound, the sweep, and lazy expiry on read. Lazy expiry is the one that matters most,
+   * because it is the only path where an entry disappears without anything above the
+   * adapter being called.
    */
   readonly onEvict?: (key: string, value: V) => void
+  /**
+   * The clock, for deciding whether an entry has expired.
+   *
+   * @remarks
+   * Handed down rather than read from the environment so that a store driving a test clock
+   * and the adapter enforcing its deadlines agree. They are the same clock or the adapter
+   * silently hides every entry the store just wrote.
+   *
+   * The adapter still never computes a deadline — `expiresAt` arrives absolute on `set`.
+   * This is only for comparing against one.
+   */
+  readonly now: () => number
 }
 
 /**

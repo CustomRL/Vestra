@@ -29,6 +29,7 @@ import type { CacheAdapter, CacheScopeContext } from './CacheAdapter.js'
 export class MemoryCacheAdapter<V> implements CacheAdapter<V> {
   readonly #max: number
   readonly #onEvict: ((key: string, value: V) => void) | undefined
+  readonly #now: () => number
   readonly #values = new Map<string, V>()
 
   /**
@@ -46,6 +47,7 @@ export class MemoryCacheAdapter<V> implements CacheAdapter<V> {
   constructor(context: CacheScopeContext<V>) {
     this.#max = context.max
     this.#onEvict = context.onEvict
+    this.#now = context.now
   }
 
   /** How many entries are stored, including any expired but not yet swept. */
@@ -66,7 +68,7 @@ export class MemoryCacheAdapter<V> implements CacheAdapter<V> {
    */
   get(key: string): V | undefined {
     if (this.#hasExpired(key)) {
-      this.#drop(key)
+      this.#evict(key)
       return undefined
     }
     return this.#values.get(key)
@@ -80,7 +82,7 @@ export class MemoryCacheAdapter<V> implements CacheAdapter<V> {
    */
   has(key: string): boolean {
     if (this.#hasExpired(key)) {
-      this.#drop(key)
+      this.#evict(key)
       return false
     }
     return this.#values.has(key)
@@ -131,19 +133,40 @@ export class MemoryCacheAdapter<V> implements CacheAdapter<V> {
     this.#expiry?.clear()
   }
 
-  /** The keys, oldest write first. */
-  keys(): IterableIterator<string> {
-    return this.#values.keys()
+  /**
+   * The keys, oldest write first, skipping anything expired.
+   *
+   * @remarks
+   * Generators rather than the raw `Map` iterators, because handing back a key that `get`
+   * would refuse breaks the contract this adapter publishes — "never return an entry past
+   * its `expiresAt`" — and produces the worst kind of bug above: a caller iterates keys,
+   * looks each one up, and gets `undefined` for something it was just told exists.
+   *
+   * The cost is one comparison per item on iteration. Unlike the read path, iteration is
+   * already O(n), so a per-item check does not change its order.
+   *
+   * Expired entries are skipped rather than dropped here. Deleting during iteration of the
+   * same map is legal, but the sweep is where removal belongs, and a read-shaped method
+   * that quietly mutates is a surprise.
+   */
+  *keys(): IterableIterator<string> {
+    for (const key of this.#values.keys()) {
+      if (!this.#hasExpired(key)) yield key
+    }
   }
 
-  /** The values, oldest write first. */
-  values(): IterableIterator<V> {
-    return this.#values.values()
+  /** The values, oldest write first, skipping anything expired. */
+  *values(): IterableIterator<V> {
+    for (const [key, value] of this.#values) {
+      if (!this.#hasExpired(key)) yield value
+    }
   }
 
-  /** The entries, oldest write first. */
-  entries(): IterableIterator<[key: string, value: V]> {
-    return this.#values.entries()
+  /** The entries, oldest write first, skipping anything expired. */
+  *entries(): IterableIterator<[key: string, value: V]> {
+    for (const entry of this.#values) {
+      if (!this.#hasExpired(entry[0])) yield entry
+    }
   }
 
   /**
@@ -175,7 +198,10 @@ export class MemoryCacheAdapter<V> implements CacheAdapter<V> {
 
   #hasExpired(key: string): boolean {
     const expiresAt = this.#expiry?.get(key)
-    return expiresAt !== undefined && expiresAt <= Date.now()
+    // The store's clock, not the environment's. A store driving a test clock and an adapter
+    // reading `Date.now()` disagree by however far the two have drifted, which makes every
+    // entry the store just wrote look long expired.
+    return expiresAt !== undefined && expiresAt <= this.#now()
   }
 
   #drop(key: string): void {

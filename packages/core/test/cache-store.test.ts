@@ -3,8 +3,6 @@ import { describe, it } from 'node:test'
 import {
   CacheScope,
   CacheStore,
-  MemoryCacheAdapter,
-  NullCacheAdapter,
   guildUserKey,
   parseGuildUserKey,
   resolveCachePolicy,
@@ -36,13 +34,6 @@ function store(
   return new CacheStore<Entry>({
     scope: CacheScope.Messages,
     policy,
-    adapter: policy.enabled
-      ? new MemoryCacheAdapter<Entry>({
-          scope: CacheScope.Messages,
-          max: policy.max,
-          codec: { encode: JSON.stringify, decode: (raw) => JSON.parse(raw) as Entry },
-        })
-      : new NullCacheAdapter<Entry>(),
     keyOf: (entry) => entry.id,
     now: clock.now,
     ...(options.grouped === true ? { groupKeyOf: (entry: Entry) => entry.guildId } : {}),
@@ -127,6 +118,12 @@ describe('cache store', () => {
     const cache = store({ ttl: 5_000 }, { clock })
     cache.add({ id: 'a' })
 
+    // Readable the instant it is written. Without this the suite passed while every TTL'd
+    // entry was invisible from the moment it was stored, because the adapter compared the
+    // store's deadline against the real clock rather than the injected one.
+    assert.equal(cache.get('a')?.id, 'a', 'a fresh entry must be readable')
+    assert.equal(cache.has('a'), true)
+
     clock.advance(4_999)
     assert.equal(cache.sweep(), 0, 'not due yet')
 
@@ -184,10 +181,49 @@ describe('cache store', () => {
   })
 
   it('CS10: drops an entry from its group on delete', () => {
+    // Asserted through the index rather than through `group()`. `group()` prunes anything
+    // the adapter no longer holds, so it returns the right answer whether or not `delete`
+    // touched the index — which is why the first version of this test could not fail.
+    const cache = store(true, { grouped: true })
+    const index = cache.index
+    assert.ok(index !== undefined, 'a grouped scope must have an index')
+
+    cache.add({ id: 'a', guildId: 'g1' })
+    assert.equal(index.groupOf('a'), 'g1')
+
+    cache.delete('a')
+    assert.equal(index.groupOf('a'), undefined, 'the index must not still hold it')
+    assert.deepEqual(cache.group('g1'), [])
+  })
+
+  it('CS14: moves an entry when its group key changes', () => {
+    // Otherwise the entry stays listed under its old guild, and `guild.channels` hands back
+    // a channel belonging to a different guild — for a live entry, forever.
     const cache = store(true, { grouped: true })
     cache.add({ id: 'a', guildId: 'g1' })
-    cache.delete('a')
-    assert.deepEqual(cache.group('g1'), [])
+    cache.add({ id: 'a', guildId: 'g2' })
+
+    assert.deepEqual(cache.group('g1'), [], 'the old group must not still list it')
+    assert.deepEqual(
+      cache.group('g2').map((entry) => entry.id),
+      ['a'],
+    )
+  })
+
+  it('CS15: prunes the index when an entry expires lazily', () => {
+    // A TTL'd grouped scope otherwise accumulates index entries for every value that ever
+    // expired, pruned only if somebody happens to read the group. A bot that never reads
+    // `guild.members` would leak while the adapter stayed neatly bounded.
+    const clock = new Clock()
+    const cache = store({ ttl: 1_000 }, { grouped: true, clock })
+    cache.add({ id: 'a', guildId: 'g1' })
+
+    const index = cache.index
+    assert.ok(index !== undefined)
+
+    clock.advance(2_000)
+    cache.get('a')
+    assert.equal(index.groupOf('a'), undefined, 'expiry must reach the index')
   })
 
   it('CS11: returns nothing for a group on an ungrouped scope', () => {
@@ -205,10 +241,15 @@ describe('cache store', () => {
 
   it('CS13: clears the index along with the entries', () => {
     const cache = store(true, { grouped: true })
+    const index = cache.index
+    assert.ok(index !== undefined)
+
     cache.add({ id: 'a', guildId: 'g1' })
     cache.clear()
 
     assert.equal(cache.size, 0)
+    // Through the index directly, for the same reason as CS10.
+    assert.equal(index.groupOf('a'), undefined)
     assert.deepEqual(cache.group('g1'), [])
   })
 })

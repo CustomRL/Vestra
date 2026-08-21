@@ -19,6 +19,17 @@
  */
 export class CacheIndex {
   readonly #groups = new Map<string, Set<string>>()
+  /**
+   * Which group each entry is currently in.
+   *
+   * @remarks
+   * The reverse direction, and it earns its memory twice. It makes removal O(1) instead of
+   * a walk over every group, which matters because eviction calls it; and it is the only
+   * way to notice that an entry has *moved* — a channel that changes guild, a message
+   * re-keyed — so the old group can be corrected rather than left holding a key that now
+   * belongs somewhere else.
+   */
+  readonly #groupOf = new Map<string, string>()
 
   /** How many groups are indexed. */
   get size(): number {
@@ -32,12 +43,19 @@ export class CacheIndex {
    * @param entryKey - The entry.
    */
   add(groupKey: string, entryKey: string): void {
+    const previous = this.#groupOf.get(entryKey)
+    if (previous === groupKey) return
+    // Moved rather than added. Without this the entry stays listed under its old group and
+    // `group(old)` hands back something that now belongs to another guild entirely.
+    if (previous !== undefined) this.remove(previous, entryKey)
+
     const existing = this.#groups.get(groupKey)
     if (existing === undefined) {
       this.#groups.set(groupKey, new Set([entryKey]))
-      return
+    } else {
+      existing.add(entryKey)
     }
-    existing.add(entryKey)
+    this.#groupOf.set(entryKey, groupKey)
   }
 
   /**
@@ -57,6 +75,7 @@ export class CacheIndex {
 
     existing.delete(entryKey)
     if (existing.size === 0) this.#groups.delete(groupKey)
+    if (this.#groupOf.get(entryKey) === groupKey) this.#groupOf.delete(entryKey)
   }
 
   /**
@@ -65,15 +84,13 @@ export class CacheIndex {
    * @param entryKey - The entry.
    *
    * @remarks
-   * O(groups). Used only when an entry is dropped without its group being known — an
-   * eviction reported by an adapter that does not track groups. The caller that knows the
-   * group should use {@link remove} instead.
+   * O(1) via the reverse map, which matters because this is what eviction calls — once per
+   * entry dropped by the bound, the sweep, or lazy expiry.
    */
   removeAnywhere(entryKey: string): void {
-    for (const [groupKey, entries] of this.#groups) {
-      if (!entries.delete(entryKey)) continue
-      if (entries.size === 0) this.#groups.delete(groupKey)
-    }
+    const groupKey = this.#groupOf.get(entryKey)
+    if (groupKey === undefined) return
+    this.remove(groupKey, entryKey)
   }
 
   /**
@@ -97,6 +114,7 @@ export class CacheIndex {
         live.push(key)
       } else {
         keys.delete(key)
+        this.#groupOf.delete(key)
       }
     }
     if (keys.size === 0) this.#groups.delete(groupKey)
@@ -105,11 +123,18 @@ export class CacheIndex {
 
   /** Forgets a whole group. */
   clearGroup(groupKey: string): void {
+    for (const entryKey of this.#groups.get(groupKey) ?? []) this.#groupOf.delete(entryKey)
     this.#groups.delete(groupKey)
   }
 
   /** Forgets everything. */
   clear(): void {
     this.#groups.clear()
+    this.#groupOf.clear()
+  }
+
+  /** Which group an entry is indexed under, if any. Exposed for tests. */
+  groupOf(entryKey: string): string | undefined {
+    return this.#groupOf.get(entryKey)
   }
 }
