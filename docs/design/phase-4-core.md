@@ -2852,6 +2852,10 @@ above.
 
 ### 8-E. Inconsistencies found by review, unresolved here
 
+**Status note.** E1, E3, E4 and E6 are settled by the implementation and marked below with what
+settled them. E2 and E5 are still open. This section is kept rather than deleted because the
+reasoning is the useful part.
+
 An adversarial review of this document against the real source in `packages/gateway/src`,
 `packages/rest/src` and `packages/types/src` found three blockers and several inconsistencies.
 The blockers are fixed above — the `GuildReadyTracker` lifecycle (§4.3), the `login()` READY race
@@ -2866,24 +2870,39 @@ implemented against would be guessing.
   `ShardSession(store, shardId)`, `ZlibStream(hooks, limits)`,
   `ShardConnection(options, hooks, url, epoch)`. For a structure the subject is the payload and
   the client is context. §4.16's signature is the one to correct when it is implemented.
-- **E2. The handled set contradicts the idempotency table.** §4.6 fixes the handled set at 26
-  named events and puts `THREAD_MEMBERS_UPDATE` among the 50 unhandled, but §5.2 specifies its
-  replay behaviour and §7 **R4** tests it. Either it is handled and the count is 27, or the
-  table and the test are describing an event that never runs.
-- **E3. `CacheStore.fetch(key)` is not implementable for messages.** Keys are flat (§4.12) and
-  `messages` is keyed by message id alone (§4.9), but the only REST route is
-  `channels.getMessage(channelId, messageId)`. A flat key cannot supply the channel. Either
-  messages are keyed compositely, or `fetch` is not offered on that scope.
-- **E4. `EventContext.user` is writable while `Client.user` is a getter.** The READY and
-  `USER_UPDATE` handlers are evidently meant to assign it, but structural assignability means
-  the contradiction compiles and only shows up as a runtime assignment to a getter-only
-  property.
-- **E5. Serial mode has no stated mechanism.** §4.8 says serial mode "changes `emit`, not
-  `handle`" and that the queue awaits before dequeuing, but handlers own their own
-  `client.emit(...)` calls and `EventContext.emit` returns `boolean`. There is nothing for the
-  queue to await.
-- **E6. `raw` is emitted outside the `try` in `routeDispatch` (§4.7)**, so a throwing `raw`
-  listener escapes the containment the section promises for every other listener.
+- **E2. The handled set contradicts the idempotency table. STILL OPEN, and now measurable.**
+  §4.6 fixes the handled set at 26 named events and puts `THREAD_MEMBERS_UPDATE` among the 50
+  unhandled, but §5.2 specifies its replay behaviour and §7 **R4** tests it. The registry
+  currently holds **23** of the 26: the three missing are `RESUMED`, `PRESENCE_UPDATE` and
+  `VOICE_STATE_UPDATE`. `RESUMED` is deliberate — it is a session mechanic and `ShardBridge`
+  handles it, for the reason that section gives about mechanics never being handlers. The other
+  two are waiting on structures and cache scopes that do not exist yet. `THREAD_MEMBERS_UPDATE`
+  remains unhandled, so §5.2 and **R4** still describe an event that never runs; that is the
+  contradiction to settle, not the count.
+- **E3. `CacheStore.fetch(key)` is not implementable for messages. RESOLVED: there is no
+  `fetch`.** The store ships without one at all, rather than with one that works on four scopes
+  and not the fifth. A cache-backed accessor that is present but throws or returns `undefined`
+  for structural reasons is exactly the "accessor that lies" ADR 4 forbids, and the flat-key
+  decision (§2.3) is load-bearing enough not to reopen for it. Fetching stays explicit:
+  `client.rest.channels.getMessage(channelId, messageId)`.
+- **E4. `EventContext.user` is writable while `Client.user` is a getter. RESOLVED by not making
+  them the same object.** The document assumed the client would satisfy `EventContext`
+  structurally. It cannot, for an unrelated reason — Node's `EventEmitter` types `emit` over its
+  own event map plus its built-ins, and no hand-written signature matches — so `Client` builds
+  one context object per client instead. `EventContext.user` is a plain writable field the
+  handlers assign; `Client.user` is a getter that reads through to it. One owner, no runtime
+  assignment to a getter, and the narrowing the interface existed for is unchanged.
+- **E5. Serial mode has no stated mechanism. STILL OPEN, and unbuilt.** Nothing in
+  `packages/core/src` implements serial mode, so the contradiction has not been resolved so much
+  as deferred: `EventContext.emit` still returns `boolean` and there is still nothing for a queue
+  to await. Whoever builds it settles it, and the honest reading of §4.8 today is that it
+  describes a feature that does not exist.
+- **E6. `raw` is emitted outside the `try` in `routeDispatch` (§4.7). RESOLVED: it is emitted
+  inside.** `EventRouter.route` puts it in the same `try` as the handler and says why — it runs
+  consumer listeners like everything else, and a throwing `raw` listener escaping while a
+  throwing `messageCreate` listener is contained would be an inconsistency with no defence. It
+  fires before the handler, so a consumer watching `raw` sees the payload as it arrived rather
+  than after the cache has been updated from it.
 
 ## 9. Suggested issues to open before coding
 
