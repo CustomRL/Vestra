@@ -13,11 +13,13 @@ import type { GatewayDispatchData } from './dispatch.js'
  */
 
 /**
- * A dispatched event.
+ * A dispatched event of one specific type.
+ *
+ * @remarks
+ * Use {@link GatewayDispatchPayload} to describe "any dispatch". This is the parameterised
+ * form, for the cases where the event is already known.
  */
-export interface GatewayDispatchPayload<
-  Event extends GatewayDispatchEvents = GatewayDispatchEvents,
-> {
+export interface GatewayDispatchPayloadFor<Event extends GatewayDispatchEvents> {
   /** Always {@link GatewayOpcodes.Dispatch}. */
   op: typeof GatewayOpcodes.Dispatch
   /** The event name. */
@@ -33,6 +35,29 @@ export interface GatewayDispatchPayload<
   /** The event data. */
   d: GatewayDispatchData<Event>
 }
+
+/**
+ * Any dispatched event.
+ *
+ * @remarks
+ * A union of one member per event, rather than a single interface parameterised by the
+ * event name. The distinction is the whole ergonomics of consuming the gateway: in a
+ * union, `t` and `d` are correlated, so a plain check narrows both.
+ *
+ * ```ts
+ * if (payload.t === 'MESSAGE_CREATE') {
+ *   payload.d.content // GatewayMessageCreateDispatchData
+ * }
+ * ```
+ *
+ * As one parameterised interface it did not narrow, and `d` did not even resolve to the
+ * union of every event's data — events absent from {@link GatewayDispatchEventMap} take
+ * the `unknown` branch of {@link GatewayDispatchData}, and `unknown` absorbs every other
+ * member of a union. So `d` was exactly `unknown` and every consumer reached for a cast.
+ */
+export type GatewayDispatchPayload = {
+  [Event in GatewayDispatchEvents]: GatewayDispatchPayloadFor<Event>
+}[GatewayDispatchEvents]
 
 /**
  * Sent immediately after connecting, carrying the heartbeat interval.

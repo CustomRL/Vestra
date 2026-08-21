@@ -2,7 +2,6 @@ import { EventEmitter } from 'node:events'
 import {
   GatewayOpcodes,
   type GatewayDispatchPayload,
-  type GatewayReadyDispatchData,
   type GatewayReceivePayload,
   type GatewaySendPayload,
 } from '@vestra/types'
@@ -319,7 +318,7 @@ export class Shard extends EventEmitter<ShardEvents> {
     this.#session.advance(payload.s)
 
     if (payload.t === 'READY') {
-      const data = payload.d as GatewayReadyDispatchData
+      const data = payload.d
       this.#session.establish(data.session_id, data.resume_gateway_url, payload.s)
       this.#backoff.reset()
       this.#transition(ShardState.Ready)
