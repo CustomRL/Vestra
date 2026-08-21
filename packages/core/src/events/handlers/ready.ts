@@ -22,11 +22,23 @@ import { defineHandler } from '../EventHandler.js'
  *
  * The payload's `guilds` are unavailable stubs that Discord streams in afterwards, so this
  * is the handshake succeeding and not the cache being populated.
+ *
+ * **This handler does not emit `ready`.** `ClientEvents.ready` promises once per client,
+ * and a handler runs once per shard, so emitting here fires a twenty-shard bot's startup
+ * listener twenty times. The `Client` owns that aggregation because it is the only thing
+ * that can see the fleet. An earlier version emitted from both and a live two-shard run
+ * logged its ready line twice, which no unit test noticed.
+ *
+ * Patches an existing identity rather than replacing it, so a consumer holding
+ * `client.user` across a reconnect keeps a live object.
  */
 export const ready = defineHandler('READY', (client, data) => {
-  const user = new ClientUser(data.user, client)
-  client.user = user
-  client.emit('ready', user)
+  const current = client.user
+  if (current === undefined) {
+    client.user = new ClientUser(data.user, client)
+    return
+  }
+  current.patch(data.user)
 })
 
 /**

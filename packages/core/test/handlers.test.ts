@@ -120,7 +120,7 @@ describe('handler registry', () => {
   })
 
   it('EH5: applies READY to the client identity', () => {
-    const { router, context, emitted } = harness()
+    const { router, context } = harness()
 
     router.route(
       dispatch('READY', {
@@ -135,7 +135,32 @@ describe('handler registry', () => {
     )
 
     assert.equal(context.user?.username, 'nelly')
-    assert.ok(emitted.some((entry) => entry.event === 'ready'))
+  })
+
+  it('EH7: the READY handler sets the identity and does not announce it', () => {
+    // `ready` promises once per client and a handler runs once per shard, so the handler
+    // sets `user` and the Client owns the announcement. Emitting from both fired a live
+    // two-shard run's startup listener twice, which no unit test noticed at the time.
+    const { router, context, emitted } = harness()
+
+    router.route(
+      dispatch('READY', {
+        v: 10,
+        user: USER,
+        guilds: [],
+        session_id: 's',
+        resume_gateway_url: 'wss://x/',
+        application: { id: '1', flags: 0 },
+      }),
+      shard,
+    )
+
+    assert.equal(context.user?.username, 'nelly', 'the handler must set the identity')
+    assert.equal(
+      emitted.some((entry) => entry.event === 'ready'),
+      false,
+      'announcing is not',
+    )
   })
 
   it('EH6: is idempotent under replay', () => {

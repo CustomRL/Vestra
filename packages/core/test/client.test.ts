@@ -1,0 +1,90 @@
+import assert from 'node:assert/strict'
+import { describe, it } from 'node:test'
+import { Client, resolveClientOptions, resolveIntents } from '@vestra/core'
+import { GatewayIntentBits } from '@vestra/types'
+
+const TOKEN = 'not.a.real.token'
+
+/** Gateway info that never opens a socket, because no shard is ever connected. */
+const info = {
+  url: 'wss://gateway.discord.gg/',
+  shards: 1,
+  session_start_limit: { total: 1000, remaining: 1000, reset_after: 0, max_concurrency: 1 },
+}
+
+describe('client options', () => {
+  it('CO1: combines intent bits from an array', () => {
+    // `[Guilds, GuildMessages]` is what people write; making them reach for `|` is a
+    // papercut on the first line of every bot.
+    const combined = resolveIntents([GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages])
+    assert.equal(combined, GatewayIntentBits.Guilds | GatewayIntentBits.GuildMessages)
+    assert.equal(resolveIntents(513), 513, 'a bit set passes through')
+  })
+
+  it('CO2: refuses an empty token here rather than as a 4004 later', () => {
+    assert.throws(() => resolveClientOptions({ token: '   ', intents: 0 }), TypeError)
+  })
+
+  it('CO3: defaults the sweep interval but honours an explicit null', () => {
+    assert.equal(resolveClientOptions({ token: TOKEN, intents: 0 }).sweepInterval, 60_000)
+    assert.equal(
+      resolveClientOptions({ token: TOKEN, intents: 0, sweepInterval: null }).sweepInterval,
+      null,
+    )
+  })
+})
+
+describe('client', () => {
+  it('CL1: exposes cache, rest and shards without connecting', () => {
+    const client = new Client({ token: TOKEN, intents: 0 })
+
+    assert.ok(client.cache.roles.enabled, 'the cache is built from the defaults')
+    assert.equal(typeof client.rest.get, 'function')
+    assert.equal(client.user, undefined, 'no identity before READY')
+  })
+
+  it('CL2: shares a REST client when given one', () => {
+    // Rate-limit buckets are keyed by token, so two clients on one token with two REST
+    // instances each believe they own the whole allowance.
+    const client = new Client({ token: TOKEN, intents: 0 })
+    const second = new Client({ token: TOKEN, intents: 0, rest: client.rest })
+
+    assert.equal(second.rest, client.rest)
+  })
+
+  it('CL3: passes gateway options through untouched', () => {
+    const client = new Client({
+      token: TOKEN,
+      intents: [GatewayIntentBits.Guilds],
+      gateway: { shardCount: 4, fetchGatewayBot: () => Promise.resolve(info) },
+    })
+
+    assert.equal(client.options.intents, GatewayIntentBits.Guilds)
+    assert.equal(client.options.gateway.shardCount, 4)
+  })
+
+  it('CL4: destroys idempotently without having connected', async () => {
+    // `destroy()` runs on a fatal close as well as on shutdown, so a second call must not
+    // turn one failure into two.
+    const client = new Client({ token: TOKEN, intents: 0 })
+
+    await client.destroy()
+    await assert.doesNotReject(client.destroy())
+  })
+
+  it('CL5: refuses a member fetch for a shard that is not connected', () => {
+    // A member request is answered on the connection it was sent on, so a misrouted one
+    // produces no error and no chunks — just a timeout. Failing loudly beats that.
+    const client = new Client({
+      token: TOKEN,
+      intents: 0,
+      gateway: { shardCount: 1, fetchGatewayBot: () => Promise.resolve(info) },
+    })
+
+    assert.throws(
+      () => client.shards.shardIdForGuild('613425648685547541'),
+      /not known until connect/,
+      'the shard count is unknown before connect, which is its own clear failure',
+    )
+  })
+})
