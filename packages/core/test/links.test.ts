@@ -56,7 +56,8 @@ describe('message links', () => {
     // cached", which is a different and wrong answer.
     const parsed = parseMessageLink(`https://discord.com/channels/@me/${CHANNEL_ID}/${MESSAGE_ID}`)
 
-    assert.equal(parsed?.guildId, undefined)
+    assert.ok(parsed !== undefined)
+    assert.equal(parsed.guildId, undefined)
     assert.equal(parsed.channelId, CHANNEL_ID)
   })
 
