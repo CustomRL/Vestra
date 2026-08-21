@@ -87,7 +87,7 @@ describe('channel factory', () => {
     for (const type of Object.values(ChannelType)) {
       const channel =
         type === ChannelType.DM || type === ChannelType.GroupDM
-          ? createChannel({ id: '1', type } as APIChannel, client)
+          ? createChannel({ id: '1', type }, client)
           : createChannel(guildChannel(type), client, GUILD_ID)
 
       if (channel !== undefined) built.set(type, channel.constructor.name)
