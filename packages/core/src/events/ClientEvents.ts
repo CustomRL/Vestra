@@ -85,6 +85,15 @@ export interface ClientEvents<Client = unknown> {
   threadUpdate: [thread: ThreadChannel<Client>]
   /** A thread was deleted, or the bot lost access to it. */
   threadDelete: [thread: ThreadChannel<Client>]
+  /**
+   * The bot regained access to a guild's active threads.
+   *
+   * @remarks
+   * Fires on reconnect and when the bot gains access to a channel. Carries the threads the
+   * sync covered, which is not necessarily every thread in the guild — Discord scopes the
+   * payload by parent channel.
+   */
+  threadListSync: [guildId: Snowflake, threads: ThreadChannel<Client>[]]
 
   /**
    * Somebody reacted to a message.
@@ -208,6 +217,17 @@ export interface ClientEvents<Client = unknown> {
   guildEmojisUpdate: [guildId: Snowflake, emojis: Emoji<Client>[], removed: Emoji<Client>[]]
   /** A guild's stickers changed. The same whole-set shape as {@link ClientEvents.guildEmojisUpdate}. */
   guildStickersUpdate: [guildId: Snowflake, stickers: Sticker<Client>[], removed: Sticker<Client>[]]
+
+  /**
+   * Somebody was banned from a guild.
+   *
+   * @remarks
+   * Carries no reason and no moderator: Discord puts both in the audit log rather than in this
+   * dispatch. `GUILD_MEMBER_REMOVE` fires alongside it and does the cache eviction.
+   */
+  guildBanAdd: [guildId: Snowflake, user: User<Client>]
+  /** A ban was lifted. */
+  guildBanRemove: [guildId: Snowflake, user: User<Client>]
 
   /** A role was created. */
   roleCreate: [role: Role<Client>, guildId: Snowflake]
