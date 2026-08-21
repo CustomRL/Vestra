@@ -1,15 +1,19 @@
 import { Guild } from '../../structures/Guild.js'
+import { GuildMember } from '../../structures/GuildMember.js'
 import { Role } from '../../structures/Role.js'
 import { defineHandler } from '../EventHandler.js'
+import { upsertUser } from '../upsert.js'
 
 /**
  * Guild dispatches.
  *
  * @remarks
- * `GUILD_CREATE` is the only event that carries a guild's roles, so it is where the roles
- * scope is filled. That is why the live client reported zero cached roles before this file
- * existed despite roles defaulting on: nothing was reading them out of the one payload that
- * contains them.
+ * `GUILD_CREATE` is the only event that carries a guild's roles, and the only one that
+ * carries a bulk list of its members, so it is where both scopes are seeded. That is why the
+ * live client reported zero cached roles and zero cached members before this file existed:
+ * nothing was reading them out of the one payload that contains them, and the member handlers
+ * only fire on a join or an edit — so a bot that had been running for a week still had an
+ * empty member cache for everyone who had not spoken since it started.
  */
 
 /**
@@ -35,6 +39,24 @@ export const guildCreate = defineHandler('GUILD_CREATE', (client, data) => {
   // Roles ride along inside the guild rather than arriving as their own dispatches, so this
   // is the only chance to cache them short of a REST call per guild.
   for (const role of data.roles) client.cache.roles.add(new Role(role, data.id, client))
+
+  // Members are seeded but deliberately not announced. They are not joins — the list is who
+  // was already there — and emitting `guildMemberAdd` for each would fire a join handler
+  // thousands of times per guild at startup and again after every reconnect.
+  //
+  // How many arrive is not this handler's decision, and the rule is not the obvious one.
+  // Measured against the live gateway: with `GuildMembers` alone, a three-member guild under
+  // `large_threshold` sends exactly one member — the bot. Adding `GuildPresences` to the same
+  // connection sends all three, and all twelve of a twelve-member guild. Discord builds this
+  // list from the presence set, so `GuildMembers` on its own gets almost nothing here and the
+  // full list needs opcode 8. A near-empty list is a correctly configured guild, not a
+  // failure, and must not be read as "this guild has one member".
+  for (const member of data.members) {
+    const user = member.user
+    if (user === undefined) continue
+    upsertUser(client, user)
+    client.cache.members.add(new GuildMember(member, data.id, user.id, client))
+  }
 
   client.emit('guildCreate', guild)
 })

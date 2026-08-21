@@ -1,5 +1,6 @@
 import { Message } from '../../structures/Message.js'
 import { defineHandler } from '../EventHandler.js'
+import { upsertUser } from '../upsert.js'
 
 /**
  * Message dispatches.
@@ -13,6 +14,7 @@ import { defineHandler } from '../EventHandler.js'
 
 /** A message was sent. */
 export const messageCreate = defineHandler('MESSAGE_CREATE', (client, data) => {
+  upsertUser(client, data.author)
   const message = client.cache.messages.add(new Message(data, client))
   client.emit('messageCreate', message)
 })
@@ -27,6 +29,9 @@ export const messageCreate = defineHandler('MESSAGE_CREATE', (client, data) => {
  * carries only `id` and `channel_id`.
  */
 export const messageUpdate = defineHandler('MESSAGE_UPDATE', (client, data) => {
+  // Guarded because `MESSAGE_UPDATE` is a partial: an embed resolving server-side produces
+  // an update carrying `id` and `channel_id` and nothing else.
+  if (data.author !== undefined) upsertUser(client, data.author)
   const cached = client.cache.messages.get(data.id)
   if (cached === undefined) {
     client.emit('messageUpdate', client.cache.messages.add(new Message(data, client)))
