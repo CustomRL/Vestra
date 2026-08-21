@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { Client, resolveClientOptions, resolveIntents } from '@vestra/core'
+import {
+  Client,
+  ClientError,
+  ClientErrorCode,
+  resolveClientOptions,
+  resolveIntents,
+} from '@vestra/core'
 import { GatewayIntentBits } from '@vestra/types'
 
 const TOKEN = 'not.a.real.token'
@@ -137,6 +143,60 @@ describe('listener hygiene', () => {
 
     assert.equal(client.listenerCount('ready'), 0, 'ready listeners accumulated')
     assert.equal(client.listenerCount('error'), 0, 'error listeners accumulated')
+
+    await client.destroy()
+  })
+})
+
+describe('refusing work after destroy', () => {
+  it('CL22: refuses login, fetchMembers and setPresence once destroyed', async () => {
+    // Destroying is not reversible — the shard map is cleared and the sweeper stopped — so a
+    // second login would build a fresh fleet on a client whose caller believes it is the same
+    // one. Refusing is the honest answer.
+    const client = new Client({ token: TOKEN, intents: 0 })
+    await client.destroy()
+
+    for (const [name, call] of [
+      ['login', async () => await client.login()],
+      ['fetchMembers', async () => await client.fetchMembers('613425648685547541')],
+      [
+        'setPresence',
+        async () => {
+          await client.setPresence({ status: 'online' })
+        },
+      ],
+    ] as const) {
+      await assert.rejects(
+        call,
+        (error: unknown) => {
+          assert.ok(error instanceof ClientError, `${name} threw a bare Error`)
+          assert.equal(error.code, ClientErrorCode.Destroyed)
+          return true
+        },
+        `${name} did not refuse`,
+      )
+    }
+  })
+
+  it('CL23: tells "not connected yet" apart from "destroyed"', async () => {
+    // The whole reason for the code. Both refusals used to be a bare `Error`, so telling them
+    // apart meant matching message text — which stops working the day somebody improves the
+    // wording. `NotReady` is retryable after `login()`; `Destroyed` never is.
+    //
+    // The third code, `ShardUnavailable`, needs a connected fleet with one shard down to
+    // reach, which is what the testing bot's live probes are for.
+    const client = new Client({ token: TOKEN, intents: 0 })
+
+    await assert.rejects(
+      async () => await client.fetchMembers('613425648685547541'),
+      (error: unknown) => {
+        assert.ok(error instanceof ClientError, 'a bare Error still escapes here')
+        assert.equal(error.code, ClientErrorCode.NotReady)
+        // The manager's own explanation is kept rather than discarded.
+        assert.ok(error.cause instanceof Error)
+        return true
+      },
+    )
 
     await client.destroy()
   })

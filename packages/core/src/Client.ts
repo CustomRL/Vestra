@@ -10,6 +10,7 @@ import {
   type ResolvedClientOptions,
 } from './ClientOptions.js'
 import { presencePayload, type PresenceOptions } from './ClientPresence.js'
+import { ClientError, ClientErrorCode } from './errors/ClientError.js'
 import type { ClientEvents } from './events/ClientEvents.js'
 import { EventRouter } from './events/EventRouter.js'
 import { handlers } from './events/registry.js'
@@ -65,6 +66,7 @@ export class Client extends EventEmitter<ClientEvents> {
   readonly #sweeper: CacheSweeper
   readonly #readyShards = new Set<number>()
   #announcedReady = false
+  #destroyed = false
 
   /**
    * @param options - What to connect as, and what to keep.
@@ -126,6 +128,12 @@ export class Client extends EventEmitter<ClientEvents> {
    * listener afterwards would miss the event and wait forever.
    */
   async login(): Promise<ClientUser> {
+    // Destroying is not reversible: the shard map is cleared and the sweeper stopped, so a
+    // second `login()` would build a fresh fleet on a client whose caller believes it is the
+    // same one. Refusing is the honest answer, and the code says which refusal it is so a
+    // caller can tell it from a shard that is merely reconnecting.
+    this.#assertUsable()
+
     const ready = this.#firstReady()
 
     try {
@@ -194,7 +202,11 @@ export class Client extends EventEmitter<ClientEvents> {
   async destroy(resumable = false): Promise<void> {
     this.#sweeper.stop()
 
-    const reason = new Error('The client was destroyed.')
+    this.#destroyed = true
+    const reason = new ClientError(
+      ClientErrorCode.Destroyed,
+      'The client was destroyed, so this request will never be answered.',
+    )
     for (const bridge of this.#bridges.values()) bridge.destroy(reason)
     this.#bridges.clear()
     this.#readyShards.clear()
@@ -219,10 +231,32 @@ export class Client extends EventEmitter<ClientEvents> {
     guildId: Snowflake,
     options: { query?: string; limit?: number; userIds?: Snowflake[] } = {},
   ): Promise<unknown[]> {
-    const shardId = this.shards.shardIdForGuild(guildId)
+    this.#assertUsable()
+
+    // The shard count is not known until `connect()` has fetched it, and the manager throws a
+    // bare `Error` saying so. Rewrapped, because "you have not connected yet" and "that shard
+    // is reconnecting" are different problems with different answers, and a caller should not
+    // have to read message text to tell them apart.
+    let shardId: number
+    try {
+      shardId = this.shards.shardIdForGuild(guildId)
+    } catch (cause) {
+      throw new ClientError(
+        ClientErrorCode.NotReady,
+        'The client has not connected, so it does not know how many shards there are and ' +
+          'cannot route a member request. Await `login()` first.',
+        { cause },
+      )
+    }
+
     const bridge = this.#bridges.get(shardId)
     if (bridge === undefined) {
-      throw new Error(`Shard ${String(shardId)} is not connected, so it cannot fetch members.`)
+      throw new ClientError(
+        ClientErrorCode.ShardUnavailable,
+        `Shard ${String(shardId)} is not connected, so it cannot fetch members for guild ` +
+          `${guildId}. This is usually transient — the shard is reconnecting — so retrying ` +
+          'shortly is reasonable, which is what the code is for.',
+      )
     }
     return await bridge.members.request({ guildId, ...options })
   }
@@ -256,6 +290,8 @@ export class Client extends EventEmitter<ClientEvents> {
    * socket with 4002; what the presence looks like is a thing to see in a Discord client.
    */
   async setPresence(options: PresenceOptions): Promise<void> {
+    this.#assertUsable()
+
     const payload = presencePayload(options, Date.now())
 
     const sends: Promise<void>[] = []
@@ -264,6 +300,24 @@ export class Client extends EventEmitter<ClientEvents> {
       sends.push(shard.send(payload))
     }
     await Promise.all(sends)
+  }
+
+  /**
+   * Refuses anything that needs a live client after it has been destroyed.
+   *
+   * @throws ClientError - If the client was destroyed.
+   *
+   * @remarks
+   * Carries a code rather than only a message, because a caller deciding whether to retry has
+   * to tell "this client is finished, build a new one" from "that shard is reconnecting, try
+   * again shortly" — and matching on wording stops working the day somebody improves it.
+   */
+  #assertUsable(): void {
+    if (!this.#destroyed) return
+    throw new ClientError(
+      ClientErrorCode.Destroyed,
+      'This client was destroyed. Destroying is not reversible; build a new client.',
+    )
   }
 
   #attachManager(): void {
