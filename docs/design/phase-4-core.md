@@ -205,8 +205,10 @@ packages/core/src/
 │   ├── message/
 │   │   └── links.ts                       ~60  jump links, message references
 │   ├── channels/
-│   │   ├── Channel.ts                    ~100  abstract; id, type, toString
+│   │   ├── Channel.ts                    ~100  abstract; id, type, toString, predicates
 │   │   ├── GuildChannel.ts               ~150  overwrites, parentId, position
+│   │   ├── GuildTextBasedChannel.ts       ~80  BUILT, not in the original list — below
+│   │   ├── ThreadOnlyChannel.ts           ~90  BUILT, not in the original list — below
 │   │   ├── TextChannel.ts                ~180  createMessage, getMessages, typing
 │   │   ├── AnnouncementChannel.ts         ~60
 │   │   ├── VoiceChannel.ts               ~140
@@ -218,6 +220,25 @@ packages/core/src/
 │   │   ├── DMChannel.ts                  ~110
 │   │   ├── GroupDMChannel.ts              ~80
 │   │   └── createChannel.ts               ~90  the only ChannelType switch
+
+Two abstract classes were added that this list did not have, both mirroring a shared base
+`@vestra/types` already declares. `GuildTextBasedChannel` holds the four message fields that
+text, announcement, voice, stage and thread channels all carry — written once rather than five
+times, which is also what stops the five drifting. `ThreadOnlyChannel` holds what forum and
+media channels share, and is deliberately **not** a text-based channel: it has
+`last_message_id`, `topic` and `rate_limit_per_user` like one and all three mean something
+else, so inheriting the text base would have named them wrongly and made `isTextBased()` true
+of a channel that cannot receive a message.
+
+`TextBased` is an interface, not a class. The set of message-carrying channels cuts across the
+hierarchy — a DM carries messages and has no guild — so `Channel.isTextBased()` narrows to
+`this & TextBased` rather than to a class nothing could sensibly extend twice.
+
+The REST methods this list puts on `TextChannel` (`createMessage`, `getMessages`, typing) are
+**not built**. They need a structure to reach `client.rest`, and `Base` is generic over the
+client precisely so structures do not import it — the same unresolved tension recorded for
+`Guild#roles` and `CategoryChannel#children`. The data structures ship without them; §8-E is
+where that gets settled.
 │   └── util/
 │       ├── snowflake.ts                   ~60  snowflakeTimestamp(id)
 │       └── emoji.ts                       ~50  emojiIdentifier(emoji)
