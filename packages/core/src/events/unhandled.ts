@@ -46,10 +46,6 @@ export const UnhandledEvents: Readonly<Partial<Record<GatewayDispatchEvents, str
     'in `@vestra/rest` yet, and this becomes a handler in the same change that adds them.',
 
   // --- No structure yet: each becomes a handler when its entity is modelled. ---
-  AUTO_MODERATION_RULE_CREATE: 'No structure. AutoModerationRule is not modelled.',
-  AUTO_MODERATION_RULE_UPDATE: 'No structure. AutoModerationRule is not modelled.',
-  AUTO_MODERATION_RULE_DELETE: 'No structure. AutoModerationRule is not modelled.',
-  AUTO_MODERATION_ACTION_EXECUTION: 'No structure. AutoModerationAction is not modelled.',
   ENTITLEMENT_CREATE: 'No structure. Entitlement is not modelled.',
   ENTITLEMENT_UPDATE: 'No structure. Entitlement is not modelled.',
   ENTITLEMENT_DELETE: 'No structure. Entitlement is not modelled.',

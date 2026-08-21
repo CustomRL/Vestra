@@ -1,4 +1,10 @@
 import type { AnyEventHandler } from './EventHandler.js'
+import {
+  autoModerationActionExecution,
+  autoModerationRuleCreate,
+  autoModerationRuleDelete,
+  autoModerationRuleUpdate,
+} from './handlers/automod.js'
 import { guildBanAdd, guildBanRemove } from './handlers/bans.js'
 import {
   channelCreate,
@@ -76,6 +82,11 @@ export const handlers: readonly AnyEventHandler[] = [
 
   presenceUpdate,
   voiceStateUpdate,
+
+  autoModerationRuleCreate,
+  autoModerationRuleUpdate,
+  autoModerationRuleDelete,
+  autoModerationActionExecution,
 
   guildBanAdd,
   guildBanRemove,

@@ -171,6 +171,20 @@ const GUILD = {
   soundboard_sounds: [],
 }
 
+const AUTOMOD_RULE = {
+  id: '964394640998400001',
+  guild_id: GUILD_ID,
+  name: 'No invites',
+  creator_id: USER_ID,
+  event_type: 1,
+  trigger_type: 1,
+  trigger_metadata: { keyword_filter: ['discord.gg'] },
+  actions: [{ type: 1, metadata: { custom_message: 'Not here.' } }],
+  enabled: true,
+  exempt_roles: [],
+  exempt_channels: [],
+}
+
 /**
  * One payload per handled event.
  *
@@ -263,6 +277,22 @@ const FIXTURES: Readonly<Record<string, unknown>> = {
     member: MEMBER,
   },
   USER_UPDATE: { ...USER, bot: true },
+
+  AUTO_MODERATION_RULE_CREATE: AUTOMOD_RULE,
+  AUTO_MODERATION_RULE_UPDATE: { ...AUTOMOD_RULE, name: 'No invites, really' },
+  // Not in DELETES: it removes nothing from the cache, so it belongs in the replayed stream.
+  AUTO_MODERATION_RULE_DELETE: AUTOMOD_RULE,
+  AUTO_MODERATION_ACTION_EXECUTION: {
+    guild_id: GUILD_ID,
+    action: { type: 1, metadata: { custom_message: 'Not here.' } },
+    rule_id: AUTOMOD_RULE.id,
+    rule_trigger_type: 1,
+    user_id: USER_ID,
+    channel_id: CHANNEL_ID,
+    content: 'join discord.gg/spam',
+    matched_keyword: 'discord.gg',
+    matched_content: 'discord.gg',
+  },
 
   // Neither of these two groups touches the cache, so their deletes belong in the replayed
   // stream rather than in DELETES: nothing they remove could make the comparison vacuous.

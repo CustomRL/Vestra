@@ -1,5 +1,9 @@
 import type { GatewayDispatchPayload, GatewayReadyDispatchData, Snowflake } from '@vestra/types'
 import type { ClientUser } from '../structures/ClientUser.js'
+import type {
+  AutoModerationActionExecution,
+  AutoModerationRule,
+} from '../structures/AutoModerationRule.js'
 import type { Channel } from '../structures/channels/Channel.js'
 import type { ThreadChannel } from '../structures/channels/ThreadChannel.js'
 import type { Emoji } from '../structures/Emoji.js'
@@ -144,6 +148,27 @@ export interface ClientEvents<Client = unknown> {
     channelId: Snowflake,
     guildId: Snowflake | undefined,
   ]
+
+  /** An Auto Moderation rule was created. */
+  autoModerationRuleCreate: [rule: AutoModerationRule<Client>]
+  /** An Auto Moderation rule was updated. */
+  autoModerationRuleUpdate: [rule: AutoModerationRule<Client>]
+  /**
+   * An Auto Moderation rule was deleted.
+   *
+   * @remarks
+   * Carries the whole rule, not its ID, because the dispatch does — unlike the message and
+   * channel deletes, which have to hand back what they can.
+   */
+  autoModerationRuleDelete: [rule: AutoModerationRule<Client>]
+  /**
+   * An Auto Moderation rule matched, and one of its actions ran.
+   *
+   * @remarks
+   * Not a rule: this is one action of one rule firing, with its own payload naming the user,
+   * the channel, the matched keyword and the content that triggered it.
+   */
+  autoModerationActionExecution: [execution: AutoModerationActionExecution<Client>]
 
   /** A message was sent. */
   messageCreate: [message: Message<Client>]

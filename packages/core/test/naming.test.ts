@@ -172,6 +172,8 @@ const STRUCTURE_SOURCES: { structure: string; api: string }[] = [
   { structure: 'GuildMember', api: 'APIGuildMember' },
   { structure: 'Message', api: 'APIMessage' },
   { structure: 'Guild', api: 'APIGuild' },
+  { structure: 'AutoModerationRule', api: 'APIAutoModerationRule' },
+  { structure: 'AutoModerationActionExecution', api: 'APIAutoModerationActionExecution' },
   { structure: 'VoiceState', api: 'APIVoiceState' },
   { structure: 'Presence', api: 'APIPresenceUpdate' },
   { structure: 'Activity', api: 'APIActivity' },

@@ -17,6 +17,13 @@ export {
   type ActivitySecrets,
   type ActivityTimestamps,
 } from './Activity.js'
+export {
+  AutoModerationActionExecution,
+  AutoModerationRule,
+  type AutoModerationAction,
+  type AutoModerationActionMetadata,
+  type AutoModerationTriggerMetadata,
+} from './AutoModerationRule.js'
 export type { CacheCapable, RestCapable } from './capabilities.js'
 export {
   defaultAvatarUrl,

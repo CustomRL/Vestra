@@ -1962,14 +1962,22 @@ Tuesday (§8-C10).
   no emoji route, and nothing is cached. What is actually needed is one function —
   `emojiIdentifier(emoji)`, producing the `name:id` or percent-encoded unicode form that
   `channels.addReaction` requires. ~50 lines instead of a class.
-- **`VoiceState`.** The rule was applied anyway: no id, not cached by default, no voice routes,
-  no computation. `voiceStateUpdate` emits `APIVoiceState`. Revisit when voice arrives, which is
-  when it will have both a cache entry and something to do.
-- **`Invite`, `Webhook`, `Integration`, `AuditLogEntry`, `StageInstance`,
-  `GuildScheduledEvent`, `AutoModerationRule`, `SoundboardSound`, `Entitlement`, `Subscription`,
-  `ThreadMember`.** Each is a self-contained resource with no route and no cache entry, and each
-  can be added in a later minor without touching anything that ships now — the definition of a
-  safe cut.
+- **`VoiceState`. Built after all, and the cut was wrong.** The reasoning here was "no id, not
+  cached by default, nothing to compute" — and the last two were false by the time it was
+  written. It has a cache scope keyed by `guildId:userId`, `connected`/`muted`/`deafened` are
+  exactly the computation this section says it lacks, and emitting `APIVoiceState` would have
+  meant `self_mute` beside `selfMute` on the same event.
+- **`Invite`, `AuditLogEntry`, `StageInstance`, `GuildScheduledEvent`, `AutoModerationRule`.
+  Also built.** The cut said each "can be added in a later minor without touching anything that
+  ships now — the definition of a safe cut", and that held: every one landed additively, and
+  the events that would otherwise have emitted raw payloads never shipped doing so. So the
+  reasoning was right and the conclusion was premature; the safe cut turned out to be a safe
+  _order_.
+- **`Webhook`, `Integration`, `SoundboardSound`, `Entitlement`, `Subscription`, `ThreadMember`.**
+  Still cut, on the same grounds, and each still listed in `events/unhandled.ts` with its
+  reason. `ThreadMember` is the one to do next: §5.2 and §7 **R4** already specify replay
+  behaviour for `THREAD_MEMBERS_UPDATE`, which is a contradiction while it goes unhandled
+  (§8-E **E2**).
 
 **The objection this cut must answer, stated plainly.** Handled events that emit raw payloads
 (§4.4: four of them) give the event API **mixed casing** — `message.channelId` in one handler,
