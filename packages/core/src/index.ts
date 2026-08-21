@@ -10,6 +10,7 @@
  */
 
 export * from './cache/index.js'
+export * from './events/index.js'
 export * from './structures/index.js'
 
 export * from '@vestra/gateway'
