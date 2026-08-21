@@ -132,3 +132,132 @@ describe('payload field naming', () => {
     assert.deepEqual(mixed.sort(), [], 'a mixed-case wire field needs an allowlist decision')
   })
 })
+
+/**
+ * Which API type each structure mirrors.
+ *
+ * @remarks
+ * A structure absent from this table is simply not checked, which is why the test reports
+ * its coverage count — an empty failure list over an empty table means nothing at all. Add
+ * a row when you add a structure.
+ */
+const STRUCTURE_SOURCES: { structure: string; api: string }[] = [
+  { structure: 'User', api: 'APIUser' },
+  { structure: 'Role', api: 'APIRole' },
+  { structure: 'GuildMember', api: 'APIGuildMember' },
+]
+
+/**
+ * Structure fields whose name is not the mechanical camelCase of an API field.
+ *
+ * @remarks
+ * Every entry needs a reason, because the bar for renaming is high: a rename is something
+ * users must learn, and it breaks grep against Discord's own documentation. §4.15 sets the
+ * bar at "the mechanical result is ambiguous or collides", not "the mechanical result is
+ * ugly".
+ *
+ * Removing an entry is how you decide a rename was wrong.
+ */
+const RENAMES: Record<string, Record<string, string>> = {
+  GuildMember: {
+    guildId:
+      'Not on the payload at all — Discord puts guild_id on the dispatch, not on the ' +
+      'member. Supplied by the caller so the guildId:userId cache key is derivable.',
+    userId:
+      'Not on the payload. Read from user.id would be undefined for message.member, ' +
+      'which is the most common member a bot touches.',
+    joinedTimestamp:
+      'joined_at. The mechanical result, joinedAt, collides with the Date getter of the ' +
+      'same name — exactly the ambiguity §4.15 sets the renaming bar at.',
+    premiumSinceTimestamp:
+      'premium_since. Follows the same suffix rule as joinedTimestamp: a rule with one ' +
+      'exception is harder to remember than a rule.',
+    communicationDisabledUntilTimestamp:
+      'communication_disabled_until. Same suffix rule, and the natural name is taken by ' +
+      'the Date getter.',
+  },
+}
+
+/**
+ * The instance fields a structure class declares.
+ *
+ * @param className - The class to read.
+ * @returns Its declared property names, excluding methods and accessors.
+ */
+const coreProgram = (() => {
+  const entry = fileURLToPath(new URL('../src/index.ts', import.meta.url))
+  const program = ts.createProgram([entry], {
+    target: ts.ScriptTarget.ES2023,
+    module: ts.ModuleKind.NodeNext,
+    moduleResolution: ts.ModuleResolutionKind.NodeNext,
+    strict: true,
+    skipLibCheck: true,
+    noEmit: true,
+  })
+  const source = program.getSourceFile(entry)
+  assert.ok(source !== undefined, `could not load ${entry}`)
+  return { checker: program.getTypeChecker(), source }
+})()
+
+function readStructureFields(className: string): string[] {
+  const { checker, source } = coreProgram
+  const moduleSymbol = checker.getSymbolAtLocation(source)
+  assert.ok(moduleSymbol !== undefined)
+
+  const exported = checker
+    .getExportsOfModule(moduleSymbol)
+    .find((symbol) => symbol.getName() === className)
+  assert.ok(exported !== undefined, `${className} is not exported`)
+
+  const declared = checker.getDeclaredTypeOfSymbol(exported)
+  return (
+    checker
+      .getPropertiesOfType(declared)
+      .filter((property) =>
+        (property.getDeclarations() ?? []).some((declaration) =>
+          ts.isPropertyDeclaration(declaration),
+        ),
+      )
+      .map((property) => property.getName())
+      // Private fields are implementation, not the mirrored surface. `#client` comes from
+      // `Base` and has no payload to be named after.
+      .filter((name) => !name.startsWith('#'))
+  )
+}
+
+describe('structure field naming', () => {
+  it('N6: names every structure field after the payload, or records why not', () => {
+    // The rule is only mechanical if nothing quietly departs from it. Without this, a
+    // rename is a comment in one class that nobody else ever sees.
+    const unexplained: string[] = []
+    let checked = 0
+
+    for (const { structure, api } of STRUCTURE_SOURCES) {
+      const allowed = RENAMES[structure] ?? {}
+      const apiCamel = new Set([...apiFields.keys()].map(toCamelCase))
+
+      for (const field of readStructureFields(structure)) {
+        checked += 1
+        if (apiCamel.has(field)) continue
+        if (typeof allowed[field] === 'string' && allowed[field].length > 0) continue
+        unexplained.push(`${structure}.${field} (mirrors nothing on ${api}, and has no reason)`)
+      }
+    }
+
+    assert.ok(checked > 20, `expected to check a real surface; checked ${String(checked)}`)
+    assert.deepEqual(unexplained.sort(), [], 'each of these needs a RENAMES entry with a reason')
+  })
+
+  it('N7: keeps no stale rename entries', () => {
+    // A rename that no longer exists is worse than none: it documents a decision the code
+    // has already walked back, and the next reader trusts it.
+    const stale: string[] = []
+    for (const { structure } of STRUCTURE_SOURCES) {
+      const fields = new Set(readStructureFields(structure))
+      for (const renamed of Object.keys(RENAMES[structure] ?? {})) {
+        if (!fields.has(renamed)) stale.push(`${structure}.${renamed}`)
+      }
+    }
+    assert.deepEqual(stale.sort(), [], 'these renames name fields that no longer exist')
+  })
+})
