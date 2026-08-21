@@ -27,10 +27,17 @@ export interface EventContext<Client = unknown> {
    * the one member a handler may assign, and it is deliberately the only one.
    */
   user: ClientUser<Client> | undefined
-  /** Emits a client event. */
+  /**
+   * Emits a client event.
+   *
+   * @remarks
+   * The `& unknown[]` is what makes the tuple usable as a rest parameter. Without it
+   * TypeScript cannot prove a generic lookup into the event map is an array type, and the
+   * conditional form that works around it produces a signature nothing can implement.
+   */
   emit: <Event extends keyof ClientEvents<Client>>(
     event: Event,
-    ...args: ClientEvents<Client>[Event] extends unknown[] ? ClientEvents<Client>[Event] : never
+    ...args: ClientEvents<Client>[Event] & unknown[]
   ) => boolean
   /** How many listeners an event has, for handlers that can skip work when nobody is looking. */
   listenerCount: (event: keyof ClientEvents<Client>) => number
