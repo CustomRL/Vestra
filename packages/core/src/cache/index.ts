@@ -13,7 +13,10 @@ export {
   type CachePolicy,
   type ResolvedCachePolicy,
 } from './CachePolicy.js'
+export { CacheIndex } from './CacheIndex.js'
+export { guildUserKey, parseGuildUserKey } from './CacheKeys.js'
 export { CacheScope, CacheScopes } from './CacheScopes.js'
+export { CacheStore, type CacheStoreOptions } from './CacheStore.js'
 export { MemoryCacheAdapter } from './MemoryCacheAdapter.js'
 export { NullCacheAdapter } from './NullCacheAdapter.js'
 export type {
