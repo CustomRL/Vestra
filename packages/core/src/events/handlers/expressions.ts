@@ -45,9 +45,10 @@ export const guildEmojisUpdate = defineHandler('GUILD_EMOJIS_UPDATE', (client, d
       continue
     }
 
-    // Patched rather than replaced, so a held reference stays live across a rename.
+    // Patched rather than replaced, so a held reference stays live across a rename — then put
+    // back through the store, so the scope's filter, ttl and max see the write.
     cached.patch(payload)
-    current.push(cached)
+    current.push(client.cache.emojis.add(cached))
   }
 
   const removed: Emoji[] = []
@@ -82,7 +83,7 @@ export const guildStickersUpdate = defineHandler('GUILD_STICKERS_UPDATE', (clien
     }
 
     cached.patch(payload)
-    current.push(cached)
+    current.push(client.cache.stickers.add(cached))
   }
 
   const removed: Sticker[] = []

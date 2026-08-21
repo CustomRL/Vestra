@@ -3,6 +3,7 @@ import { describe, it } from 'node:test'
 import { ShardState } from '@vestra/gateway'
 import { ChannelType, GatewayOpcodes, type GatewayDispatchPayload } from '@vestra/types'
 import {
+  AnnouncementChannel,
   CacheRegistry,
   EventRouter,
   handlers,
@@ -134,6 +135,45 @@ describe('channel handlers', () => {
     assert.equal(held.bitrate, 96000)
     assert.equal(held.name, 'Renamed')
     assert.equal(context.cache.channels.get(CHANNEL_ID), held)
+  })
+
+  it('CD4b: rebuilds a channel that changed type, rather than keeping the old class', () => {
+    // Converting a text channel to an announcement channel is a supported Discord operation.
+    // Patching cannot express it — `type` is readonly and the object is the wrong class — so
+    // the stale version kept answering `isTextBased()` and friends from the old type forever.
+    const { router, context, emitted } = harness()
+    router.route(dispatch('CHANNEL_CREATE', channelPayload(ChannelType.GuildText)), shard, false)
+    assert.ok(context.cache.channels.get(CHANNEL_ID) instanceof TextChannel)
+
+    router.route(
+      dispatch('CHANNEL_UPDATE', channelPayload(ChannelType.GuildAnnouncement)),
+      shard,
+      false,
+    )
+
+    const rebuilt = context.cache.channels.get(CHANNEL_ID)
+    assert.equal(rebuilt?.type, ChannelType.GuildAnnouncement)
+    assert.ok(rebuilt instanceof AnnouncementChannel, `still a ${rebuilt.constructor.name}`)
+    assert.equal(emitted.at(-1)?.event, 'channelUpdate')
+    assert.equal(emitted.at(-1)?.args[0], rebuilt)
+  })
+
+  it('CD4c: patches in place when the type is unchanged, so references stay live', () => {
+    // The other half: a rebuild on every update would break every held reference, which is the
+    // thing patching in place exists to avoid.
+    const { router, context } = harness()
+    router.route(dispatch('CHANNEL_CREATE', channelPayload(ChannelType.GuildText)), shard, false)
+    const held = context.cache.channels.get(CHANNEL_ID)
+
+    router.route(
+      dispatch('CHANNEL_UPDATE', channelPayload(ChannelType.GuildText, { name: 'renamed' })),
+      shard,
+      false,
+    )
+
+    assert.equal(context.cache.channels.get(CHANNEL_ID), held, 'the reference was replaced')
+    assert.ok(held?.isGuildBased())
+    assert.equal(held.name, 'renamed')
   })
 
   it('CD5: hands the deleted channel to the listener, not just its ID', () => {

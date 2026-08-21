@@ -88,3 +88,32 @@ describe('client', () => {
     )
   })
 })
+
+describe('fleet readiness', () => {
+  it('CL20: whenReady does not resolve before anything has connected', () => {
+    // The guard used to read `#announcedReady`, which is set by the **first** shard because it
+    // gates the once-per-client `ready` emit — so `whenReady()` returned as soon as any shard
+    // was up, about a minute early on a two-hundred shard bot, while its own documentation
+    // promised the fleet. It now compares the ready set against the owned shards, and
+    // `#readyShards`, which was written to and never read, is what it compares.
+    //
+    // This covers the `owned > 0` half: with nothing connected the ready set is empty and the
+    // owned set is empty, and an empty set must not read as "all of them are ready". The
+    // partially-ready case needs three live sockets to reach the private set honestly, which
+    // is what `scripts/client-check.ts` in the testing bot exercises.
+    const client = new Client({ token: TOKEN, intents: 0 })
+    assert.equal(client.shards.shards.size, 0)
+
+    let settled = false
+    void client.whenReady().then(() => {
+      settled = true
+    })
+
+    return new Promise<void>((resolve) => {
+      setImmediate(() => {
+        assert.equal(settled, false, 'whenReady resolved with nothing connected')
+        resolve()
+      })
+    })
+  })
+})

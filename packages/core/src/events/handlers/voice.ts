@@ -22,6 +22,11 @@ import { upsertUser } from '../upsert.js'
  * been in voice, and `voiceState(guild, user)` returning an object would read as "they are
  * connected" to every caller who did not also check `channelId`.
  *
+ * **A disconnect is announced whether or not the state was cached.** `voiceStates` is off by
+ * default, so reporting only cache hits would make the departure event silent on exactly the
+ * configuration most bots run — `previous` is then `undefined`, which is the honest answer to
+ * "what were they doing before", not a reason to say nothing at all.
+ *
  * The previous state is emitted alongside the new one, which is the exception to the rule the
  * message and guild events follow. It is affordable here — a voice state is a dozen scalars, so
  * the clone is cheap — and it is the only way to answer the questions bots actually ask of this
@@ -46,16 +51,28 @@ export const voiceStateUpdate = defineHandler('VOICE_STATE_UPDATE', (client, dat
 
   if (data.channel_id === null) {
     client.cache.voiceStates.delete(key)
-    if (previous !== undefined) client.emit('voiceStateUpdate', previous, undefined)
+
+    // Announced whether or not anything was cached. `voiceStates` is off by default, so
+    // gating this on a cache hit made the one event a "who left voice" bot exists to hear
+    // silent under the default configuration — while joins and moves kept firing, which is
+    // what made it look like the event worked. When there is nothing cached the previous
+    // state is genuinely unknown, and `undefined` says so rather than inventing one.
+    client.emit('voiceStateUpdate', guildId, data.user_id, previous, undefined)
     return
   }
 
   if (cached === undefined) {
     const state = client.cache.voiceStates.add(new VoiceState(data, guildId, client))
-    client.emit('voiceStateUpdate', undefined, state)
+    client.emit('voiceStateUpdate', guildId, data.user_id, undefined, state)
     return
   }
 
   cached.patch(data)
-  client.emit('voiceStateUpdate', previous, cached)
+  client.emit(
+    'voiceStateUpdate',
+    guildId,
+    data.user_id,
+    previous,
+    client.cache.voiceStates.add(cached),
+  )
 })

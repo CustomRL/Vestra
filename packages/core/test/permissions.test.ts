@@ -3,6 +3,11 @@ import { describe, it } from 'node:test'
 import { PermissionFlagsBits } from '@vestra/types'
 import {
   ALL_PERMISSIONS,
+  CacheRegistry,
+  Guild,
+  GuildMember,
+  Role,
+  type CacheCapable,
   applyTimeout,
   computeBasePermissions,
   computeOverwrites,
@@ -246,5 +251,138 @@ describe('timeouts', () => {
   it('PC15: leaves a member who is not timed out alone', () => {
     const original = new PermissionsBitField(ALL_PERMISSIONS)
     assert.equal(applyTimeout(original, member(), NOW), original)
+  })
+})
+
+describe('the composed member accessor', () => {
+  const NOW = 1_700_000_000_000
+  const TIMED_OUT = new Date(NOW + 60_000).toISOString()
+
+  function client(roles: PermissionRole[], ownerId = OWNER_ID): CacheCapable {
+    const cache = new CacheRegistry({ guilds: true, roles: true })
+    const context: CacheCapable = { cache }
+    cache.guilds.add(
+      new Guild(
+        {
+          id: GUILD_ID,
+          name: 'g',
+          icon: null,
+          splash: null,
+          discovery_splash: null,
+          home_header: null,
+          owner_id: ownerId,
+          afk_channel_id: null,
+          afk_timeout: 300,
+          verification_level: 1,
+          default_message_notifications: 0,
+          explicit_content_filter: 0,
+          roles: [],
+          emojis: [],
+          features: [],
+          mfa_level: 0,
+          application_id: null,
+          system_channel_id: null,
+          system_channel_flags: 0,
+          rules_channel_id: null,
+          vanity_url_code: null,
+          description: null,
+          banner: null,
+          premium_tier: 0,
+          preferred_locale: 'en-US',
+          public_updates_channel_id: null,
+          nsfw: false,
+          nsfw_level: 0,
+          premium_progress_bar_enabled: false,
+          safety_alerts_channel_id: null,
+          incidents_data: null,
+        } as never,
+        context,
+      ),
+    )
+    for (const role of roles) {
+      cache.roles.add(
+        new Role(
+          {
+            id: role.id,
+            name: 'r',
+            color: 0,
+            colors: { primary_color: 0, secondary_color: null, tertiary_color: null },
+            hoist: false,
+            position: 0,
+            permissions: role.permissions,
+            managed: false,
+            mentionable: false,
+            flags: 0,
+          },
+          GUILD_ID,
+          context,
+        ),
+      )
+    }
+    return context
+  }
+
+  function memberOf(
+    context: CacheCapable,
+    extra: Record<string, unknown> = {},
+  ): GuildMember<CacheCapable> {
+    return new GuildMember(
+      { roles: [], deaf: false, mute: false, flags: 0, ...extra } as never,
+      GUILD_ID,
+      USER_ID,
+      context,
+    )
+  }
+
+  it('PC16: a channel overwrite does not hand back what a timeout took away', () => {
+    // The bug this accessor exists to make impossible. Applying the timeout before overwrites
+    // — which is what "compute guild-wide, then pass it to computeOverwrites" does — lets
+    // `bits |= allow` re-grant SendMessages to a member who is silenced.
+    const context = client([
+      role(GUILD_ID, PermissionFlagsBits.ViewChannel | PermissionFlagsBits.SendMessages),
+    ])
+    const member = memberOf(context, { communication_disabled_until: TIMED_OUT })
+    const channel = {
+      permissionOverwrites: [overwrite(GUILD_ID, 0, PermissionFlagsBits.SendMessages, 0n)],
+    }
+
+    const inChannel = member.permissionsIn(channel, NOW)
+
+    assert.equal(inChannel.hasExact('SendMessages'), false, 'a timeout was undone by an overwrite')
+    // The timeout masks down to ViewChannel and ReadMessageHistory, and keeps only what was
+    // already granted — this member never had ReadMessageHistory to begin with.
+    assert.deepEqual(inChannel.toArray(), ['ViewChannel'])
+  })
+
+  it('PC17: applies channel overwrites when a channel is given', () => {
+    const context = client([role(GUILD_ID, PermissionFlagsBits.ViewChannel)])
+    const member = memberOf(context)
+    const channel = {
+      permissionOverwrites: [overwrite(GUILD_ID, 0, PermissionFlagsBits.SendMessages, 0n)],
+    }
+
+    assert.equal(member.permissionsIn(undefined, NOW).hasExact('SendMessages'), false)
+    assert.equal(member.permissionsIn(channel, NOW).hasExact('SendMessages'), true)
+  })
+
+  it('PC18: gives the guild owner everything, and a timed-out owner almost nothing', () => {
+    const context = client([], USER_ID)
+    assert.equal(memberOf(context).permissionsIn(undefined, NOW).bits, ALL_PERMISSIONS)
+
+    const silenced = memberOf(context, { communication_disabled_until: TIMED_OUT })
+    assert.equal(silenced.permissionsIn(undefined, NOW).hasExact('SendMessages'), false)
+  })
+
+  it('PC19: understates rather than overstates with the roles scope off', () => {
+    const cache = new CacheRegistry({ guilds: false, roles: false })
+    const context: CacheCapable = { cache }
+    const member = new GuildMember<CacheCapable>(
+      { roles: ['1'], deaf: false, mute: false, flags: 0 } as never,
+      GUILD_ID,
+      USER_ID,
+      context,
+    )
+
+    assert.deepEqual(member.permissionsIn(undefined, NOW).toArray(), [])
   })
 })

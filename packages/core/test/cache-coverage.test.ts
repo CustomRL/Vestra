@@ -265,3 +265,86 @@ describe('cache scope coverage', () => {
     assert.deepEqual(filled, [], `these scopes ignored being switched off: ${filled.join(', ')}`)
   })
 })
+
+describe('policy on update', () => {
+  /**
+   * An update is a write, and every scope's policy must see it.
+   *
+   * @remarks
+   * Handlers patch a cached entry in place so a held reference stays live. Doing only that
+   * skips `CacheStore.set`, and with it the scope's `filter`, the `ttl` deadline and the
+   * write-recency `max` evicts by. `CacheStore.set`'s own remarks name the consequence as the
+   * rule "most easily got wrong":
+   *
+   * > `presences: { filter: (p) => p.status !== 'offline' }` must remove a user who goes
+   * > offline, not leave a cached presence insisting they are online forever.
+   *
+   * That is exactly what happened. This is the guard.
+   */
+  it('CC3: runs the filter on an update, not only on the first write', () => {
+    const seen: string[] = []
+    const cache = new CacheRegistry({
+      presences: {
+        filter: (presence) => {
+          seen.push(presence.status)
+          return presence.status !== 'offline'
+        },
+      },
+    })
+    const context: EventContext = {
+      cache,
+      rest: undefined as never,
+      user: undefined,
+      emit: () => true,
+      listenerCount: () => 0,
+    } as EventContext
+    const router = new EventRouter(context, handlers)
+
+    const presence = (status: string): unknown => ({
+      user: { id: USER.id },
+      guild_id: GUILD_ID,
+      status,
+      activities: [],
+      client_status: {},
+    })
+
+    router.route(dispatch('PRESENCE_UPDATE', presence('online')), shard, false)
+    assert.equal(cache.presences.size, 1)
+
+    router.route(dispatch('PRESENCE_UPDATE', presence('offline')), shard, false)
+
+    assert.deepEqual(seen, ['online', 'offline'], 'the filter never saw the update')
+    assert.equal(cache.presences.size, 0, 'the filter said evict and the entry survived')
+  })
+
+  it('CC4: measures a ttl from the latest write', () => {
+    // `CachePolicy.ttl` says "milliseconds an entry survives its last write". An edit is a
+    // write, so a message edited at t=900 with a 1000ms ttl must still be there at t=1001.
+    let now = 0
+    const cache = new CacheRegistry({ messages: { ttl: 1000 }, now: () => now })
+    const context: EventContext = {
+      cache,
+      rest: undefined as never,
+      user: undefined,
+      emit: () => true,
+      listenerCount: () => 0,
+    } as EventContext
+    const router = new EventRouter(context, handlers)
+
+    router.route(dispatch('MESSAGE_CREATE', MESSAGE_CREATE.d), shard, false)
+
+    now = 900
+    router.route(
+      dispatch('MESSAGE_UPDATE', { id: '1', channel_id: '2', content: 'edited' }),
+      shard,
+      false,
+    )
+
+    now = 1001
+    assert.equal(
+      cache.messages.get('1')?.content,
+      'edited',
+      'the edit did not move the expiry deadline',
+    )
+  })
+})

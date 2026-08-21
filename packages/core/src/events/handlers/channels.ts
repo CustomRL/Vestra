@@ -44,8 +44,21 @@ export const channelUpdate = defineHandler('CHANNEL_UPDATE', (client, data) => {
     return
   }
 
+  // **A type change is a rebuild, not a patch.** Converting a text channel to an announcement
+  // channel is a supported Discord operation and arrives as a `CHANNEL_UPDATE` with a new
+  // `type`. Patching cannot express it: `type` is readonly, and the object is the wrong class
+  // now — `isTextBased()` and friends would keep answering from the old one. A held reference
+  // does go stale, and that is the truth rather than a cost: Discord converted the channel.
+  if (cached.type !== data.type) {
+    evictChannel(client.cache, data.id)
+    const rebuilt = cacheChannel(client, data)
+    if (rebuilt !== undefined) client.emit('channelUpdate', rebuilt)
+    return
+  }
+
   cached.patch(data)
-  client.emit('channelUpdate', cached)
+  // Back through whichever store holds it, so the scope's filter, ttl and max see the write.
+  client.emit('channelUpdate', recache(client, cached))
 })
 
 /** A channel or thread was deleted. */
@@ -79,7 +92,7 @@ export const threadUpdate = defineHandler('THREAD_UPDATE', (client, data) => {
   }
 
   cached.patch(data)
-  client.emit('threadUpdate', cached)
+  client.emit('threadUpdate', client.cache.threads.add(cached))
 })
 
 /**
@@ -131,7 +144,7 @@ export const threadListSync = defineHandler('THREAD_LIST_SYNC', (client, data) =
     }
 
     cached.patch(payload)
-    synced.push(cached)
+    synced.push(client.cache.threads.add(cached))
   }
 
   for (const thread of client.cache.threads.values()) {
@@ -164,6 +177,23 @@ export function cacheChannel(
   const channel = createChannel(data, client, guildId)
   if (channel === undefined) return undefined
 
+  if (channel.isThread()) return client.cache.threads.add(channel)
+  return client.cache.channels.add(channel)
+}
+
+/**
+ * Puts a patched channel back in whichever scope holds it.
+ *
+ * @param client - The handler context.
+ * @param channel - The channel that was just mutated in place.
+ * @returns The channel.
+ *
+ * @remarks
+ * A patch that only mutates the object skips `CacheStore.set`, so the scope's `filter` never
+ * runs on the new value, its `ttl` stays measured from the original write, and its
+ * write-recency stays at the original insertion — which is backwards for a bounded cache.
+ */
+function recache(client: EventContext, channel: Channel): Channel {
   if (channel.isThread()) return client.cache.threads.add(channel)
   return client.cache.channels.add(channel)
 }

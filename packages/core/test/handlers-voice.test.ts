@@ -65,8 +65,8 @@ describe('voice state handler', () => {
     router.route(dispatch('VOICE_STATE_UPDATE', voiceState()), shard, false)
 
     assert.equal(context.cache.voiceState(GUILD_ID, USER_ID)?.channelId, CHANNEL_A)
-    assert.deepEqual(emitted.at(-1)?.args[0], undefined)
-    assert.ok(emitted.at(-1)?.args[1] instanceof VoiceState)
+    assert.deepEqual(emitted.at(-1)?.args.slice(0, 3), [GUILD_ID, USER_ID, undefined])
+    assert.ok(emitted.at(-1)?.args[3] instanceof VoiceState)
   })
 
   it('V2: hands the listener the state as it was before the change', () => {
@@ -81,7 +81,7 @@ describe('voice state handler', () => {
       false,
     )
 
-    const [previous, current] = emitted.at(-1)?.args as [VoiceState, VoiceState]
+    const [, , previous, current] = emitted.at(-1)?.args as [string, string, VoiceState, VoiceState]
     assert.equal(previous.channelId, CHANNEL_A)
     assert.equal(previous.selfMute, false)
     assert.equal(current.channelId, CHANNEL_B)
@@ -110,22 +110,43 @@ describe('voice state handler', () => {
     assert.equal(context.cache.voiceState(GUILD_ID, USER_ID), undefined)
     assert.equal(context.cache.voiceStates.size, 0)
 
-    const [previous, current] = emitted.at(-1)?.args as [VoiceState, undefined]
+    const [guildId, userId, previous, current] = emitted.at(-1)?.args as [
+      string,
+      string,
+      VoiceState,
+      undefined,
+    ]
+    assert.equal(guildId, GUILD_ID)
+    assert.equal(userId, USER_ID)
     assert.equal(previous.channelId, CHANNEL_A)
     assert.equal(current, undefined)
   })
 
-  it('V5: emits nothing for a disconnect it never saw connect', () => {
-    // Discord replays a leave after a resume, and a bot that started mid-call never saw the
-    // join. Announcing a departure for somebody the library has no record of would be inventing
-    // an event.
-    const { router, emitted } = harness()
+  it('V5: still announces a disconnect it has no cached state for', () => {
+    // The scope is off by default, so gating the departure on a cache hit made the one event a
+    // "who left voice" bot exists to hear silent on most clients — while joins and moves kept
+    // firing, which is what made it look like the event worked.
+    //
+    // Discord said they left; reporting that is not inventing an event. `previous` is
+    // `undefined`, which is the honest answer to what they were doing before, and the IDs say
+    // who and where regardless.
+    const { router, emitted } = harness({ voiceStates: false })
     router.route(dispatch('VOICE_STATE_UPDATE', voiceState({ channel_id: null })), shard, false)
 
-    assert.deepEqual(
-      emitted.map((entry) => entry.event),
-      ['raw'],
-    )
+    assert.deepEqual(emitted.at(-1), {
+      event: 'voiceStateUpdate',
+      args: [GUILD_ID, USER_ID, undefined, undefined],
+    })
+  })
+
+  it('V5b: reports a join with the scope off, so the event does not depend on caching', () => {
+    const { router, emitted } = harness({ voiceStates: false })
+    router.route(dispatch('VOICE_STATE_UPDATE', voiceState()), shard, false)
+
+    const last = emitted.at(-1)
+    assert.equal(last?.event, 'voiceStateUpdate')
+    assert.deepEqual(last.args.slice(0, 2), [GUILD_ID, USER_ID])
+    assert.ok(last.args[3] instanceof VoiceState)
   })
 
   it('V6: ignores a voice state with no guild', () => {

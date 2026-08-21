@@ -57,7 +57,7 @@ export const guildMemberUpdate = defineHandler('GUILD_MEMBER_UPDATE', (client, d
   }
 
   cached.patch(data)
-  client.emit('guildMemberUpdate', cached)
+  client.emit('guildMemberUpdate', client.cache.members.add(cached))
 })
 
 /**
