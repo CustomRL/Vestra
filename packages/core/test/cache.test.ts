@@ -20,11 +20,13 @@ const codec: CacheCodec<string> = {
 function memory(
   max = Number.POSITIVE_INFINITY,
   onEvict?: (key: string, value: string) => void,
+  now: () => number = Date.now,
 ): MemoryCacheAdapter<string> {
   return new MemoryCacheAdapter<string>({
     scope: CacheScope.Users,
     max,
     codec,
+    now,
     ...(onEvict === undefined ? {} : { onEvict }),
   })
 }
@@ -149,14 +151,18 @@ describe('memory cache adapter', () => {
     // The sweep is O(expired), not O(n), because a uniform per-scope TTL plus
     // move-to-tail-on-write makes insertion order ascending deadline order. If that ever
     // stops holding, this is where it shows.
+    // The fixture must put an expired entry AFTER a live one, or the assertion holds
+    // whether the walk stops early or runs to the end — which is how the first version of
+    // this test passed with `break` mutated to `continue`.
     const cache = memory()
     const now = Date.now()
     cache.set('a', '1', now - 2)
-    cache.set('b', '2', now - 1)
-    cache.set('c', '3', now + 60_000)
+    cache.set('b', '2', now + 60_000)
+    cache.set('c', '3', now - 1)
 
-    assert.equal(cache.sweep(now), 2)
-    assert.deepEqual([...cache.keys()], ['c'])
+    assert.equal(cache.sweep(now), 1, 'the walk must stop at `b` and never reach `c`')
+    assert.equal(cache.has('c'), false, '`c` is expired, so it must not be readable')
+    assert.deepEqual([...cache.keys()], ['b'], 'only the live entry is iterable')
   })
 
   it('CE7: keeps the expiry map in step with the value map', () => {
@@ -175,10 +181,11 @@ describe('memory cache adapter', () => {
     cache.set('d', '4', now + 1_000)
     cache.set('e', '5', now + 1_000)
 
-    // `a` was rewritten with no expiry, so it must not still be pending expiry; if it were,
-    // it would vanish a second later despite having been stored as permanent.
-    assert.equal(cache.sweep(now + 500), 0, 'nothing should be due yet')
-    assert.equal(cache.has('a'), true, '`a` was rewritten as permanent')
+    // Swept PAST the rewritten key's original deadline. Stopping short of it was why the
+    // first version of this test passed even with the expiry-map cleanup removed.
+    cache.sweep(now + 2_000)
+    assert.equal(cache.has('a'), true, '`a` was rewritten as permanent and must survive')
+    assert.equal(cache.has('c'), false, 'entries still holding a deadline must go')
   })
 
   it('CE8: reports eviction to the index when asked', () => {
@@ -187,6 +194,30 @@ describe('memory cache adapter', () => {
     cache.set('a', '1', NEVER)
     cache.set('b', '2', NEVER)
 
+    assert.deepEqual(evicted, ['a'])
+  })
+
+  it('CE10: never yields through an iterator what get would refuse', () => {
+    // The adapter publishes three obligations, and "never return an entry past its
+    // expiresAt" is one of them. Raw Map iterators broke it: a caller iterating keys and
+    // looking each one up got `undefined` for something it had just been told exists.
+    const cache = memory()
+    cache.set('dead', '1', Date.now() - 1)
+    cache.set('live', '2', NEVER)
+
+    assert.deepEqual([...cache.keys()], ['live'])
+    assert.deepEqual([...cache.values()], ['2'])
+    assert.deepEqual([...cache.entries()], [['live', '2']])
+  })
+
+  it('CE11: reports lazy expiry to the index, not just the bound and the sweep', () => {
+    // Lazy expiry is the only path where an entry vanishes without anything above the
+    // adapter being called, so it is the path an index most needs told about.
+    const evicted: string[] = []
+    const cache = memory(Number.POSITIVE_INFINITY, (key) => evicted.push(key))
+    cache.set('a', '1', Date.now() - 1)
+
+    cache.get('a')
     assert.deepEqual(evicted, ['a'])
   })
 

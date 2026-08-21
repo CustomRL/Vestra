@@ -1,5 +1,7 @@
-import type { CacheAdapter } from './CacheAdapter.js'
+import type { CacheAdapter, CacheAdapterFactory, CacheCodec } from './CacheAdapter.js'
 import { CacheIndex } from './CacheIndex.js'
+import { MemoryCacheAdapter } from './MemoryCacheAdapter.js'
+import { NullCacheAdapter } from './NullCacheAdapter.js'
 import type { ResolvedCachePolicy } from './CachePolicy.js'
 import type { CacheScope } from './CacheScopes.js'
 
@@ -15,14 +17,40 @@ import type { CacheScope } from './CacheScopes.js'
  * See `docs/design/phase-4-core.md` §4.12.
  */
 
+/**
+ * A codec for adapters that never leave the process.
+ *
+ * @remarks
+ * The context requires one so an out-of-process adapter always has something to call. The
+ * in-memory default never calls it, so this stands in rather than forcing every scope to
+ * declare serialisation it will not use.
+ */
+function passthroughCodec<V>(): CacheCodec<V> {
+  return {
+    encode: (value) => JSON.stringify(value),
+    decode: (encoded) => JSON.parse(encoded) as V,
+  }
+}
+
 /** How a store derives keys and groups from the values it holds. */
 export interface CacheStoreOptions<V> {
   /** Which entity type this store holds. */
   scope: CacheScope
   /** The resolved policy. */
   policy: ResolvedCachePolicy<V>
-  /** Where entries actually go. */
-  adapter: CacheAdapter<V>
+  /**
+   * Builds the storage. Defaults to the in-memory adapter.
+   *
+   * @remarks
+   * A factory rather than a built adapter, because the store owns two things the adapter
+   * needs at construction and nobody outside can supply: the clock its deadlines are
+   * measured against, and the eviction callback that keeps the index honest. Taking an
+   * already-built adapter made both unreachable — the clock silently diverged and the
+   * callback was dead API.
+   */
+  adapter?: CacheAdapterFactory
+  /** Serialisation for adapters that leave the process. */
+  codec?: CacheCodec<V>
   /** Derives an entry's key from the value itself. */
   keyOf: (value: V) => string
   /**
@@ -54,11 +82,38 @@ export class CacheStore<V> {
   constructor(options: CacheStoreOptions<V>) {
     this.#scope = options.scope
     this.#policy = options.policy
-    this.#adapter = options.adapter
     this.#keyOf = options.keyOf
     this.#groupKeyOf = options.groupKeyOf
     this.#now = options.now ?? Date.now
     this.#index = options.groupKeyOf === undefined ? undefined : new CacheIndex()
+
+    // Built here so the adapter shares this store's clock, and reports evictions straight
+    // into the index. An entry dropped by the bound, the sweep or lazy expiry is pruned
+    // eagerly rather than waiting for somebody to read the group it was in — without which
+    // a TTL'd grouped scope leaks index entries for every value that ever expired.
+    this.#adapter = this.#policy.enabled
+      ? (options.adapter ?? ((context) => new MemoryCacheAdapter(context)))<V>({
+          scope: this.#scope,
+          max: this.#policy.max,
+          codec: options.codec ?? passthroughCodec<V>(),
+          now: this.#now,
+          onEvict: (key) => {
+            this.#index?.removeAnywhere(key)
+          },
+        })
+      : new NullCacheAdapter<V>()
+  }
+
+  /**
+   * The secondary index, when this scope has one.
+   *
+   * @remarks
+   * Exposed so its state can be asserted directly. `group()` verifies against the adapter
+   * and prunes as it goes, so it returns the right answer whether or not the index was
+   * maintained — which makes it useless for testing that it was.
+   */
+  get index(): CacheIndex | undefined {
+    return this.#index
   }
 
   /** Which entity type this store holds. */
@@ -160,17 +215,11 @@ export class CacheStore<V> {
    * @returns Whether one was there.
    */
   delete(key: string): boolean {
-    const existing = this.#adapter.get(key)
     const removed = this.#adapter.delete(key)
-
-    if (existing !== undefined && this.#index !== undefined) {
-      const groupKey = this.#groupKeyOf?.(existing)
-      if (groupKey === undefined) {
-        this.#index.removeAnywhere(key)
-      } else {
-        this.#index.remove(groupKey, key)
-      }
-    }
+    // By key rather than by re-deriving the group from the stored value. Deriving it needs
+    // a read, the read drops an expired entry as a side effect, and the group then comes
+    // back undefined for exactly the entries that most need pruning.
+    this.#index?.removeAnywhere(key)
     return removed
   }
 
