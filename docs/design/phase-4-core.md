@@ -2635,9 +2635,18 @@ each item is cross-referenced from the rule that depends on it.
   string construction guarded by `listenerCount('debug')`. Whether people then ask for per-dispatch
   debug — and what it costs on the hot path — is not settled, and nothing about it should be
   benchmarked by assertion.
-- **A14. Is the mechanical camelCase rule unambiguous across all 58 payload files?** Not checked for
-  digits, doubled underscores or leading underscores. "I saw none" is not "there are none". §7 **N1**
-  settles it and should be written and run **before any structure is**.
+- **A14. Is the mechanical camelCase rule unambiguous across all 58 payload files?**
+  **Answered — yes.** `packages/core/test/naming.test.ts` reads every exported `API*` type
+  through the TypeScript compiler API and checks the whole surface. Across **429 distinct field
+  names**: zero collisions under the mechanical rule, zero doubled or edge underscores, zero
+  digits following an underscore, and zero already-mixed-case names. The rule is injective and
+  reversible over the entire payload surface, so no allowlist entry is needed for ambiguity —
+  the allowlist in §4.15 carries only the deliberate renames.
+
+  Written and run before any structure was, as this entry asked. The guards were checked by
+  injecting a `guildId` field into `APIStageInstance` and confirming N2 and N5 both fail, so
+  they are pinned to the real property rather than passing over an empty set.
+
 - **A15. Which fields each structure mirrors.** §4.17 admits the curated-field-set position without
   doing the per-structure pass. `Guild` in particular needs a field-by-field decision, and that
   decision determines whether `Guild.ts` is 300 lines or 600.
@@ -2799,11 +2808,13 @@ The blockers are fixed above — the `GuildReadyTracker` lifecycle (§4.3), the 
 silently resolved, because each is a genuine choice and picking one in a document nobody has
 implemented against would be guessing.
 
-- **E1. Structure constructor argument order contradicts itself.** §4.16 declares
-  `constructor(client, data)`; §4.6's worked `guildCreate` handler writes `new Guild(data, client)`
-  and §4.12 quotes `new Message(data, client)`. Two of the three agree on `(data, client)`.
-  Pick one before the first structure is written; the cost of getting it wrong is a rename
-  across every structure file.
+- **E1. Structure constructor argument order. RESOLVED: `(data, client)`.** §4.16 declared
+  `constructor(client, data)` while §4.6 and §4.12 both wrote `(data, client)`. Settled on the
+  majority spelling, which is also the house convention: every multi-argument constructor in the
+  repository puts the subject first and collaborators after — `Shard(options, throttler)`,
+  `ShardSession(store, shardId)`, `ZlibStream(hooks, limits)`,
+  `ShardConnection(options, hooks, url, epoch)`. For a structure the subject is the payload and
+  the client is context. §4.16's signature is the one to correct when it is implemented.
 - **E2. The handled set contradicts the idempotency table.** §4.6 fixes the handled set at 26
   named events and puts `THREAD_MEMBERS_UPDATE` among the 50 unhandled, but §5.2 specifies its
   replay behaviour and §7 **R4** tests it. Either it is handled and the count is 27, or the
