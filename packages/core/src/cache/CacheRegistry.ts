@@ -134,15 +134,20 @@ export type CacheOptions<Client = unknown> = {
  * What each scope does when the consumer says nothing.
  *
  * @remarks
- * ADR 4's position: cache what the client needs to function and nothing else. Everything
- * here is Vestra policy rather than protocol, and the two that are on are on for reasons
- * worth restating.
+ * ADR 4's position: cache what the client needs to function and nothing else. Everything here
+ * is Vestra policy rather than protocol, and the four that are on are on for reasons worth
+ * restating, because three of them are not in ADR 4.
  *
- * `guilds` is on because ADR 4 says so. `roles` is on and ADR 4 does not list it — permission computation is the most common
- * thing a bot does and is impossible offline without roles, and roles are bounded at 250
- * per guild by Discord and arrive inside the guild payload anyway. `users` stays off
- * because it is unbounded in exactly the way ADR 4 exists to prevent: it grows with every
- * person the bot has ever seen speak.
+ * `guilds` is on because ADR 4 says so. `channels`, `roles` and `emojis` share one argument:
+ * each is bounded per guild by Discord, each arrives free inside the `GUILD_CREATE` payload
+ * the bot already receives, and each is needed to answer questions bots ask constantly —
+ * permission computation is impossible offline without roles, and posting a guild's own emoji
+ * needs its ID. Caching them costs nothing that was not already paid for.
+ *
+ * Everything else is off because it is unbounded in exactly the way ADR 4 exists to prevent.
+ * `users` grows with every person the bot has ever seen speak; `threads` and `messages` grow
+ * without limit within a single guild; `presences` is the largest of all, at one entry per
+ * membership rather than per user.
  */
 export const DefaultCacheOptions: Record<CachedScope, CacheOption<never>> = {
   guilds: true,
