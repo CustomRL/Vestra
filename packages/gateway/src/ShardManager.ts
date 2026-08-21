@@ -127,7 +127,16 @@ export class ShardManager extends EventEmitter<ShardManagerEvents> {
         const shard = this.#createShard(shardId)
         shard.once('ready', () => {
           readyCount += 1
-          if (readyCount === ids.length) this.emit('allReady')
+          if (readyCount !== ids.length) return
+
+          // Deferred by a microtask rather than emitted inline. `shardSpawn` is the first
+          // point a consumer can attach to a shard, and this listener is registered before
+          // that — so emitting here runs ahead of every consumer `ready` handler, and
+          // anything they derived from READY is a tick stale. With one shard the two land
+          // in the same millisecond, which is how the race hides.
+          queueMicrotask(() => {
+            this.emit('allReady')
+          })
         })
         this.emit('shardSpawn', shardId)
         await shard.connect()

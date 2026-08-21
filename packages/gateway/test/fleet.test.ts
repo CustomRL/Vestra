@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import {
+  CompressionMode,
   GuildReadyTracker,
   LocalIdentifyThrottler,
   MAX_PAYLOAD_BYTES,
@@ -14,6 +15,13 @@ import {
   type Timers,
 } from '@vestra/gateway'
 import { GatewayOpcodes } from '@vestra/types'
+import { MockTransportFleet } from './mock-transport.ts'
+
+/** Lets queued microtasks and timers settle. */
+async function flush(): Promise<void> {
+  await new Promise((resolve) => setImmediate(resolve))
+  await new Promise((resolve) => setImmediate(resolve))
+}
 
 /** Timers whose clock the test controls. */
 class ManualTimers implements Timers {
@@ -297,5 +305,84 @@ describe('shard manager preflight', () => {
     await manager.connect().catch(() => undefined)
 
     assert.deepEqual(warnings, [3])
+  })
+})
+
+describe('shard manager readiness', () => {
+  /**
+   * `allReady` must not outrun the consumer's own `ready` handlers.
+   *
+   * @remarks
+   * The manager registers its readiness counter inside `connect()`, and `shardSpawn` is
+   * the first point a consumer can attach to a shard — so the manager's listener is always
+   * registered first, and `EventEmitter` runs listeners in registration order.
+   *
+   * That made `allReady` fire before any consumer had processed READY, so state derived
+   * from it was a tick stale. With a single shard both land in the same millisecond, which
+   * is exactly why the race went unnoticed: it looks like correct output until the value
+   * read in an `allReady` handler happens to matter.
+   */
+  it('fires allReady after the consumer has handled ready', async () => {
+    const fleet = new MockTransportFleet()
+    const order: string[] = []
+
+    const manager = new ShardManager({
+      token: 't',
+      intents: 0,
+      shardCount: 1,
+      // The mock speaks plain JSON, so decompression is out of the picture here.
+      compression: CompressionMode.None,
+      fetchGatewayBot: () =>
+        Promise.resolve({
+          url: 'wss://gateway.discord.gg/',
+          shards: 1,
+          session_start_limit: {
+            total: 1000,
+            remaining: 1000,
+            reset_after: 5_000,
+            max_concurrency: 1,
+          },
+        }),
+      transport: fleet.factory,
+    })
+
+    manager.on('shardSpawn', (shardId) => {
+      const shard = manager.shards.get(shardId)
+      shard?.on('ready', () => {
+        order.push('consumer ready')
+      })
+    })
+    manager.on('allReady', () => {
+      order.push('allReady')
+    })
+
+    await manager.connect()
+
+    fleet.current.open()
+    fleet.current.receive({ op: GatewayOpcodes.Hello, d: { heartbeat_interval: 40_000 } })
+    await flush()
+
+    fleet.current.receive({
+      op: GatewayOpcodes.Dispatch,
+      t: 'READY',
+      s: 1,
+      d: {
+        v: 10,
+        user: { id: '1' },
+        guilds: [],
+        session_id: 'sess-1',
+        resume_gateway_url: 'wss://resume.discord.gg/',
+        application: { id: '1', flags: 0 },
+      },
+    })
+    await flush()
+
+    assert.deepEqual(
+      order,
+      ['consumer ready', 'allReady'],
+      'allReady must mean "every shard is ready and the consumer has seen it"',
+    )
+
+    await manager.destroy(false)
   })
 })
