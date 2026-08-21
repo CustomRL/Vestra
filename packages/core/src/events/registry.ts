@@ -10,6 +10,12 @@ import {
 import { guildEmojisUpdate, guildStickersUpdate } from './handlers/expressions.js'
 import { guildCreate, guildDelete, guildUpdate } from './handlers/guilds.js'
 import { presenceUpdate } from './handlers/presence.js'
+import {
+  messageReactionAdd,
+  messageReactionRemove,
+  messageReactionRemoveAll,
+  messageReactionRemoveEmoji,
+} from './handlers/reactions.js'
 import { voiceStateUpdate } from './handlers/voice.js'
 import { channelPinsUpdate, messageDeleteBulk, typingStart } from './handlers/misc.js'
 import { guildMemberAdd, guildMemberRemove, guildMemberUpdate } from './handlers/members.js'
@@ -50,6 +56,11 @@ export const handlers: readonly AnyEventHandler[] = [
   threadCreate,
   threadUpdate,
   threadDelete,
+
+  messageReactionAdd,
+  messageReactionRemove,
+  messageReactionRemoveAll,
+  messageReactionRemoveEmoji,
 
   messageDeleteBulk,
   channelPinsUpdate,

@@ -7,6 +7,7 @@ import type { Guild } from '../structures/Guild.js'
 import type { GuildMember } from '../structures/GuildMember.js'
 import type { Message } from '../structures/Message.js'
 import type { Presence } from '../structures/Presence.js'
+import type { ReactionEmoji } from '../structures/ReactionEmoji.js'
 import type { Role } from '../structures/Role.js'
 import type { Sticker } from '../structures/Sticker.js'
 import type { User } from '../structures/User.js'
@@ -84,6 +85,54 @@ export interface ClientEvents<Client = unknown> {
   threadUpdate: [thread: ThreadChannel<Client>]
   /** A thread was deleted, or the bot lost access to it. */
   threadDelete: [thread: ThreadChannel<Client>]
+
+  /**
+   * Somebody reacted to a message.
+   *
+   * @remarks
+   * Carries IDs and an emoji rather than a `Message`. Messages are off by default, so a
+   * resolved message would be `undefined` for almost every reaction, and an event whose main
+   * argument is usually absent is worse than one that hands over what it actually knows.
+   */
+  messageReactionAdd: [
+    emoji: ReactionEmoji,
+    messageId: Snowflake,
+    channelId: Snowflake,
+    userId: Snowflake,
+    guildId: Snowflake | undefined,
+  ]
+  /** Somebody removed their own reaction. */
+  messageReactionRemove: [
+    emoji: ReactionEmoji,
+    messageId: Snowflake,
+    channelId: Snowflake,
+    userId: Snowflake,
+    guildId: Snowflake | undefined,
+  ]
+  /**
+   * Every reaction on a message was removed at once.
+   *
+   * @remarks
+   * No emoji, because Discord does not say which were removed — the answer is all of them.
+   */
+  messageReactionRemoveAll: [
+    messageId: Snowflake,
+    channelId: Snowflake,
+    guildId: Snowflake | undefined,
+  ]
+  /**
+   * Every reaction of one emoji was removed from a message.
+   *
+   * @remarks
+   * A moderator clearing everybody's, which is why there is no `userId` — distinct from
+   * {@link ClientEvents.messageReactionRemove}, which is one person un-reacting.
+   */
+  messageReactionRemoveEmoji: [
+    emoji: ReactionEmoji,
+    messageId: Snowflake,
+    channelId: Snowflake,
+    guildId: Snowflake | undefined,
+  ]
 
   /** A message was sent. */
   messageCreate: [message: Message<Client>]
