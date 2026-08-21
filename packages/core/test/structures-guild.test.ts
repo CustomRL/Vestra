@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import type { APIGuildMember, APIRole } from '@vestra/types'
-import { GuildMember, Role } from '@vestra/core'
+import { GuildMember, Role, guildUserKey } from '@vestra/core'
 
 const client = { name: 'test-client' }
+const GUILD_ID = '613425648685547541'
+const USER_ID = '80351110224678912'
 
 function apiRole(overrides: Partial<APIRole> = {}): APIRole {
   return {
@@ -74,7 +76,7 @@ describe('GuildMember structure', () => {
     // The naming rule: `Timestamp` carries what Discord sent, the natural name allocates a
     // Date. `joined_at` converts mechanically to `joinedAt`, which would collide with the
     // getter — which is exactly the renaming bar §4.15 sets.
-    const member = new GuildMember(apiMember(), client)
+    const member = new GuildMember(apiMember(), GUILD_ID, USER_ID, client)
 
     assert.equal(member.joinedTimestamp, '2021-03-14T12:00:00.000000+00:00')
     assert.equal(member.joinedAt.getTime(), Date.parse('2021-03-14T12:00:00.000000+00:00'))
@@ -83,18 +85,20 @@ describe('GuildMember structure', () => {
   it('M2: does not parse dates eagerly', () => {
     // Most timestamps are never read, so parsing on construction pays for all of them to
     // serve the few. The stored value must still be the string.
-    const member = new GuildMember(apiMember(), client)
+    const member = new GuildMember(apiMember(), GUILD_ID, USER_ID, client)
     assert.equal(typeof member.joinedTimestamp, 'string')
     assert.equal(typeof member.premiumSinceTimestamp, 'undefined')
   })
 
   it('M3: reports null rather than an invalid Date for an absent timestamp', () => {
-    const member = new GuildMember(apiMember(), client)
+    const member = new GuildMember(apiMember(), GUILD_ID, USER_ID, client)
     assert.equal(member.premiumSince, null)
     assert.equal(member.communicationDisabledUntil, null)
 
     const boosting = new GuildMember(
       apiMember({ premium_since: '2022-01-01T00:00:00+00:00' }),
+      GUILD_ID,
+      USER_ID,
       client,
     )
     assert.equal(boosting.premiumSince?.getUTCFullYear(), 2022)
@@ -106,24 +110,28 @@ describe('GuildMember structure', () => {
     // consumers get wrong.
     const past = new GuildMember(
       apiMember({ communication_disabled_until: '2020-01-01T00:00:00+00:00' }),
+      GUILD_ID,
+      USER_ID,
       client,
     )
     const future = new GuildMember(
       apiMember({ communication_disabled_until: '2099-01-01T00:00:00+00:00' }),
+      GUILD_ID,
+      USER_ID,
       client,
     )
 
     assert.equal(past.isTimedOut(), false, 'a stale value must not read as timed out')
     assert.equal(future.isTimedOut(), true)
-    assert.equal(new GuildMember(apiMember(), client).isTimedOut(), false)
+    assert.equal(new GuildMember(apiMember(), GUILD_ID, USER_ID, client).isTimedOut(), false)
   })
 
   it('M5: constructs the nested user eagerly, and only when present', () => {
     // Eager because any lazy conversion forces the structure to retain the raw payload,
     // which pins the whole parsed JSON graph for the structure's lifetime.
-    const embedded = new GuildMember(apiMember(), client)
+    const embedded = new GuildMember(apiMember(), GUILD_ID, USER_ID, client)
     assert.equal(embedded.user, undefined, 'an embedded member carries no user')
-    assert.equal(embedded.id, undefined)
+    assert.equal(embedded.id, USER_ID, 'the id is supplied, not read from an absent user')
 
     const full = new GuildMember(
       apiMember({
@@ -135,6 +143,8 @@ describe('GuildMember structure', () => {
           avatar: null,
         },
       }),
+      GUILD_ID,
+      USER_ID,
       client,
     )
     assert.equal(full.user?.username, 'nelly')
@@ -147,6 +157,8 @@ describe('GuildMember structure', () => {
       apiMember({
         user: { id: '1', username: 'before', discriminator: '0', global_name: null, avatar: null },
       }),
+      GUILD_ID,
+      USER_ID,
       client,
     )
     const held = member.user
@@ -170,18 +182,46 @@ describe('GuildMember structure', () => {
       avatar: null,
     }
 
-    assert.equal(new GuildMember(apiMember({ user, nick: 'Mod' }), client).displayName, 'Mod')
-    assert.equal(new GuildMember(apiMember({ user }), client).displayName, 'Nelly')
     assert.equal(
-      new GuildMember(apiMember({ user: { ...user, global_name: null } }), client).displayName,
+      new GuildMember(apiMember({ user, nick: 'Mod' }), GUILD_ID, USER_ID, client).displayName,
+      'Mod',
+    )
+    assert.equal(
+      new GuildMember(apiMember({ user }), GUILD_ID, USER_ID, client).displayName,
+      'Nelly',
+    )
+    assert.equal(
+      new GuildMember(
+        apiMember({ user: { ...user, global_name: null } }),
+        GUILD_ID,
+        USER_ID,
+        client,
+      ).displayName,
       'nelly',
     )
   })
 
+  it('M9: mentions an embedded member, which has no user', () => {
+    // message.member carries no user by protocol, so a mention built from `user` produced
+    // the empty string — and interpolating it into a reply silently sent nothing.
+    const embedded = new GuildMember(apiMember(), GUILD_ID, USER_ID, client)
+    assert.equal(String(embedded), `<@${USER_ID}>`)
+  })
+
+  it('M10: derives the composite cache key without a user', () => {
+    // The members scope is keyed `guildId:userId`, and CacheStore.add derives the key from
+    // the value alone. A member that could not answer both would be uncacheable in exactly
+    // the common case.
+    const member = new GuildMember(apiMember(), GUILD_ID, USER_ID, client)
+    assert.equal(guildUserKey(member.guildId, member.userId), `${GUILD_ID}:${USER_ID}`)
+  })
+
   it('M8: keeps a stable shape across construction and patch', () => {
-    const sparse = new GuildMember(apiMember(), client)
+    const sparse = new GuildMember(apiMember(), GUILD_ID, USER_ID, client)
     const full = new GuildMember(
       apiMember({ nick: 'Mod', pending: true, permissions: '8', premium_since: null }),
+      GUILD_ID,
+      USER_ID,
       client,
     )
     assert.deepEqual(Object.keys(sparse), Object.keys(full))

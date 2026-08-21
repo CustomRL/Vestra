@@ -88,6 +88,10 @@ export class CachePolicyError extends Error {
 }
 
 function assertMax(scope: string, max: number): void {
+  // `Infinity` is the canonical spelling of unbounded — `true` resolves to it, and both
+  // `ResolvedCachePolicy.max` and `CacheScopeContext.max` document it as such. Rejecting it
+  // here would make the same number a valid value in one interface and an error in another.
+  if (max === Number.POSITIVE_INFINITY) return
   if (!Number.isFinite(max)) {
     throw new CachePolicyError(scope, `\`max\` must be a finite number, got ${String(max)}.`)
   }

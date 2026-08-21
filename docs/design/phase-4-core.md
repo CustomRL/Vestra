@@ -2813,12 +2813,17 @@ above.
   a constructor that conditionally assigns a declared field does not change it. Verified by
   injecting a conditional assignment and watching the shape test still pass.
 
-  This does not make the rule wrong, it makes its reason different, and the difference matters
-  for §4.16: fields written with `declare` emit nothing, so for those the constructor **is** the
-  only thing creating properties and its completeness is exactly what the argument claims.
-  Structures should therefore either declare fields plainly and rely on the emit, or use
-  `declare` and treat constructor completeness as load-bearing — but the document should say
-  which, because the guard needed differs.
+  This does not make the rule wrong, it makes its reason conditional on how fields are written,
+  and the difference matters for §4.16: fields written with `declare` emit nothing, so for
+  those the constructor **is** the only thing creating properties and its completeness is
+  exactly what the argument claims.
+
+  **Resolved: `declare`.** CONTRIBUTING.md:114 already required it — "Declare structure fields
+  with `declare` and assign them in the constructor, so no redundant field initialisation is
+  emitted before your assignment" — and the first structures were written plainly, which
+  contradicted the rule and cost a define and a set per field on the hot path. All structures
+  now use `declare`, which both satisfies the house rule and restores the original rationale.
+  §4.15's wording stands as written.
 
   `packages/core/test/structures.test.ts` **S7** covers it. A missing declaration cannot compile
   while the constructor assigns it, so the mistake actually guarded is `declare` plus a

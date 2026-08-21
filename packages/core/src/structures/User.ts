@@ -6,19 +6,25 @@ import { snowflakeDate, snowflakeTimestamp } from './snowflake.js'
  * A Discord user.
  *
  * @remarks
- * Fields are assigned in a fixed order in the constructor, every one of them, every time.
- * That is what keeps every `User` sharing one hidden class: V8 assigns a shape per
- * assignment sequence, so a constructor that skips absent fields produces a different shape
- * per payload variant and turns `user.username` in consumer code polymorphic. Assigning
- * `undefined` costs one slot and keeps the shape.
+ * Fields are `declare`d and assigned in a fixed order in the constructor, every one of
+ * them, every time. The two halves are one rule: `declare` emits nothing, so no redundant
+ * field initialisation runs before the assignment — which is what CONTRIBUTING.md asks for
+ * — and it also makes the constructor the only thing that creates properties. A constructor
+ * that skipped an absent field would then produce a different shape per payload variant and
+ * turn `user.username` polymorphic in consumer code. Assigning `undefined` costs one slot
+ * and keeps the shape.
+ *
+ * Written plainly rather than with `declare`, the emit defines every property up front and
+ * the shape holds regardless — but at the cost of a define and a set per field on the hot
+ * path. See `docs/design/phase-4-core.md` §8-F1.
  *
  * See CONTRIBUTING.md's hot-path rules and `docs/design/phase-4-core.md` §4.15.
  */
 export class User<Client = unknown> extends Base<Client> {
   /** The user's ID. */
-  readonly id: Snowflake
+  declare readonly id: Snowflake
   /** The username, unique across the platform for migrated accounts. */
-  username: string
+  declare username: string
   /**
    * The legacy four-digit discriminator, or `'0'` on a migrated account.
    *
@@ -26,23 +32,23 @@ export class User<Client = unknown> extends Base<Client> {
    * `'0'` rather than absent, which is why {@link tag} tests for it rather than for
    * presence. Discord kept the field and changed its meaning.
    */
-  discriminator: string
+  declare discriminator: string
   /** The display name, or `null` if the user has not set one. */
-  globalName: string | null
+  declare globalName: string | null
   /** The avatar hash, or `null` when the user has the default avatar. */
-  avatar: string | null
+  declare avatar: string | null
   /** Whether the user is a bot. */
-  bot: boolean | undefined
+  declare bot: boolean | undefined
   /** Whether the user is Discord's system account. */
-  system: boolean | undefined
+  declare system: boolean | undefined
   /** The banner hash. */
-  banner: string | null | undefined
+  declare banner: string | null | undefined
   /** The banner colour as an integer, when no banner image is set. */
-  accentColor: number | null | undefined
+  declare accentColor: number | null | undefined
   /** The public flags bit set. */
-  publicFlags: number | undefined
+  declare publicFlags: number | undefined
   /** Which Nitro tier the user has. */
-  premiumType: PremiumType | undefined
+  declare premiumType: PremiumType | undefined
 
   /**
    * @param data - The payload to mirror.
