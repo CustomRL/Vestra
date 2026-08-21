@@ -1,5 +1,7 @@
 import type { GatewayDispatchPayload, GatewayReadyDispatchData, Snowflake } from '@vestra/types'
 import type { ClientUser } from '../structures/ClientUser.js'
+import type { Channel } from '../structures/channels/Channel.js'
+import type { ThreadChannel } from '../structures/channels/ThreadChannel.js'
 import type { Guild } from '../structures/Guild.js'
 import type { GuildMember } from '../structures/GuildMember.js'
 import type { Message } from '../structures/Message.js'
@@ -56,6 +58,28 @@ export interface ClientEvents<Client = unknown> {
    * incident and refills it minutes later.
    */
   guildUnavailable: [guildId: Snowflake]
+
+  /** A channel was created. */
+  channelCreate: [channel: Channel<Client>]
+  /** A channel was updated. */
+  channelUpdate: [channel: Channel<Client>]
+  /**
+   * A channel was deleted.
+   *
+   * @remarks
+   * Carries the channel rather than its ID, unlike {@link ClientEvents.messageDelete}. The
+   * difference is what a listener can do afterwards: a deleted message can at least be named
+   * by ID, but nothing resolves a deleted channel — no REST route returns one — so an ID here
+   * would be permanently opaque. The cost is that an uncached channel emits nothing.
+   */
+  channelDelete: [channel: Channel<Client>]
+
+  /** A thread was created, or the bot gained access to one. */
+  threadCreate: [thread: ThreadChannel<Client>]
+  /** A thread was updated. */
+  threadUpdate: [thread: ThreadChannel<Client>]
+  /** A thread was deleted, or the bot lost access to it. */
+  threadDelete: [thread: ThreadChannel<Client>]
 
   /** A message was sent. */
   messageCreate: [message: Message<Client>]

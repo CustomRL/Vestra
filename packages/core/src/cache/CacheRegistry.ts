@@ -4,6 +4,8 @@ import { guildUserKey } from './CacheKeys.js'
 import { resolveCachePolicy, type CacheOption } from './CachePolicy.js'
 import { CacheScope } from './CacheScopes.js'
 import { CacheStore } from './CacheStore.js'
+import type { Channel } from '../structures/channels/Channel.js'
+import type { ThreadChannel } from '../structures/channels/ThreadChannel.js'
 import type { Guild } from '../structures/Guild.js'
 import type { GuildMember } from '../structures/GuildMember.js'
 import type { Message } from '../structures/Message.js'
@@ -18,13 +20,17 @@ import type { User } from '../structures/User.js'
  * That is deliberate staging rather than an oversight: a scope is added here when its
  * structure exists, so the map never promises a type nothing can produce.
  *
- * The scopes still to arrive are `channels`, `threads`, `presences`,
+ * The scopes still to arrive are `presences`,
  * `voiceStates`, `emojis` and `stickers` — each lands with its structure. Adding one is a
  * line here and a row in {@link CacheKeys}, not a change to anything below.
  */
 export interface CacheValueMap<Client> {
   /** Guilds, keyed by guild ID. */
   guilds: Guild<Client>
+  /** Guild and direct-message channels, keyed by channel ID. Never threads. */
+  channels: Channel<Client>
+  /** Threads, keyed by channel ID. */
+  threads: ThreadChannel<Client>
   /** Users, keyed by user ID. */
   users: User<Client>
   /** Roles, keyed by role ID. */
@@ -51,6 +57,18 @@ export type CacheValue<S extends CachedScope, Client> = CacheValueMap<Client>[S]
 const CacheKeys = {
   guilds: {
     keyOf: (value: Guild) => value.id,
+  },
+  channels: {
+    keyOf: (value: Channel) => value.id,
+    // A DM has no guild, so it is left ungrouped rather than filed under a made-up key.
+    // `group()` on the index skips what it was never told about, so this costs nothing.
+    groupKeyOf: (value: Channel) => (value.isGuildBased() ? value.guildId : undefined),
+  },
+  threads: {
+    keyOf: (value: ThreadChannel) => value.id,
+    // Grouped by the channel a thread hangs off, not by its guild: the common question is
+    // "which threads are in this forum", and the guild is one hop further up.
+    groupKeyOf: (value: ThreadChannel) => value.parentId ?? undefined,
   },
   users: {
     keyOf: (value: User) => value.id,
@@ -97,6 +115,8 @@ export type CacheOptions<Client = unknown> = {
  */
 export const DefaultCacheOptions: Record<CachedScope, CacheOption<never>> = {
   guilds: true,
+  channels: true,
+  threads: false,
   users: false,
   roles: true,
   members: false,
@@ -138,6 +158,18 @@ export interface AnyCacheStore {
 export class CacheRegistry<Client = unknown> {
   /** Guilds the bot is in. On by default, per ADR 4. */
   readonly guilds: CacheStore<Guild<Client>>
+  /** Guild and DM channels, grouped by guild. On by default, per ADR 4. */
+  readonly channels: CacheStore<Channel<Client>>
+  /**
+   * Threads, grouped by the channel they hang off. Off by default.
+   *
+   * @remarks
+   * Split from `channels` because the bound is far worse: a guild has a fixed, small number
+   * of channels and an unbounded number of threads, every one of which is a channel object.
+   * One shared scope would mean a `max` that is either useless for channels or ruinous for
+   * threads.
+   */
+  readonly threads: CacheStore<ThreadChannel<Client>>
   /** Users the bot has seen. Off by default. */
   readonly users: CacheStore<User<Client>>
   /** Roles, which permission checks need. On by default. */
@@ -183,6 +215,8 @@ export class CacheRegistry<Client = unknown> {
     }
 
     this.guilds = build(CacheScope.Guilds)
+    this.channels = build(CacheScope.Channels)
+    this.threads = build(CacheScope.Threads)
     this.users = build(CacheScope.Users)
     this.roles = build(CacheScope.Roles)
     this.members = build(CacheScope.Members)
@@ -191,7 +225,15 @@ export class CacheRegistry<Client = unknown> {
 
   /** Every store, for operations that apply to all of them. */
   get stores(): readonly AnyCacheStore[] {
-    return [this.guilds, this.users, this.roles, this.members, this.messages]
+    return [
+      this.guilds,
+      this.channels,
+      this.threads,
+      this.users,
+      this.roles,
+      this.members,
+      this.messages,
+    ]
   }
 
   /**

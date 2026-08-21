@@ -1,4 +1,12 @@
 import type { AnyEventHandler } from './EventHandler.js'
+import {
+  channelCreate,
+  channelDelete,
+  channelUpdate,
+  threadCreate,
+  threadDelete,
+  threadUpdate,
+} from './handlers/channels.js'
 import { guildCreate, guildDelete, guildUpdate } from './handlers/guilds.js'
 import { guildMemberAdd, guildMemberRemove, guildMemberUpdate } from './handlers/members.js'
 import { messageCreate, messageDelete, messageUpdate } from './handlers/messages.js'
@@ -30,6 +38,14 @@ export const handlers: readonly AnyEventHandler[] = [
   guildCreate,
   guildUpdate,
   guildDelete,
+
+  channelCreate,
+  channelUpdate,
+  channelDelete,
+
+  threadCreate,
+  threadUpdate,
+  threadDelete,
 
   guildMemberAdd,
   guildMemberUpdate,

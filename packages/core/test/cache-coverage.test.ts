@@ -99,8 +99,32 @@ const GUILD_CREATE = dispatch('GUILD_CREATE', {
       flags: 0,
     },
   ],
-  channels: [],
-  threads: [],
+  channels: [
+    {
+      id: '3',
+      type: 0,
+      name: 'general',
+      position: 0,
+      permission_overwrites: [],
+      parent_id: null,
+      nsfw: false,
+    },
+  ],
+  threads: [
+    {
+      id: '4',
+      type: 11,
+      name: 'a thread',
+      position: 0,
+      parent_id: '3',
+      thread_metadata: {
+        archived: false,
+        auto_archive_duration: 1440,
+        archive_timestamp: '2023-01-01T00:00:00+00:00',
+        locked: false,
+      },
+    },
+  ],
   voice_states: [],
   presences: [],
   stage_instances: [],
@@ -130,6 +154,8 @@ describe('cache scope coverage', () => {
   it('CC1: fills every scope from a representative dispatch set', () => {
     const cache = new CacheRegistry({
       guilds: true,
+      channels: true,
+      threads: true,
       users: true,
       roles: true,
       members: true,
@@ -167,6 +193,8 @@ describe('cache scope coverage', () => {
     // here. That is a property of the design, not a gap in the test.
     const cache = new CacheRegistry({
       guilds: false,
+      channels: false,
+      threads: false,
       users: false,
       roles: false,
       members: false,

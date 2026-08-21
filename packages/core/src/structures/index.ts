@@ -9,6 +9,7 @@
 export { Base } from './Base.js'
 export { ClientUser } from './ClientUser.js'
 export { Guild, type APIGuildLike } from './Guild.js'
+export * from './channels/index.js'
 export { GuildMember } from './GuildMember.js'
 export { Message, type CompleteMessage } from './Message.js'
 export { Role, type RoleColors } from './Role.js'
