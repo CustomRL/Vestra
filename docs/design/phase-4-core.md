@@ -1226,8 +1226,18 @@ export type CacheScope = (typeof CacheScope)[keyof typeof CacheScope]
 | `messages`    | message id       | channel id        | off           |                                                             |
 | `presences`   | `guildId:userId` | guild id          | off           | One entry per (user, guild), not per user                   |
 | `voiceStates` | `guildId:userId` | guild id          | off           |                                                             |
-| `emojis`      | emoji id         | guild id          | off           | Arrives inside the guild payload; dropped unless enabled    |
-| `stickers`    | sticker id       | guild id          | off           | Ditto                                                       |
+| `emojis`      | emoji id         | guild id          | **on**        | **Deviation from this table as written — below**            |
+| `stickers`    | sticker id       | guild id          | off           | Arrives inside the guild payload; dropped unless enabled    |
+
+**Emojis default on — a second deviation, on the same argument.** This table originally had
+them off. They were switched on when the scope was implemented, because the case is the roles
+case with the nouns changed: a guild's emoji set is small and hard-bounded by Discord, it
+arrives free inside a `GUILD_CREATE` the bot already receives, and posting a guild's own emoji
+needs the ID — so caching it costs nothing that was not already paid for, and not caching it
+means a REST call to learn something the gateway already said. Stickers stayed off, and the
+asymmetry is deliberate rather than an oversight: a sticker is a far rarer thing for a bot to
+send and its payload is several times larger. This wants the same sign-off as the roles
+deviation below; if it goes the other way, one line in `DefaultCacheOptions` changes.
 
 **Roles default on — the deviation.** ADR 4 lists three defaults; this adds a fourth. Permission
 computation is the single most common thing a bot does, and it is impossible offline without
