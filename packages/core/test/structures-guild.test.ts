@@ -6,6 +6,13 @@ import { GuildMember, Role, guildUserKey } from '@vestra/core'
 const client = { name: 'test-client' }
 const GUILD_ID = '613425648685547541'
 const USER_ID = '80351110224678912'
+const USER = {
+  id: USER_ID,
+  username: 'nelly',
+  discriminator: '0',
+  global_name: null,
+  avatar: null,
+}
 
 function apiRole(overrides: Partial<APIRole> = {}): APIRole {
   return {
@@ -79,7 +86,7 @@ describe('GuildMember structure', () => {
     const member = new GuildMember(apiMember(), GUILD_ID, USER_ID, client)
 
     assert.equal(member.joinedTimestamp, '2021-03-14T12:00:00.000000+00:00')
-    assert.equal(member.joinedAt.getTime(), Date.parse('2021-03-14T12:00:00.000000+00:00'))
+    assert.equal(member.joinedAt?.getTime(), Date.parse('2021-03-14T12:00:00.000000+00:00'))
   })
 
   it('M2: does not parse dates eagerly', () => {
@@ -214,6 +221,20 @@ describe('GuildMember structure', () => {
     // the common case.
     const member = new GuildMember(apiMember(), GUILD_ID, USER_ID, client)
     assert.equal(guildUserKey(member.guildId, member.userId), `${GUILD_ID}:${USER_ID}`)
+  })
+
+  it('M11: does not blank a known field when an update omits it', () => {
+    // GUILD_MEMBER_UPDATE carries only what changed — joined_at, deaf, mute and flags are
+    // all optional on it — so copying absent fields would blank joinedTimestamp every time
+    // somebody changed their nickname. The same trap Message.patch avoids the same way.
+    const member = new GuildMember(apiMember(), GUILD_ID, USER_ID, client)
+    const joined = member.joinedTimestamp
+
+    member.patch({ guild_id: GUILD_ID, user: { ...USER }, roles: [], nick: 'Renamed' })
+
+    assert.equal(member.nick, 'Renamed')
+    assert.equal(member.joinedTimestamp, joined, 'the join date must survive a nickname change')
+    assert.equal(member.deaf, false, 'deaf must not be blanked either')
   })
 
   it('M8: keeps a stable shape across construction and patch', () => {

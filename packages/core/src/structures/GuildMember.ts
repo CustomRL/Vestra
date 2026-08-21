@@ -1,4 +1,9 @@
-import type { APIGuildMember, ISO8601Timestamp, Snowflake } from '@vestra/types'
+import type {
+  APIGuildMember,
+  GatewayGuildMemberUpdateDispatchData,
+  ISO8601Timestamp,
+  Snowflake,
+} from '@vestra/types'
 import { Base } from './Base.js'
 import { User } from './User.js'
 
@@ -17,6 +22,12 @@ import { User } from './User.js'
  * It also matches the two examples the specification already fixes: message `timestamp`
  * becomes `createdTimestamp` beside `createdAt`, and `edited_timestamp` stays
  * `editedTimestamp`.
+ *
+ * **A member payload may be partial.** `GUILD_MEMBER_UPDATE` carries only what changed, so
+ * `joined_at`, `deaf`, `mute` and `flags` are all optional on it. Every field that can be
+ * omitted is therefore `T | undefined`, and {@link patch} assigns only what arrived — the
+ * same rule {@link Message} follows, and for the same reason: copying an absent field would
+ * blank `joinedTimestamp` on every nickname change.
  *
  * **No eager `Date` parsing.** `globals.ts` keeps timestamps as strings because most are
  * never read, and parsing every one on construction would pay for all of them to serve the
@@ -68,16 +79,21 @@ export class GuildMember<Client = unknown> extends Base<Client> {
    * objects would need the cache, which may be off — see ADR 4.
    */
   declare roles: readonly Snowflake[]
-  /** When the member joined the guild, as the raw ISO string. */
-  declare joinedTimestamp: ISO8601Timestamp
+  /**
+   * When the member joined the guild, as the raw ISO string.
+   *
+   * @remarks
+   * Absent on a `GUILD_MEMBER_UPDATE` that did not change it, which is most of them.
+   */
+  declare joinedTimestamp: ISO8601Timestamp | undefined
   /** When the member started boosting the guild, as the raw ISO string. */
   declare premiumSinceTimestamp: ISO8601Timestamp | null | undefined
   /** Whether the member is server-deafened in voice channels. */
-  declare deaf: boolean
+  declare deaf: boolean | undefined
   /** Whether the member is server-muted in voice channels. */
-  declare mute: boolean
+  declare mute: boolean | undefined
   /** The member's flags, as a bit set. */
-  declare flags: number
+  declare flags: number | undefined
   /**
    * Whether the member has passed the guild's membership screening.
    *
@@ -100,7 +116,12 @@ export class GuildMember<Client = unknown> extends Base<Client> {
    * @param userId - The user the membership belongs to.
    * @param client - The client that produced this structure.
    */
-  constructor(data: APIGuildMember, guildId: Snowflake, userId: Snowflake, client: Client) {
+  constructor(
+    data: APIGuildMember | GatewayGuildMemberUpdateDispatchData,
+    guildId: Snowflake,
+    userId: Snowflake,
+    client: Client,
+  ) {
     super(client)
 
     this.guildId = guildId
@@ -132,9 +153,10 @@ export class GuildMember<Client = unknown> extends Base<Client> {
     return this.userId
   }
 
-  /** When the member joined the guild. Allocates. */
-  get joinedAt(): Date {
-    return new Date(this.joinedTimestamp)
+  /** When the member joined the guild, or `null` if the payload never said. Allocates. */
+  get joinedAt(): Date | null {
+    const raw = this.joinedTimestamp
+    return raw === undefined ? null : new Date(raw)
   }
 
   /**
@@ -184,10 +206,15 @@ export class GuildMember<Client = unknown> extends Base<Client> {
    * @param data - The payload to apply.
    *
    * @remarks
+   * **Assigns only what arrived.** `GUILD_MEMBER_UPDATE` carries whichever fields changed,
+   * so copying absent ones would blank `joinedTimestamp` every time somebody changed their
+   * nickname — an update turned into data loss, which is the same trap {@link Message}
+   * avoids the same way.
+   *
    * A member whose user arrives again is patched rather than replaced, so a consumer
    * holding `member.user` keeps a live object.
    */
-  patch(data: APIGuildMember): void {
+  patch(data: APIGuildMember | GatewayGuildMemberUpdateDispatchData): void {
     if (data.user !== undefined) {
       if (this.user === undefined) {
         this.user = new User(data.user, this.client)
@@ -195,18 +222,22 @@ export class GuildMember<Client = unknown> extends Base<Client> {
         this.user.patch(data.user)
       }
     }
-    this.nick = data.nick
-    this.avatar = data.avatar
-    this.banner = data.banner
+    if (data.nick !== undefined) this.nick = data.nick
+    if (data.avatar !== undefined) this.avatar = data.avatar
+    if (data.banner !== undefined) this.banner = data.banner
+    // Unconditional: `roles` is required on both the full payload and the update, so a
+    // presence check here would be dead code the compiler can prove never branches.
     this.roles = data.roles
-    this.joinedTimestamp = data.joined_at
-    this.premiumSinceTimestamp = data.premium_since
-    this.deaf = data.deaf
-    this.mute = data.mute
-    this.flags = data.flags
-    this.pending = data.pending
-    this.permissions = data.permissions
-    this.communicationDisabledUntilTimestamp = data.communication_disabled_until
+    if (data.joined_at !== undefined) this.joinedTimestamp = data.joined_at
+    if (data.premium_since !== undefined) this.premiumSinceTimestamp = data.premium_since
+    if (data.deaf !== undefined) this.deaf = data.deaf
+    if (data.mute !== undefined) this.mute = data.mute
+    if (data.flags !== undefined) this.flags = data.flags
+    if (data.pending !== undefined) this.pending = data.pending
+    if (data.permissions !== undefined) this.permissions = data.permissions
+    if (data.communication_disabled_until !== undefined) {
+      this.communicationDisabledUntilTimestamp = data.communication_disabled_until
+    }
   }
 
   /**
