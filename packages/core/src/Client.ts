@@ -9,11 +9,12 @@ import {
   type ClientOptions,
   type ResolvedClientOptions,
 } from './ClientOptions.js'
+import { presencePayload, type PresenceOptions } from './ClientPresence.js'
 import type { ClientEvents } from './events/ClientEvents.js'
 import { EventRouter } from './events/EventRouter.js'
 import { handlers } from './events/registry.js'
 import type { EventContext } from './events/EventHandler.js'
-import { ShardBridge } from './gateway/ShardBridge.js'
+import { isConnected, ShardBridge } from './gateway/ShardBridge.js'
 import type { ClientUser } from './structures/ClientUser.js'
 
 /**
@@ -192,6 +193,45 @@ export class Client extends EventEmitter<ClientEvents> {
       throw new Error(`Shard ${String(shardId)} is not connected, so it cannot fetch members.`)
     }
     return await bridge.members.request({ guildId, ...options })
+  }
+
+  /**
+   * Sets what the bot appears to be doing.
+   *
+   * @param options - The status and activities to show.
+   * @returns Once every connected shard has been told.
+   *
+   * @remarks
+   * **Sent to every shard, because presence is per-connection.** Discord tracks it on the
+   * gateway session rather than on the account, so telling one shard leaves the bot showing
+   * one thing to the guilds on that shard and something else everywhere else. That is the bug
+   * this method exists to make impossible.
+   *
+   * **Not persisted across a reconnect.** A shard that reconnects identifies afresh and comes
+   * back with whatever presence the identify payload carried — `options.gateway.presence` —
+   * not with what was last set here. Anything that must survive a reconnect belongs in the
+   * client options; this is for changing it afterwards.
+   *
+   * Shards that are not currently connected are skipped rather than erroring. A fleet where
+   * one shard is mid-reconnect is normal, and refusing to update the other hundred because of
+   * it would make this unusable on exactly the bots that need it.
+   *
+   * **There is no way to read the result back.** Discord does not send a bot its own
+   * `PRESENCE_UPDATE` — that event is about other members — and no REST route returns it.
+   * Measured against the live gateway: setting several presences in a row with the
+   * `GuildPresences` intent produced no dispatch about the bot at all. What this method can
+   * confirm is that the payload was well formed, because a malformed opcode 3 closes the
+   * socket with 4002; what the presence looks like is a thing to see in a Discord client.
+   */
+  async setPresence(options: PresenceOptions): Promise<void> {
+    const payload = presencePayload(options, Date.now())
+
+    const sends: Promise<void>[] = []
+    for (const shard of this.shards.shards.values()) {
+      if (!isConnected(shard.state)) continue
+      sends.push(shard.send(payload))
+    }
+    await Promise.all(sends)
   }
 
   #attachManager(): void {
