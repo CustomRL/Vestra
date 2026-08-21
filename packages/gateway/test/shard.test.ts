@@ -199,6 +199,43 @@ describe('heartbeats', () => {
     assert.equal(h.fleet.current.sends.length, before + 2)
   })
 
+  it('does not call a requested beat near the scheduled one a zombie', async () => {
+    // Found by review. A beat Discord *requests* sets the same outstanding-acknowledgement flag
+    // as a scheduled one, and the zombie check read that flag rather than how long it had been
+    // outstanding. So a requested beat arriving within a round trip of the scheduled beat left
+    // an ack legitimately in flight when the timer fired, and a healthy socket was abandoned
+    // and a resume spent — about one RTT of exposure per interval.
+    const h = harness()
+    h.timers.randomValue = 0.5
+    await reachReady(h)
+
+    h.timers.advance(20_000) // the jittered first beat
+    h.fleet.current.receive({ op: GatewayOpcodes.HeartbeatAck })
+
+    // Almost a full interval later, Discord asks for a beat out of band.
+    h.timers.advance(39_990)
+    h.fleet.current.receive({ op: GatewayOpcodes.Heartbeat })
+
+    // The scheduled beat is now due, ten milliseconds after the requested one went out.
+    h.timers.advance(10)
+
+    assert.notEqual(h.shard.state, ShardState.Reconnecting, 'a healthy socket was called a zombie')
+    assert.equal(h.shard.state, ShardState.Ready)
+  })
+
+  it('still calls a genuinely unacknowledged beat a zombie', async () => {
+    // The control. Without it the fix above could be "never declare a zombie", which would
+    // leave a dead connection running forever.
+    const h = harness()
+    h.timers.randomValue = 0.5
+    await reachReady(h)
+
+    h.timers.advance(20_000) // the first beat, never acknowledged
+    h.timers.advance(40_000) // a whole interval later
+
+    assert.equal(h.shard.state, ShardState.Reconnecting, 'a dead connection was left running')
+  })
+
   it('sends the last dispatch sequence, and control frames never overwrite it', async () => {
     const h = harness()
     await reachReady(h)

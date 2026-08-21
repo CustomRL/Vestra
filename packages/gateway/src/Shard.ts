@@ -7,6 +7,7 @@ import {
 } from '@vestra/types'
 import { buildGatewayUrl, resolveShardOptions } from './GatewayOptions.js'
 import type { ResolvedShardOptions, ShardOptions } from './GatewayOptions.js'
+import { GatewayCloseCodes } from '@vestra/types'
 import { Backoff } from './connection/Backoff.js'
 import {
   resolveCloseVerdict,
@@ -126,8 +127,14 @@ export class Shard extends EventEmitter<ShardEvents> {
       await this.#session.forget()
     }
 
+    // `Fatal` is terminal and stays terminal. Transitioning to `Closed` here made a shard that
+    // failed on a rejected token reconnectable again — `connect()` throws in `Fatal` and
+    // resolves in `Closed` — undoing the state that exists to stop a doomed reconnect loop.
+    //
+    // Only guarded here: a shard that went `Fatal` disposed its connection on the way, so it
+    // always takes this branch.
     if (connection === null) {
-      this.#transition(ShardState.Closed)
+      if (this.#state !== ShardState.Fatal) this.#transition(ShardState.Closed)
       return
     }
 
@@ -376,6 +383,11 @@ export class Shard extends EventEmitter<ShardEvents> {
     }
 
     if (verdict.action === ShardCloseAction.ReIdentify) void this.#session.forget()
+
+    // 4008 means payloads went out too fast, and reconnecting straight away is the tight loop
+    // Discord revokes API access for. `startAtCap` exists for this and had no caller anywhere.
+    if (code === GatewayCloseCodes.RateLimited) this.#backoff.startAtCap()
+
     this.#scheduleReconnect()
   }
 
@@ -405,7 +417,9 @@ export class Shard extends EventEmitter<ShardEvents> {
     // The resume path is bounded: `resume_gateway_url` names one gateway node, so if that
     // node is what failed, retrying it forever is a loop against a host that will never
     // answer. Fall back to a fresh identify against the base URL.
-    if (this.#session.resumeAttempts > this.#options.maxResumeAttempts) {
+    // `>=`, not `>`: the count is incremented before this runs, so `>` allowed one resume more
+    // than the option names — four for a configured three.
+    if (this.#session.resumeAttempts >= this.#options.maxResumeAttempts) {
       void this.#session.forget()
     }
 

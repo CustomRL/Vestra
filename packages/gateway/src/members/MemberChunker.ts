@@ -195,7 +195,34 @@ export class MemberChunker {
       this.#pending.set(nonce, { members: [], notFound: [], resolve, reject, timer })
     })
 
-    await this.#send(data)
+    try {
+      await this.#send(data)
+    } catch (error) {
+      // **The request never left the process, so nothing about it may outlive this throw.**
+      // `request()` rejects with the send error and never reaches the `await` below, so the
+      // pending entry stayed registered with its sixty-second timer armed — and when that
+      // fired it rejected a promise nobody was awaiting, which Node reports as an unhandled
+      // rejection and, by default, exits on. A minute after a failed member request, the
+      // process died.
+      //
+      // Reachable through the public API without doing anything unusual: `Shard.send` throws
+      // whenever the shard is reconnecting, and `Client.fetchMembers` checks only that a
+      // bridge exists, never the shard's state.
+      const entry = this.#pending.get(nonce)
+      if (entry !== undefined) {
+        this.#timers.clearTimeout(entry.timer)
+        this.#pending.delete(nonce)
+      }
+      // Nothing will settle it now; make certain it cannot surface later either.
+      members.catch(() => undefined)
+
+      // The allowance is a courtesy limit on requests Discord actually received. Keeping it
+      // spent here meant one failed send locked the guild out for thirty seconds.
+      if (wantsEveryone) this.#allMembersGate.delete(options.guildId)
+
+      throw error
+    }
+
     return await members
   }
 

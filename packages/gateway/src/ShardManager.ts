@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events'
 import type { RESTGetAPIGatewayBotResult } from '@vestra/types'
+import { InMemorySessionStore } from './session/SessionStore.js'
 import { Shard } from './Shard.js'
 import type { ShardOptions } from './GatewayOptions.js'
 import { LocalIdentifyThrottler, type IdentifyThrottler } from './session/IdentifyThrottler.js'
@@ -82,7 +83,16 @@ export class ShardManager extends EventEmitter<ShardManagerEvents> {
    */
   constructor(options: ShardManagerOptions) {
     super()
-    this.#options = options
+    // **One store for the fleet, resolved once here rather than per shard.** Each `Shard`
+    // otherwise fell back to its own `InMemorySessionStore`, and `destroy()` clears the shard
+    // map — so `destroy(true)` followed by `login()` built new shards with new empty stores and
+    // the persisted session died with the discarded objects. The 4000 close went out correctly
+    // and the resume never happened, spending a session start from the daily cap on every
+    // restart cycle. Sharing it also matches what a consumer supplying their own store gets.
+    this.#options = {
+      ...options,
+      sessionStore: options.sessionStore ?? new InMemorySessionStore(),
+    }
     this.#throttler = options.throttler
   }
 
