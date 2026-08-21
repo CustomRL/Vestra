@@ -116,6 +116,29 @@ describe('dispatch event names', () => {
   })
 
   /**
+   * Every dispatch event must have a payload type.
+   *
+   * @remarks
+   * Coverage reached all seventy-six events, so completeness is now enforceable rather
+   * than aspirational. Adding a name to `GatewayDispatchEvents` without a matching row in
+   * `GatewayDispatchEventMap` breaks this, which is the intent: the event would otherwise
+   * resolve to `unknown` and the gap would be invisible until a consumer tripped over it.
+   *
+   * If an event genuinely cannot be modelled yet, map it to `unknown` explicitly. That is
+   * the same type a missing row produces, but it is a decision on the record instead of an
+   * oversight.
+   */
+  it('gives every dispatch event a payload type', () => {
+    // `true` only while every event name is a key of the map; a gap makes it `false` and
+    // the assignment stops compiling.
+    type FullCoverage =
+      Exclude<GatewayDispatchEvents, keyof GatewayDispatchEventMap> extends never ? true : false
+
+    const fullCoverage: FullCoverage = true
+    assert.equal(fullCoverage, true)
+  })
+
+  /**
    * Events that have been given a payload type must keep one.
    *
    * @remarks
