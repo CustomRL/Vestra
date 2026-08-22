@@ -17,6 +17,18 @@ import {
 
 const shard: DispatchShard = { id: 0, state: ShardState.Ready, guildsPending: false }
 
+/**
+ * The built entry point, as a URL a child process can import.
+ *
+ * @remarks
+ * Derived from this file's own location rather than written out, because the two tests below
+ * import it from a snippet run in a fresh process and a literal path is a literal machine. An
+ * earlier version hard-coded one, which meant ER8 and ER9 could only pass on the laptop they
+ * were written on: on CI the import failed, the snippet printed nothing, and both tests failed
+ * claiming the throw had escaped when nothing had run at all.
+ */
+const CORE_ENTRY = new URL('../dist/index.js', import.meta.url).href
+
 function dispatch(t: string, d: unknown): GatewayDispatchPayload {
   return { op: GatewayOpcodes.Dispatch, t, s: 1, d } as GatewayDispatchPayload
 }
@@ -104,7 +116,7 @@ describe('containing a handler failure', () => {
     // Also out of process: containing it means rethrowing on a clean tick, which lands after
     // an in-process test has finished and gets attributed to whichever test is running then.
     const script = [
-      "import { CacheRegistry, EventRouter, defineHandler } from 'file:///D:/Projects/Vestra/packages/core/dist/index.js'",
+      `import { CacheRegistry, EventRouter, defineHandler } from '${CORE_ENTRY}'`,
       'const context = { cache: new CacheRegistry(), rest: undefined, user: undefined,',
       "  emit: () => { throw new Error('the error listener also exploded') }, listenerCount: () => 1 }",
       "const boom = defineHandler('MESSAGE_CREATE', () => { throw new Error('handler exploded') })",
@@ -141,7 +153,7 @@ describe('reporting a contained failure', () => {
     // throw scheduled on a clean tick lands after the test that caused it has finished. An
     // in-process version of this passed while failing the file.
     const script = [
-      "import { CacheRegistry, EventRouter, defineHandler } from 'file:///D:/Projects/Vestra/packages/core/dist/index.js'",
+      `import { CacheRegistry, EventRouter, defineHandler } from '${CORE_ENTRY}'`,
       'const context = { cache: new CacheRegistry(), rest: undefined, user: undefined,',
       '  emit: () => true, listenerCount: () => 0 }',
       "const boom = defineHandler('MESSAGE_CREATE', () => { throw new Error('handler exploded') })",
