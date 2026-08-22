@@ -35,12 +35,34 @@ export const GatewayOpcodes = {
   HeartbeatAck: 11,
   /** Send: request soundboard sounds for a guild. */
   RequestSoundboardSounds: 31,
+  /** Send: request information about channels the connection cannot see. */
+  RequestChannelInfo: 43,
 } as const
 
 /**
  * A gateway opcode.
  */
 export type GatewayOpcodes = (typeof GatewayOpcodes)[keyof typeof GatewayOpcodes]
+
+/**
+ * Optional protocol behaviours an application can opt into when identifying.
+ */
+export const GatewayCapabilityFlags = {
+  /**
+   * Receive obfuscated channel objects for channels the connection cannot access.
+   *
+   * @remarks
+   * Changes the shape of channel payloads, so opting in is a decision about parsing, not
+   * merely about volume.
+   */
+  ChannelObfuscation: 1 << 15,
+} as const
+
+/**
+ * A gateway capability flag.
+ */
+export type GatewayCapabilityFlags =
+  (typeof GatewayCapabilityFlags)[keyof typeof GatewayCapabilityFlags]
 
 /**
  * Websocket close codes the gateway sends.

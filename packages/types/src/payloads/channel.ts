@@ -1,5 +1,6 @@
 import type { ISO8601Timestamp, Permissions, Snowflake } from '../globals.js'
 import type {
+  ChannelFlags,
   ChannelType,
   ForumLayoutType,
   SortOrderType,
@@ -249,6 +250,16 @@ export type APIChannel =
 
 /**
  * The reduced channel form sent inside interaction `resolved` data and message mentions.
+ *
+ * @remarks
+ * Discord enumerates exactly which fields survive the reduction, and it is a longer list
+ * than the name suggests: `id`, `name`, `type`, `permissions`, `app_permissions`,
+ * `last_message_id`, `last_pin_timestamp`, `nsfw`, `parent_id`, `guild_id`, `flags`,
+ * `rate_limit_per_user`, `topic` and `position`, plus `thread_metadata` on a thread.
+ *
+ * Every field but `id` and `type` is optional, because which of them arrive depends on the
+ * channel's type — a DM has no `guild_id`, a voice channel no `topic`. Optional here means
+ * "may be absent", and the three fields that are additionally nullable say so separately.
  */
 export interface APIChannelPartial {
   /** The channel's ID. */
@@ -263,4 +274,29 @@ export interface APIChannelPartial {
   thread_metadata?: APIThreadMetadata
   /** The invoking user's permissions in the channel. Interactions only. */
   permissions?: Permissions
+  /** The application's own permissions in the channel. Interactions only. */
+  app_permissions?: Permissions
+  /** The guild the channel belongs to. Absent on a direct message. */
+  guild_id?: Snowflake
+  /** The channel's topic, or `null` where one has never been set. */
+  topic?: string | null
+  /** Whether the channel is marked age-restricted. */
+  nsfw?: boolean
+  /**
+   * The last message sent in the channel.
+   *
+   * @remarks
+   * Nullable, and `null` does not mean the channel is empty: the ID points at the last
+   * message *sent*, which may since have been deleted. It is not a reliable existence
+   * check, only an ordering hint.
+   */
+  last_message_id?: Snowflake | null
+  /** When the most recent pin was pinned, or `null` if nothing is pinned. */
+  last_pin_timestamp?: ISO8601Timestamp | null
+  /** The channel's flags, as a bit set. */
+  flags?: ChannelFlags
+  /** The per-user slow-mode interval in seconds. */
+  rate_limit_per_user?: number
+  /** The channel's sorting position within the guild. */
+  position?: number
 }

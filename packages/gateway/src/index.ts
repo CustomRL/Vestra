@@ -4,37 +4,74 @@
  * @packageDocumentation
  */
 
-import { APIVersion } from '@vestra/types'
-
-/**
- * Transport compression modes Vestra can negotiate.
- *
- * @remarks
- * Both are decompressed with `node:zlib` alone — `zstd-stream` via
- * `createZstdDecompress` (Node 22.15+) — which is why the gateway needs
- * no runtime dependency.
- */
-export const TransportCompression = {
-  ZlibStream: 'zlib-stream',
-  ZstdStream: 'zstd-stream',
-} as const
-
-/**
- * A transport compression mode.
- */
-export type TransportCompression = (typeof TransportCompression)[keyof typeof TransportCompression]
-
-/**
- * Builds the gateway websocket URL for a given resume or identify.
- *
- * @param baseUrl - The `wss://` URL returned by `GET /gateway/bot`, or a resume URL.
- * @param compression - Transport compression to negotiate, or `null` for none.
- * @returns A fully qualified gateway URL including version and encoding.
- */
-export function buildGatewayUrl(baseUrl: string, compression: TransportCompression | null): string {
-  const url = new URL(baseUrl)
-  url.searchParams.set('v', APIVersion)
-  url.searchParams.set('encoding', 'json')
-  if (compression !== null) url.searchParams.set('compress', compression)
-  return url.toString()
-}
+export * from './compression/index.js'
+export {
+  buildGatewayUrl,
+  DefaultBackpressureOptions,
+  resolveShardOptions,
+  type BackpressureOptions,
+  type ResolvedShardOptions,
+  type ShardOptions,
+} from './GatewayOptions.js'
+export { Shard } from './Shard.js'
+export {
+  ShardManager,
+  type GatewayBotFetcher,
+  type ShardManagerEvents,
+  type ShardManagerOptions,
+} from './ShardManager.js'
+export { GuildReadyTracker, type GuildReadyTrackerOptions } from './ready/GuildReadyTracker.js'
+export {
+  MAX_NONCE_BYTES,
+  MemberChunker,
+  type RequestGuildMembersOptions,
+  type SendChunkRequest,
+} from './members/MemberChunker.js'
+export { receivesGuildlessEvents, shardIdForGuild } from './util/ShardRouting.js'
+export { SystemTimers, type Timers } from './util/Timers.js'
+export { GatewayError } from './errors/GatewayError.js'
+export { FatalGatewayError } from './errors/FatalGatewayError.js'
+export { SessionLimitError } from './errors/SessionLimitError.js'
+export { MAX_PAYLOAD_BYTES, PayloadTooLargeError } from './errors/PayloadTooLargeError.js'
+export { SendTimeoutError } from './errors/SendTimeoutError.js'
+export type { ShardEvents } from './ShardEvents.js'
+export { ShardSession } from './ShardSession.js'
+export { ClosingIntent, ConnectIntent, ShardState } from './ShardState.js'
+export { sendIdentify, sendResume } from './ShardHandshake.js'
+export { ShardConnection, type ConnectionHooks } from './connection/ShardConnection.js'
+export {
+  InMemorySessionStore,
+  type SessionState,
+  type SessionStore,
+} from './session/SessionStore.js'
+export { LocalIdentifyThrottler, type IdentifyThrottler } from './session/IdentifyThrottler.js'
+export { JsonEncoding } from './encoding/JsonEncoding.js'
+export type { Encoding } from './encoding/Encoding.js'
+export { Backoff, DefaultBackoffOptions, type BackoffOptions } from './connection/Backoff.js'
+export {
+  DefaultHeartbeaterOptions,
+  Heartbeater,
+  type HeartbeaterHooks,
+  type HeartbeaterOptions,
+} from './connection/Heartbeater.js'
+export {
+  DefaultSendQueueOptions,
+  SendQueue,
+  type SendQueueOptions,
+} from './connection/SendQueue.js'
+export {
+  assertSendableCloseCode,
+  classifyCloseCode,
+  resolveCloseVerdict,
+  CLOSE_PERMANENT,
+  CLOSE_RESUMABLE,
+  ShardCloseAction,
+  type CloseCodeVerdict,
+} from './connection/CloseCodes.js'
+export type {
+  Transport,
+  TransportFactory,
+  TransportInit,
+  TransportListeners,
+} from './transport/Transport.js'
+export { WebSocketTransport } from './transport/WebSocketTransport.js'

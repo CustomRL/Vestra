@@ -9,6 +9,7 @@
     { "path": "packages/vestra" },
     { "path": "packages/types/test" },
     { "path": "packages/rest/test" },
+    { "path": "packages/gateway/test" },
     { "path": "scripts" },
     { "path": "tests" }
   ]

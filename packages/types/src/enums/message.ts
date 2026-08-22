@@ -210,3 +210,18 @@ export const EmbedType = {
  * An embed type.
  */
 export type EmbedType = (typeof EmbedType)[keyof typeof EmbedType]
+
+/**
+ * Whether a reaction is an ordinary one or a super-reaction.
+ */
+export const ReactionType = {
+  /** An ordinary reaction. */
+  Normal: 0,
+  /** A super-reaction, which is animated and costs the reacting user a burst. */
+  Burst: 1,
+} as const
+
+/**
+ * A reaction type.
+ */
+export type ReactionType = (typeof ReactionType)[keyof typeof ReactionType]
