@@ -18,6 +18,10 @@ jobs:
   verify:
     name: Verify (Node ${{ matrix.node }})
     runs-on: ubuntu-latest
+    # The suite finishes in well under a minute. This is here because it once did not: a
+    # transport test hung on the floor Node, and with no ceiling the job sat burning a runner
+    # for six hours before GitHub killed it, reporting nothing.
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
@@ -48,6 +52,7 @@ jobs:
   quality:
     name: Lint, format and packaging
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
 
