@@ -100,9 +100,14 @@ export class WebSocketTransport implements Transport {
     this.#socket = socket
     const { signal } = detach
 
+    // Whether this socket ever finished its handshake. Read by the error listener below to
+    // tell a stillborn connection from a live one that failed later.
+    let opened = false
+
     socket.addEventListener(
       'open',
       () => {
+        opened = true
         this.#listeners.onOpen()
       },
       { signal },
@@ -140,6 +145,30 @@ export class WebSocketTransport implements Transport {
       'error',
       (event) => {
         this.#listeners.onError(this.#describe((event as unknown as { error?: unknown }).error))
+
+        // **A rejected handshake produces no close event on Node 22.** Measured, on the floor
+        // runtime: a server answering the upgrade with `401` fires `error` and nothing else,
+        // leaving `readyState` at CONNECTING forever. Node 24 and 25 follow the same failure
+        // with `close(1006, wasClean: false)`. Every reconnect decision this library makes is
+        // driven by a close, so on Node 22 a bad token — the most ordinary failure there is —
+        // left the shard waiting on an event that was never coming, with no reconnect and no
+        // report beyond the error.
+        //
+        // Synthesising the close is safe precisely because the socket never opened: there was
+        // no websocket layer to carry a close frame, so the only close such a socket can ever
+        // have is 1006 and unclean, which is what a conforming runtime reports. It is done
+        // synchronously rather than on a later tick because the value cannot differ, so there
+        // is nothing to wait to find out; on Node 24 and 25 the teardown detaches the real
+        // close before it is delivered, and the outcome is byte-for-byte the same.
+        //
+        // The `opened` guard is what keeps this narrow, and it is load-bearing. An error on a
+        // socket that *did* open may be followed by an authoritative Discord code — 4004 for a
+        // bad token, 4014 for disallowed intents, both of which must never be retried. Reporting
+        // 1006 in their place would turn a fatal, do-not-reconnect close into a resumable one
+        // and produce an endless reconnect loop against a gateway that will never accept.
+        if (opened || this.#socket !== socket) return
+        this.#teardown()
+        this.#listeners.onClose(1006, '', false)
       },
       { signal },
     )
