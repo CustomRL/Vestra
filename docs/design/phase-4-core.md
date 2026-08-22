@@ -1763,14 +1763,14 @@ with a short explicit **rename allowlist**. Renaming is a thing users must learn
 breaks grep against Discord's own documentation, so the bar is "the mechanical result is ambiguous
 or collides", not "the mechanical result is ugly".
 
-| API field                                          | Structure field                                | Why                                                                                                                                                                                                     |
-| -------------------------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `channel_id`, `guild_id`, `owner_id`, `webhook_id` | `channelId`, `guildId`, `ownerId`, `webhookId` | mechanical                                                                                                                                                                                              |
-| `rate_limit_per_user`                              | `rateLimitPerUser`                             | mechanical, and kept ugly on purpose — it is greppable against the docs                                                                                                                                 |
-| `color`                                            | `color`                                        | Discord's spelling. Prose in this repo is British (`colour`); field names are not. A field differing from the wire by a vowel is a permanent papercut                                                   |
-| `pending` (member)                                 | `pending`                                      | **Not** renamed despite the inversion `payloads/member.ts` warns about. The TSDoc warning is carried across verbatim; a rename would hide the trap rather than flag it                                  |
-| `timestamp` (message)                              | `createdTimestamp`                             | allowlisted rename. Bare `timestamp` next to `editedTimestamp` reads as "the relevant one", which it is not                                                                                             |
-| `*_timestamp`, `joined_at`, `premium_since`        | value kept as the raw ISO string               | `globals.ts` is explicit that timestamps stay strings because most are never read. Structures expose a sibling `get xAt(): Date` that allocates on access and says so. No eager `Date` parsing anywhere |
+| API field                                          | Structure field                                | Why                                                                                                                                                                                                              |
+| -------------------------------------------------- | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `channel_id`, `guild_id`, `owner_id`, `webhook_id` | `channelId`, `guildId`, `ownerId`, `webhookId` | mechanical                                                                                                                                                                                                       |
+| `rate_limit_per_user`                              | `rateLimitPerUser`                             | mechanical, and kept ugly on purpose — it is greppable against the docs                                                                                                                                          |
+| `color`                                            | `color`                                        | Discord's spelling. Prose in this repo is British (`colour`); field names are not. A field differing from the wire by a vowel is a permanent papercut                                                            |
+| `pending` (member)                                 | `pending`                                      | **Not** renamed despite the inversion `payloads/member.ts` warns about. The TSDoc warning is carried across verbatim; a rename would hide the trap rather than flag it                                           |
+| `timestamp` (message)                              | `sentTimestamp`                                | allowlisted rename. Bare `timestamp` next to `editedTimestamp` reads as "the relevant one", which it is not. Not `createdTimestamp`: that name is epoch milliseconds from the snowflake on every other structure |
+| `*_timestamp`, `joined_at`, `premium_since`        | value kept as the raw ISO string               | `globals.ts` is explicit that timestamps stay strings because most are never read. Structures expose a sibling `get xAt(): Date` that allocates on access and says so. No eager `Date` parsing anywhere          |
 
 **The rule must be tested, not trusted.** `packages/core/test/naming.test.ts` walks the `API*`
 interfaces with the TypeScript compiler API (a devDependency, so no runtime dependency is implied)
@@ -1828,7 +1828,7 @@ export class Message extends Base {
   declare readonly guildId: Snowflake | undefined
   declare readonly author: User | undefined
   declare content: string | undefined
-  declare readonly createdTimestamp: ISO8601Timestamp | undefined
+  declare readonly sentTimestamp: ISO8601Timestamp | undefined
   declare editedTimestamp: ISO8601Timestamp | null | undefined
   declare pinned: boolean | undefined
   declare embeds: readonly APIEmbed[] | undefined
@@ -1856,7 +1856,7 @@ export class Message extends Base {
 export interface CompleteMessage extends Message {
   readonly author: User
   readonly content: string
-  readonly createdTimestamp: ISO8601Timestamp
+  readonly sentTimestamp: ISO8601Timestamp
   readonly editedTimestamp: ISO8601Timestamp | null
 }
 ```
@@ -2801,7 +2801,7 @@ each item is cross-referenced from the rule that depends on it.
 - **C13. `toString()` on `User`/`GuildMember`/`Role`/`Channel` and deliberately not on `Message` or
   `Guild`.** Defensible and inconsistent by construction.
 - **C14. The rename allowlist for non-mechanical field names** — currently one entry,
-  `Message.timestamp` to `createdTimestamp`. Every future entry is a papercut users must learn, so
+  `Message.timestamp` to `sentTimestamp`. Every future entry is a papercut users must learn, so
   each must carry a stated reason in the test data. Keeping Discord's American spelling (`color`)
   while repo prose stays British is the same kind of call.
 - **C15. Requiring `ClientOptions` to expose REST and gateway seams** (`fetch`, `transport`,

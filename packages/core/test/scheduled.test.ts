@@ -90,7 +90,7 @@ function toCamelCase(field: string): string {
  *
  * @remarks
  * Both are the timestamp suffix rule: the mechanical name is taken by the `Date` getter
- * beside it, which is what `Guild.joinedTimestamp` and `Invite.createdTimestamp` do.
+ * beside it, which is what `Guild.joinedTimestamp` and `GuildMember.joinedTimestamp` do.
  */
 const RENAMED: Record<string, string> = {
   scheduled_start_time: 'scheduledStartTimestamp',

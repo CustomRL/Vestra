@@ -51,14 +51,19 @@ export class Invite<Client = unknown> extends Base<Client> {
   /** The guild the invite leads to, or `undefined` for a group direct message invite. */
   declare readonly guildId: Snowflake | undefined
   /**
-   * When the invite was created, as the raw ISO string.
+   * When the invite was created, in epoch milliseconds.
    *
    * @remarks
-   * Named for the timestamp rather than mirroring `created_at`, because the mechanical name
-   * is taken by the {@link Invite.createdAt} `Date` getter beside it — the same rule
-   * {@link Guild.joinedTimestamp} follows.
+   * Parsed from `created_at` rather than kept raw, because `createdTimestamp` means epoch
+   * milliseconds on every structure that has one and an invite must not be the exception that
+   * makes `a.createdTimestamp - b.createdTimestamp` produce `NaN`. An invite code is not a
+   * snowflake, so unlike the other structures there is no ID to decode it from and the payload
+   * field is the only source.
+   *
+   * This is the one place the suffix rule bends: every other `*Timestamp` is the wire value
+   * as Discord sent it, and {@link Invite.expiresTimestamp} beside this one still is.
    */
-  declare createdTimestamp: ISO8601Timestamp
+  declare readonly createdTimestamp: number
   /** Who created the invite, when Discord said. */
   declare inviter: User<Client> | undefined
   /** How long the invite lives, in seconds, where `0` never expires. */
@@ -103,7 +108,7 @@ export class Invite<Client = unknown> extends Base<Client> {
     this.code = data.code
     this.channelId = data.channel_id
     this.guildId = data.guild_id
-    this.createdTimestamp = data.created_at
+    this.createdTimestamp = Date.parse(data.created_at)
     this.inviter = data.inviter === undefined ? undefined : new User(data.inviter, client)
     this.maxAge = data.max_age
     this.maxUses = data.max_uses

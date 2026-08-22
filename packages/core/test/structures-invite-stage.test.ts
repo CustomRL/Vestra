@@ -114,7 +114,11 @@ describe('Invite', () => {
     assert.equal(invite.code, 'vestra')
     assert.equal(invite.channelId, CHANNEL_ID)
     assert.equal(invite.guildId, GUILD_ID)
-    assert.equal(invite.createdTimestamp, '2024-03-01T12:00:00.000000+00:00')
+    // Epoch milliseconds, not the raw string the payload carries. `createdTimestamp` means
+    // the same thing on every structure that has one, and an invite code is not a snowflake,
+    // so this is the one that has to be parsed rather than decoded from an ID.
+    assert.equal(invite.createdTimestamp, Date.parse('2024-03-01T12:00:00.000000+00:00'))
+    assert.equal(invite.createdAt.getTime(), invite.createdTimestamp)
     assert.equal(invite.maxAge, 86_400)
     assert.equal(invite.maxUses, 25)
     assert.equal(invite.targetType, InviteTargetType.Stream)

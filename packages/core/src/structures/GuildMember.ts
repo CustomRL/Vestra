@@ -29,9 +29,16 @@ import { User } from './User.js'
  * every ISO field rather than only the colliding one, because a rule with an exception is
  * worse to remember than a rule.
  *
- * It also matches the two examples the specification already fixes: message `timestamp`
- * becomes `createdTimestamp` beside `createdAt`, and `edited_timestamp` stays
- * `editedTimestamp`.
+ * It also matches the examples the specification fixes: message `timestamp` becomes
+ * `sentTimestamp` beside `sentAt`, and `edited_timestamp` stays `editedTimestamp`.
+ *
+ * **`createdTimestamp` is the one name outside the rule**, and deliberately so. It means
+ * epoch milliseconds on every structure that has one — decoded from the snowflake, so it
+ * answers even for a partial that carries nothing but an ID — which is why the message's
+ * ISO string is `sentTimestamp` and not that. The specification originally assigned
+ * `createdTimestamp` to the raw string; doing so gave one name two types and made
+ * `a.createdTimestamp - b.createdTimestamp` produce `NaN` on the most used structure there
+ * is, so §4.15 was corrected rather than followed.
  *
  * **A member payload may be partial.** `GUILD_MEMBER_UPDATE` carries only what changed, so
  * `joined_at`, `deaf`, `mute` and `flags` are all optional on it. Every field that can be

@@ -231,10 +231,13 @@ const RENAMES: Record<string, Record<string, string>> = {
     lastThreadId: 'last_message_id. The same rename as ForumChannel, from the same shared base.',
   },
   Message: {
-    createdTimestamp:
+    sentTimestamp:
       'timestamp. A bare `timestamp` sitting next to `editedTimestamp` reads as "the ' +
       'relevant one", which it is not, and the suffix rule then matches the other ISO ' +
-      'fields.',
+      'fields. Not `createdTimestamp`, which it was: that name means epoch milliseconds ' +
+      'decoded from the ID on all eleven other structures that have one, and a Message ' +
+      'holding a string under it made `a.createdTimestamp - b.createdTimestamp` produce ' +
+      'NaN for the single most used structure in the library.',
     partial:
       'Not a payload field. The discriminant `isComplete()` narrows on, recording that ' +
       'the payload did not carry every field.',
@@ -326,6 +329,44 @@ describe('structure field naming', () => {
 
     assert.ok(checked > 20, `expected to check a real surface; checked ${String(checked)}`)
     assert.deepEqual(unexplained.sort(), [], 'each of these needs a RENAMES entry with a reason')
+  })
+
+  it('N8: gives createdTimestamp the same type on every structure that has one', () => {
+    // **One name, one type.** `createdTimestamp` is epoch milliseconds everywhere, which is
+    // what makes `a.createdTimestamp - b.createdTimestamp` an interval rather than a guess
+    // about which two structures are being subtracted. It used to be an ISO string on
+    // `Message` and on `Invite`, so that subtraction produced `NaN` on the most used
+    // structure in the library and nowhere else -- silently, since a string minus a string
+    // is not a type error.
+    //
+    // Swept rather than asserted per class: the divergence arrived by a structure being
+    // written to a local rule, and only a sweep sees a structure that has not been written
+    // yet. The raw wire value keeps a name of its own -- `Message.sentTimestamp` -- which is
+    // the suffix rule, and is exactly what this leaves room for.
+    const { checker, source } = coreProgram
+    const moduleSymbol = checker.getSymbolAtLocation(source)
+    assert.ok(moduleSymbol !== undefined)
+
+    const wrong: string[] = []
+    let found = 0
+
+    for (const exported of checker.getExportsOfModule(moduleSymbol)) {
+      const declared = checker.getDeclaredTypeOfSymbol(exported)
+      const property = checker
+        .getPropertiesOfType(declared)
+        .find((candidate) => candidate.getName() === 'createdTimestamp')
+      if (property === undefined) continue
+
+      const declaration = property.valueDeclaration ?? (property.getDeclarations() ?? [])[0]
+      if (declaration === undefined) continue
+
+      found += 1
+      const type = checker.typeToString(checker.getTypeOfSymbolAtLocation(property, declaration))
+      if (type !== 'number') wrong.push(`${exported.getName()}.createdTimestamp is ${type}`)
+    }
+
+    assert.ok(found > 8, `expected many structures to carry one; found ${String(found)}`)
+    assert.deepEqual(wrong.sort(), [], 'createdTimestamp must be epoch milliseconds everywhere')
   })
 
   it('N7: keeps no stale rename entries', () => {

@@ -29,7 +29,7 @@ import { snowflakeDate, snowflakeTimestamp } from './snowflake.js'
 export interface CompleteMessage<Client = unknown> extends Message<Client> {
   readonly author: User<Client>
   readonly content: string
-  readonly createdTimestamp: ISO8601Timestamp
+  readonly sentTimestamp: ISO8601Timestamp
   readonly editedTimestamp: ISO8601Timestamp | null
   readonly type: MessageType
 }
@@ -49,6 +49,15 @@ export interface CompleteMessage<Client = unknown> extends Message<Client> {
  * the common path miserable.
  *
  * **Structures never throw on a partial payload.** Absent is `undefined`, never an error.
+ *
+ * **Two names for when it was sent, because there are two sources.**
+ * {@link Message.createdTimestamp} is epoch milliseconds decoded from the ID, the same
+ * field of the same type every other structure exposes, so it sorts and subtracts against
+ * them and costs no payload field to compute — it is there on a partial that carries
+ * nothing but an ID. {@link Message.sentTimestamp} is Discord's own ISO string, which is
+ * authoritative and carries microsecond precision the snowflake does not, so it is kept
+ * raw rather than folded into the other. They describe the same moment; prefer the
+ * snowflake for arithmetic and the wire value when exactness is the point.
  */
 export class Message<Client = unknown> extends Base<Client> {
   /** The message's ID. */
@@ -77,8 +86,15 @@ export class Message<Client = unknown> extends Base<Client> {
    * apart when debugging.
    */
   declare content: string | undefined
-  /** When it was sent, as the raw ISO string. */
-  declare createdTimestamp: ISO8601Timestamp | undefined
+  /**
+   * When it was sent, as the raw ISO string Discord sent.
+   *
+   * @remarks
+   * The authoritative time, kept raw because Discord's value carries microseconds that
+   * {@link Message.createdTimestamp} cannot. Absent on a partial payload that did not
+   * carry `timestamp`; the snowflake answers even then.
+   */
+  declare sentTimestamp: ISO8601Timestamp | undefined
   /** When it was last edited, `null` if never, as the raw ISO string. */
   declare editedTimestamp: ISO8601Timestamp | null | undefined
   /** Whether it was sent as text-to-speech. */
@@ -141,7 +157,7 @@ export class Message<Client = unknown> extends Base<Client> {
         ? undefined
         : new GuildMember(data.member, data.guild_id, data.author.id, client)
     this.content = data.content
-    this.createdTimestamp = data.timestamp
+    this.sentTimestamp = data.timestamp
     this.editedTimestamp = data.edited_timestamp
     this.tts = data.tts
     this.mentionEveryone = data.mention_everyone
@@ -157,13 +173,25 @@ export class Message<Client = unknown> extends Base<Client> {
   }
 
   /** When the message was sent, in epoch milliseconds, from its ID. */
-  get createdAtTimestamp(): number {
+  get createdTimestamp(): number {
     return snowflakeTimestamp(this.id)
   }
 
   /** When the message was sent. Allocates. */
   get createdAt(): Date {
     return snowflakeDate(this.id)
+  }
+
+  /**
+   * When the message was sent, from {@link Message.sentTimestamp}. Allocates.
+   *
+   * @remarks
+   * `undefined` when the payload did not carry `timestamp`, which
+   * {@link Message.createdAt} never is.
+   */
+  get sentAt(): Date | undefined {
+    const raw = this.sentTimestamp
+    return raw === undefined ? undefined : new Date(raw)
   }
 
   /** When the message was last edited, or `null`. Allocates. */
@@ -313,7 +341,7 @@ export class Message<Client = unknown> extends Base<Client> {
       }
     }
     if (data.content !== undefined) this.content = data.content
-    if (data.timestamp !== undefined) this.createdTimestamp = data.timestamp
+    if (data.timestamp !== undefined) this.sentTimestamp = data.timestamp
     if (data.edited_timestamp !== undefined) this.editedTimestamp = data.edited_timestamp
     if (data.tts !== undefined) this.tts = data.tts
     if (data.mention_everyone !== undefined) this.mentionEveryone = data.mention_everyone
