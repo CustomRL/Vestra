@@ -14,9 +14,11 @@ import { ClientError, ClientErrorCode } from './errors/ClientError.js'
 import type { ClientEvents } from './events/ClientEvents.js'
 import { EventRouter } from './events/EventRouter.js'
 import { handlers } from './events/registry.js'
+import { upsertUser } from './events/upsert.js'
 import type { EventContext } from './events/EventHandler.js'
 import { isConnected, ShardBridge } from './gateway/ShardBridge.js'
 import type { ClientUser } from './structures/ClientUser.js'
+import { GuildMember } from './structures/GuildMember.js'
 
 /**
  * A Discord client.
@@ -220,17 +222,29 @@ export class Client extends EventEmitter<ClientEvents> {
    *
    * @param guildId - The guild to fetch from.
    * @param options - What to fetch.
-   * @returns The members.
+   * @returns The members, which are also cached.
    *
    * @remarks
    * Routed to the shard that carries the guild, because a member request is answered on the
    * connection it was sent on. Sending it to the wrong shard produces no error and no
    * chunks — just a request that times out.
+   *
+   * **What arrives is cached, into `members` and `users` both.** This is the only way to get
+   * a guild's full membership: `GUILD_CREATE` builds its member list from the presence set,
+   * so without `GuildPresences` it carries almost nothing, and opcode 8 is the rest. Handing
+   * those members back without keeping them meant the expensive path was also the one that
+   * left the cache empty — a bot that fetched a thousand members still answered `undefined`
+   * from `cache.member()` for every one of them.
+   *
+   * Doing it here rather than in a `GUILD_MEMBERS_CHUNK` handler is deliberate. Chunks arrive
+   * only in response to a request this method made, so there is no stream of them to miss,
+   * and routing them through the handler system would put member fetching behind the opt-out
+   * list — disabling an event would then break an API call.
    */
   async fetchMembers(
     guildId: Snowflake,
     options: { query?: string; limit?: number; userIds?: Snowflake[] } = {},
-  ): Promise<unknown[]> {
+  ): Promise<GuildMember[]> {
     this.#assertUsable()
 
     // The shard count is not known until `connect()` has fetched it, and the manager throws a
@@ -258,7 +272,19 @@ export class Client extends EventEmitter<ClientEvents> {
           'shortly is reasonable, which is what the code is for.',
       )
     }
-    return await bridge.members.request({ guildId, ...options })
+    const arrived = await bridge.members.request({ guildId, ...options })
+
+    const members: GuildMember[] = []
+    for (const entry of arrived) {
+      // A chunk member always carries `user`; the field is optional only on the member
+      // embedded in a message. Skipped rather than asserted, because a member with no user
+      // has no cache key and nothing to look it up by.
+      const user = entry.user
+      if (user === undefined) continue
+      upsertUser(this.#context, user)
+      members.push(this.cache.members.add(new GuildMember(entry, guildId, user.id, this)))
+    }
+    return members
   }
 
   /**
