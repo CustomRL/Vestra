@@ -1,7 +1,7 @@
 import type { Emoji } from '../../structures/Emoji.js'
 import { createEmoji } from '../../structures/Emoji.js'
 import { Sticker } from '../../structures/Sticker.js'
-import { defineHandler } from '../EventHandler.js'
+import { defineHandler, type EventContext } from '../EventHandler.js'
 
 /**
  * Emoji and sticker dispatches.
@@ -32,7 +32,7 @@ export const guildEmojisUpdate = defineHandler('GUILD_EMOJIS_UPDATE', (client, d
   const previous = client.cache.emojis.group(data.guild_id)
 
   const arrived = new Set<string>()
-  const current: Emoji[] = []
+  const current: Emoji<EventContext>[] = []
   for (const payload of data.emojis) {
     const emoji = createEmoji(payload, data.guild_id, client)
     // A payload with no ID is a standard Unicode emoji, which has nothing to cache.
@@ -51,7 +51,7 @@ export const guildEmojisUpdate = defineHandler('GUILD_EMOJIS_UPDATE', (client, d
     current.push(client.cache.emojis.add(cached))
   }
 
-  const removed: Emoji[] = []
+  const removed: Emoji<EventContext>[] = []
   for (const emoji of previous) {
     if (arrived.has(emoji.id)) continue
     client.cache.emojis.delete(emoji.id)
@@ -73,7 +73,7 @@ export const guildStickersUpdate = defineHandler('GUILD_STICKERS_UPDATE', (clien
   const previous = client.cache.stickers.group(data.guild_id)
 
   const arrived = new Set<string>()
-  const current: Sticker[] = []
+  const current: Sticker<EventContext>[] = []
   for (const payload of data.stickers) {
     arrived.add(payload.id)
     const cached = client.cache.stickers.get(payload.id)
@@ -86,7 +86,7 @@ export const guildStickersUpdate = defineHandler('GUILD_STICKERS_UPDATE', (clien
     current.push(client.cache.stickers.add(cached))
   }
 
-  const removed: Sticker[] = []
+  const removed: Sticker<EventContext>[] = []
   for (const sticker of previous) {
     if (arrived.has(sticker.id)) continue
     client.cache.stickers.delete(sticker.id)

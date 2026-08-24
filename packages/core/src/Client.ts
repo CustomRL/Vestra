@@ -18,7 +18,6 @@ import { handlers } from './events/registry.js'
 import { upsertUser } from './events/upsert.js'
 import type { EventContext } from './events/EventHandler.js'
 import { isConnected, ShardBridge } from './gateway/ShardBridge.js'
-import type { StructureClient } from './structures/capabilities.js'
 import type { ClientUser } from './structures/ClientUser.js'
 import { GuildMember } from './structures/GuildMember.js'
 
@@ -43,9 +42,9 @@ import { GuildMember } from './structures/GuildMember.js'
  * await client.login()
  * ```
  */
-export class Client extends EventEmitter<ClientEvents<StructureClient>> {
+export class Client extends EventEmitter<ClientEvents<EventContext>> {
   /** Cached entities, per scope. */
-  readonly cache: CacheRegistry
+  readonly cache: CacheRegistry<EventContext>
   /** The REST client. */
   readonly rest: REST
   /** The resolved configuration. */
@@ -60,7 +59,7 @@ export class Client extends EventEmitter<ClientEvents<StructureClient>> {
    * Reads through to the handler context, which is what the READY and `USER_UPDATE`
    * handlers assign. Two copies would drift the moment one of them updated.
    */
-  get user(): ClientUser | undefined {
+  get user(): ClientUser<EventContext> | undefined {
     return this.#context.user
   }
 
@@ -98,7 +97,7 @@ export class Client extends EventEmitter<ClientEvents<StructureClient>> {
 
     this.#warnOnVersionMismatch()
 
-    this.cache = new CacheRegistry(this.options.cache)
+    this.cache = new CacheRegistry<EventContext>(this.options.cache)
     this.#context = {
       cache: this.cache,
       rest: this.rest,
@@ -353,7 +352,7 @@ export class Client extends EventEmitter<ClientEvents<StructureClient>> {
   async fetchMembers(
     guildId: Snowflake,
     options: { query?: string; limit?: number; userIds?: Snowflake[] } = {},
-  ): Promise<GuildMember[]> {
+  ): Promise<GuildMember<EventContext>[]> {
     this.#assertUsable()
 
     // The shard count is not known until `connect()` has fetched it, and the manager throws a
@@ -383,7 +382,7 @@ export class Client extends EventEmitter<ClientEvents<StructureClient>> {
     }
     const arrived = await bridge.members.request({ guildId, ...options })
 
-    const members: GuildMember[] = []
+    const members: GuildMember<EventContext>[] = []
     for (const entry of arrived) {
       // A chunk member always carries `user`; the field is optional only on the member
       // embedded in a message. Skipped rather than asserted, because a member with no user
@@ -514,13 +513,7 @@ export class Client extends EventEmitter<ClientEvents<StructureClient>> {
     if (this.#announcedReady) return
     this.#announcedReady = true
 
-    // Through the same seam a handler's emit takes. The handler pipeline is parameterised
-    // `unknown` and the public event surface is parameterised {@link StructureClient} — the
-    // same objects under two labels, since a structure's client is the context and the context
-    // carries `cache` and `rest`. `CacheRegistry` is invariant in that parameter (`add(value:
-    // V): V` puts `V` in both positions), so the two labels cannot be reconciled by the type
-    // system and the seam is where they meet.
-    this.#dispatchEmit('ready', [user])
+    this.emit('ready', user)
   }
 
   #onShardError(error: Error, shardId: number): void {

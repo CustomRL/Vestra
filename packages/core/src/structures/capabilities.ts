@@ -47,23 +47,3 @@ export interface CacheCapable {
   /** Cached entities, per scope. */
   readonly cache: CacheRegistry
 }
-
-/**
- * The client as a structure the library hands out sees it.
- *
- * @remarks
- * **What `Client` parameterises its events and its cache with**, and the reason
- * `message.reply()` works on a message from `client.on('messageCreate')`. It did not: `Client`
- * extended `EventEmitter<ClientEvents>`, whose client parameter defaults to `unknown`, so every
- * structure a consumer received was `Message<unknown>` — and `unknown` satisfies neither
- * capability. The mechanism above was tested on structures built directly with a capable
- * client and never on the path every consumer actually takes, so the library's headline
- * example did not compile.
- *
- * Both capabilities rather than `Client` itself, because `Client` is not what a structure
- * holds. Handlers are handed an `EventContext` — deliberately narrower, so a handler cannot
- * reach `destroy()` — and that context carries exactly `cache` and `rest`. Typing the events
- * as `Message<Client>` would make `message.client.destroy()` compile and then fail at runtime.
- * This says what is really there.
- */
-export type StructureClient = RestCapable & CacheCapable

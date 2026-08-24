@@ -1,5 +1,6 @@
 import type { REST } from '@vestra/rest'
 import { CacheRegistry, Guild, Message, type CacheCapable, type RestCapable } from '@vestra/core'
+import type { Client } from '@vestra/core'
 
 /**
  * Type-level guards for the constrained-`this` mechanism (see `structures/capabilities.ts`).
@@ -75,3 +76,27 @@ void new Message(payload, restOnly).channel()
 void new Message(payload, cacheOnly).channel()
 // @ts-expect-error `CacheCapable` alone cannot reach REST
 void new Message(payload, cacheOnly).send({ content: 'pong' })
+
+// --- The path a consumer actually takes, which is what this file did not cover. ---
+//
+// The mechanism above was checked on structures built by hand with a capable client, and the
+// library shipped with `message.reply()` failing to compile on a message from an event and on
+// one read back out of the cache. `Client` parameterises both with `EventContext`, which is
+// what a structure really holds: handlers are handed the context, not the client, and it
+// carries `cache` and `rest`.
+
+declare const client: Client
+
+// An async listener is the case being checked. `ClientEvents` types listeners `void` because
+// the default path discards what they return, and `serialDispatch` documents that interaction.
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+client.on('messageCreate', async (message) => {
+  await message.reply({ content: 'pong' })
+  void message.channel()
+})
+
+export async function fromTheCache(id: string): Promise<void> {
+  await client.cache.messages.get(id)?.reply({ content: 'pong' })
+  void client.cache.guilds.get(id)?.roles()
+  void client.cache.member(id, id)?.displayName
+}
