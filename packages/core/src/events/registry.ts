@@ -22,6 +22,7 @@ import {
   threadCreate,
   threadDelete,
   threadListSync,
+  threadMembersUpdate,
   threadUpdate,
 } from './handlers/channels.js'
 import { guildEmojisUpdate, guildStickersUpdate } from './handlers/expressions.js'
@@ -76,6 +77,7 @@ export const handlers: readonly AnyEventHandler[] = [
   threadUpdate,
   threadDelete,
   threadListSync,
+  threadMembersUpdate,
 
   messageReactionAdd,
   messageReactionRemove,

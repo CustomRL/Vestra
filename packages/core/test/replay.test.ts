@@ -239,6 +239,13 @@ const FIXTURES: Readonly<Record<string, unknown>> = {
   THREAD_CREATE: THREAD,
   THREAD_UPDATE: { ...THREAD, name: 'renamed thread' },
   THREAD_LIST_SYNC: { guild_id: GUILD_ID, threads: [THREAD], members: [] },
+  THREAD_MEMBERS_UPDATE: {
+    id: THREAD_ID,
+    guild_id: GUILD_ID,
+    member_count: 7,
+    added_members: [{ user_id: USER_ID, join_timestamp: '2024-01-01T00:00:00+00:00', flags: 0 }],
+    removed_member_ids: ['9'],
+  },
   MESSAGE_CREATE: MESSAGE,
   MESSAGE_UPDATE: { id: 'm1', channel_id: CHANNEL_ID, content: 'edited' },
   MESSAGE_REACTION_ADD: {
@@ -507,6 +514,27 @@ describe('replay after a resume', () => {
     router.route(dispatch('GUILD_DELETE', FIXTURES.GUILD_DELETE), shard, true)
 
     assert.equal(snapshot(context), first)
+  })
+
+  it('R6: THREAD_MEMBERS_UPDATE assigns member_count rather than adjusting it', () => {
+    // The case §5.2's idempotency table is built around. `added_members` and
+    // `removed_member_ids` invite `count += added - removed`, and the dispatch carries the
+    // absolute figure precisely so nobody needs to: a resumed session redelivers it, and a
+    // counter adjusted twice is wrong for as long as the thread is cached.
+    const { router, context } = harness()
+    router.route(dispatch('THREAD_CREATE', FIXTURES.THREAD_CREATE), shard, false)
+    const before = context.cache.threads.get(THREAD_ID)?.memberCount
+    assert.notEqual(before, 7, 'the fixture must change the count, or this proves nothing')
+
+    router.route(dispatch('THREAD_MEMBERS_UPDATE', FIXTURES.THREAD_MEMBERS_UPDATE), shard, false)
+    assert.equal(context.cache.threads.get(THREAD_ID)?.memberCount, 7)
+
+    router.route(dispatch('THREAD_MEMBERS_UPDATE', FIXTURES.THREAD_MEMBERS_UPDATE), shard, true)
+    assert.equal(
+      context.cache.threads.get(THREAD_ID)?.memberCount,
+      7,
+      'the replayed dispatch moved the count, so it was adjusted rather than assigned',
+    )
   })
 
   it('R5: a create replayed after its delete puts the entity back', () => {

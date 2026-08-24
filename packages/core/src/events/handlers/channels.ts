@@ -162,6 +162,40 @@ export const threadListSync = defineHandler('THREAD_LIST_SYNC', (client, data) =
 })
 
 /**
+ * Who is in a thread changed.
+ *
+ * @remarks
+ * **Assigns `member_count`, never adjusts it.** The dispatch carries the absolute figure, so
+ * the tempting `+= added.length - removed.length` is both unnecessary and the one write that
+ * would break replay: a resumed session redelivers the dispatch and a counter adjusted twice
+ * is wrong forever. §5.2's idempotency table names this event as the case that proves the
+ * rule.
+ *
+ * **Emits user IDs rather than thread members.** `added_members` carries `APIThreadMember`
+ * objects and `ThreadMember` is not modelled, so emitting them would put a raw payload in a
+ * typed event and make modelling it later a breaking change. The IDs are what a bot acts on —
+ * they are what `guild.members` and `cache.users` are keyed by — and they stay correct
+ * whatever `ThreadMember` becomes. `added_members` is also absent unless the bot can see the
+ * members, so an event built around it would be empty for most consumers anyway.
+ *
+ * An uncached thread emits nothing: the payload has no name, parent or type to build one
+ * from, and a thread with only an ID is not something a listener can use.
+ */
+export const threadMembersUpdate = defineHandler('THREAD_MEMBERS_UPDATE', (client, data) => {
+  const cached = client.cache.threads.get(data.id)
+  if (cached === undefined) return
+
+  cached.memberCount = data.member_count
+  client.cache.threads.add(cached)
+
+  const added = (data.added_members ?? [])
+    .map((member) => member.user_id)
+    .filter((id): id is Snowflake => id !== undefined)
+
+  client.emit('threadMembersUpdate', cached, added, data.removed_member_ids ?? [])
+})
+
+/**
  * Puts a channel in whichever of the two scopes it belongs to.
  *
  * @param client - The handler context.

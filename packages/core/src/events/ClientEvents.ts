@@ -105,6 +105,23 @@ export interface ClientEvents<Client = unknown> {
   threadListSync: [guildId: Snowflake, threads: ThreadChannel<Client>[]]
 
   /**
+   * Who is in a thread changed.
+   *
+   * @remarks
+   * Carries user IDs rather than thread members. `ThreadMember` is not modelled, and an event
+   * shaped around the raw payload would change shape the day it is — so it carries the part
+   * that will not: the IDs, which are what `cache.users` and `guild.members` are keyed by.
+   *
+   * `added` is empty unless the bot can see the members Discord added, which is Discord's
+   * rule and not a Vestra one. `thread.memberCount` is the absolute figure either way.
+   */
+  threadMembersUpdate: [
+    thread: ThreadChannel<Client>,
+    added: readonly Snowflake[],
+    removed: readonly Snowflake[],
+  ]
+
+  /**
    * Somebody reacted to a message.
    *
    * @remarks

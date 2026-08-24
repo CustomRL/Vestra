@@ -1986,9 +1986,10 @@ Tuesday (§8-C10).
   _order_.
 - **`Webhook`, `Integration`, `SoundboardSound`, `Entitlement`, `Subscription`, `ThreadMember`.**
   Still cut, on the same grounds, and each still listed in `events/unhandled.ts` with its
-  reason. `ThreadMember` is the one to do next: §5.2 and §7 **R4** already specify replay
-  behaviour for `THREAD_MEMBERS_UPDATE`, which is a contradiction while it goes unhandled
-  (§8-E **E2**).
+  reason. `ThreadMember` was named here as the one to do next, on the grounds that §5.2 and §7
+  specify replay behaviour for `THREAD_MEMBERS_UPDATE` — but that turned out not to need the
+  structure at all. The dispatch is handled now and the contradiction is closed (§8-E **E2**);
+  `ThreadMember` is cut on the same terms as the rest.
 
 **The objection this cut must answer, stated plainly.** Handled events that emit raw payloads
 (§4.4: four of them) give the event API **mixed casing** — `message.channelId` in one handler,
@@ -2545,7 +2546,9 @@ built from the partial and `changes === null`, never a fabricated previous objec
   table-driven over the whole registry, for every handled event with a fixture. This is what
   enforces the absolute-writes rule and it is the reason fixtures are worth the effort.
 - **R4** `guild.memberCount` is unchanged by `GUILD_MEMBER_ADD`, live or replayed;
-  `THREAD_MEMBERS_UPDATE` assigns `member_count` absolutely and is stable under double application.
+  `THREAD_MEMBERS_UPDATE` assigns `member_count` absolutely and is stable under double
+  application. Built as **R6** in `packages/core/test/replay.test.ts`, which asserts the fixture
+  actually moves the count first so it cannot pass vacuously.
 - **R5** `GUILD_MEMBER_UPDATE` for an uncached member creates nothing.
 - **R6** `GUILD_UPDATE` merges: `memberCount`, `joinedAt` and `large` survive it.
 - **R7** `GUILD_CREATE` with `unavailable: true` marks the guild unavailable rather than replacing
@@ -2939,15 +2942,26 @@ implemented against would be guessing.
   `ShardSession(store, shardId)`, `ZlibStream(hooks, limits)`,
   `ShardConnection(options, hooks, url, epoch)`. For a structure the subject is the payload and
   the client is context. §4.16's signature is the one to correct when it is implemented.
-- **E2. The handled set contradicts the idempotency table. STILL OPEN, and now measurable.**
-  §4.6 fixes the handled set at 26 named events and puts `THREAD_MEMBERS_UPDATE` among the 50
-  unhandled, but §5.2 specifies its replay behaviour and §7 **R4** tests it. The registry
-  currently holds **23** of the 26: the three missing are `RESUMED`, `PRESENCE_UPDATE` and
-  `VOICE_STATE_UPDATE`. `RESUMED` is deliberate — it is a session mechanic and `ShardBridge`
-  handles it, for the reason that section gives about mechanics never being handlers. The other
-  two are waiting on structures and cache scopes that do not exist yet. `THREAD_MEMBERS_UPDATE`
-  remains unhandled, so §5.2 and **R4** still describe an event that never runs; that is the
-  contradiction to settle, not the count.
+- **E2. The handled set contradicts the idempotency table. RESOLVED: the event is handled.**
+  §4.6 fixed the handled set at 26 named events and put `THREAD_MEMBERS_UPDATE` among the
+  unhandled, while §5.2 specified its replay behaviour and §7 tested it — so the table's
+  showcase case described something that never ran. The registry now holds **50** handlers
+  against 26 documented non-handlers, which is every dispatch Discord defines, and
+  `THREAD_MEMBERS_UPDATE` is among them.
+
+  Settling it did not need `ThreadMember` after all, which is why it sat open longer than it
+  deserved. The cache effect §5.2 specifies is one assignment of `member_count` onto the
+  cached thread, and the payload carries that absolutely. What the event _emits_ is where the
+  missing structure would have bitten, so it emits `(thread, addedIds, removedIds)`: IDs are
+  what a consumer acts on, they are what `cache.users` and `guild.members` are keyed by, and
+  they do not change shape when `ThreadMember` is eventually modelled. `added_members` is
+  absent unless the bot can see the members anyway, so an event built around it would be empty
+  for most consumers.
+
+  `RESUMED` stays unhandled and always will — a session mechanic, handled by `ShardBridge`, for
+  the reason §4.6 gives about mechanics never being handlers. **R6** guards the assignment, and
+  fails if it is turned back into an adjustment.
+
 - **E3. `CacheStore.fetch(key)` is not implementable for messages. RESOLVED: there is no
   `fetch`.** The store ships without one at all, rather than with one that works on four scopes
   and not the fifth. A cache-backed accessor that is present but throws or returns `undefined`

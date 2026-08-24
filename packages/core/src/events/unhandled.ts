@@ -58,10 +58,6 @@ export const UnhandledEvents: Readonly<Partial<Record<GatewayDispatchEvents, str
   MESSAGE_POLL_VOTE_ADD: 'No structure. Poll is not modelled.',
   MESSAGE_POLL_VOTE_REMOVE: 'No structure. Poll is not modelled.',
   THREAD_MEMBER_UPDATE: 'No structure. ThreadMember is not modelled.',
-  THREAD_MEMBERS_UPDATE:
-    'No structure. ThreadMember is not modelled. Note that ' +
-    '`docs/design/phase-4-core.md` §5.2 specifies replay behaviour for this event and §7 R4 ' +
-    'tests it, which describes something that does not run — recorded as §8-E E2.',
   VOICE_CHANNEL_EFFECT_SEND: 'No structure. VoiceChannelEffect is not modelled.',
 
   // --- Deliberate: modelled enough to handle, and still not worth a typed event. ---
