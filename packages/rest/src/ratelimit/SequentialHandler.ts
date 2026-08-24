@@ -236,6 +236,19 @@ export class SequentialHandler {
         this.#assertWithinTimeout(wait, identity, method, isGlobal)
         await discard(response)
         await sleep(wait, undefined, signal ? { signal } : undefined)
+
+        // **The window this 429 described is over, so say so before looping.** A 429 carries
+        // `x-ratelimit-remaining: 0` alongside a `reset-after` that `#applyHeaders` has
+        // already turned into a `resetAt` — and `#awaitAvailability` at the top of the loop
+        // would then derive a second wait from the same response this sleep was for. The two
+        // are computed from `Date.now()` calls a fraction of a millisecond apart, so which one
+        // wins is a coin toss: on the losing side one 429 reported `rateLimited` twice and
+        // waited an extra tick for nothing. Observed on CI, on Node 24, as `2 !== 1`.
+        //
+        // The same assumption `#awaitAvailability` makes after its own sleep, for the same
+        // reason: the wait is over, so assume the allowance is fresh until a response says
+        // otherwise.
+        state.remaining = Number.isFinite(state.limit) ? state.limit : 1
         continue
       }
 
