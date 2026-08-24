@@ -2418,7 +2418,13 @@ concentrating the dishonesty in one helper keeps it visible.
   `undefined`.
 - **CU4** `add` returns its argument under a `NullCacheAdapter`, so CONTRIBUTING's canonical
   handler line compiles and runs with `messages: false`.
-- **CU5** (compile-time) the return type of every cache-backed accessor includes `undefined`.
+- **CU5** the return type of every cache-backed accessor includes `undefined`. Built as a sweep
+  in `packages/core/test/cache-accessors.test.ts` rather than the compile-time list this asked
+  for: a list passes forever once somebody adds an accessor and forgets to append to it, which
+  is the only way the rule actually gets broken. Every method whose `this` is constrained on
+  `CacheCapable` is found and checked, so a new one is covered the moment it is written.
+  `GuildMember.permissionsIn` is the single allowlisted exception, with its reason, and the
+  allowlist is itself checked for staleness.
   `message.guild` asserting is a compile failure, not a review comment.
 - **CU6** `message.guildId` is the correct string with `guilds: false` — ids never lie.
 
@@ -2504,9 +2510,14 @@ Runs in the normal suite, using the TypeScript compiler API.
 - **EC5** the assertion is set arithmetic over `Object.values(GatewayDispatchEvents)`, with **no
   count constant anywhere in the file**. A constant that must be bumped by hand is a second thing
   to forget.
-- **EC6** (compile-time) `[Exclude<GatewayDispatchEvents, HandledDispatchEvents | UnhandledEvent>]
-extends [never]`. Kept as a belt-and-braces companion to EC1, not as its replacement — verified
-  that its failure message names no event, which is why the runtime form is primary.
+- ~~**EC6** (compile-time) `[Exclude<GatewayDispatchEvents, HandledDispatchEvents |
+UnhandledEvent>] extends [never]`.~~ **Not built, deliberately.** It needs both sets as
+  literal types, which means declaring `handlers` with `satisfies` rather than
+  `readonly AnyEventHandler[]` — publishing a fifty-element tuple of specific handler types
+  into `dist/index.d.ts` and into every consumer's IDE hints, in place of one readable array
+  type. That is a worse public surface bought for a strictly weaker check: this entry already
+  recorded that EC6's failure names no event, while **EC1** fails at test time naming exactly
+  which event is neither handled nor explained. Both run in CI, so the gap closes either way.
 
 **Does the coverage test require a handler for all 76? No, and that is the design.** It requires
 every event to be _accounted for_, with a one-line escape hatch that demands a sentence. Three
@@ -2648,8 +2659,8 @@ built from the partial and `changes === null`, never a fabricated previous objec
 - **W5** `login()` calls `fetchGatewayBot` exactly once regardless of shard count.
 - **PK1** every handler file's export appears in `registry.ts`. Writing the handler and forgetting
   the registry line is the one mistake CONTRIBUTING's two-step contribution flow invites.
-- **PK2** the compile-time coverage pair (EC6) lives in `event-coverage.test.ts` so its failure
-  names the right problem.
+- ~~**PK2** the compile-time coverage pair (EC6) lives in `event-coverage.test.ts`.~~ Moot: EC6
+  is not built, for the reason §7.7 gives.
 - **PK3** pass-through identity: `import { Shard } from '@vestra/core'` is the **same object** as
   `@vestra/gateway`'s. Verified that an explicit re-export shadowing a star export is not a compile
   error, so core can replace a lower package's symbol with its own and nothing will say so.
