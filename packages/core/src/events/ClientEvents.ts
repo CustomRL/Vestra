@@ -399,6 +399,22 @@ export interface ClientEvents<Client = unknown> {
   raw: [payload: GatewayDispatchPayload, shardId: number, replayed: boolean]
 
   /**
+   * A dispatch was discarded because a serial-mode queue was full.
+   *
+   * @remarks
+   * Only fires when `serialDispatch` is on; the default path has no queue and drops
+   * nothing. The discarded payload is the **newest**, not the oldest — a `MESSAGE_DELETE`
+   * arriving after its `MESSAGE_CREATE` was thrown away is worse than a contiguous gap.
+   *
+   * Carries the shard, unlike the spec's original two-argument form. There is one queue per
+   * shard, so an event that cannot say which one is backed up cannot be acted on: the
+   * consumer's answer is either to speed up a listener on that shard or to raise
+   * `maxQueued`, and both need the id. {@link ClientEvents.raw} carries it for the same
+   * reason.
+   */
+  dispatchDropped: [payload: GatewayDispatchPayload, shardId: number, depth: number]
+
+  /**
    * A handler threw.
    *
    * @remarks

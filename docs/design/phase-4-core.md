@@ -1175,14 +1175,25 @@ export class DispatchQueue {
 - **Cleared on identify, kept on resume.** A backlog belonging to a dead session carries
   sequence numbers that no longer mean anything. A resumed session's backlog is still in order
   and still wanted.
-- **Overflow: drop the newest, emit `dispatchDropped(payload, depth)`.** Rejected _drop-oldest_,
+- **Overflow: drop the newest, emit `dispatchDropped(payload, shardId, depth)`.** Built with a
+  `shardId` the original two-argument form did not have: there is one queue per shard, so an
+  event that cannot say which one is backed up cannot be acted on — the consumer's answer is
+  either to speed up a listener on that shard or to raise `maxQueued`, and both need the id.
+  `raw` already carries it for the same reason. Rejected _drop-oldest_,
   which silently reorders causality — a `MESSAGE_DELETE` surviving while its `MESSAGE_CREATE` is
   discarded is worse than a contiguous gap. Rejected _close the shard and resume_, symmetric
   though it looks with the gateway's back-pressure handling: the replay lands in the same queue
   behind the same slow listener, converting a backlog into a reconnect loop.
 - **Off by default**, and when it is off no queue object is constructed and `ShardBridge` calls
-  `routeDispatch` directly. The serial path costs a microtask per dispatch even with no async
-  listeners; per CLAUDE.md that is a claim for `scripts/bench/`, not for prose.
+  `routeDispatch` directly. ~~The serial path costs a microtask per dispatch even with no async
+  listeners~~ — **wrong, and measured.** The batch a dispatch's listeners return is empty when
+  none of them is `async`, the `await` is skipped, and the drain runs to completion inside
+  `push`. `scripts/bench/dispatch-queue.ts` puts the real cost at about **130ns per dispatch**
+  over the direct path with a synchronous listener and about **450ns** with an `async` one, on
+  Node 25. The benchmark also found the queue's first implementation to be quadratic in backlog
+  depth — `Array.prototype.shift` at 40µs per dispatch on a 50,000-deep queue — which a moving
+  head index fixed, and showed `Promise.allSettled` costing 2.5× a bare `await` for the
+  overwhelmingly common single-listener case.
 - `maxQueued` defaults to **1024 payloads per shard**. No basis; sized so a several-second
   listener stall does not drop anything on a busy shard. §8-C6.
 
@@ -2516,8 +2527,13 @@ built from the partial and `changes === null`, never a fabricated previous objec
 - **Q3** overflow past `maxQueued` emits `dispatchDropped` and discards the **newest**.
 - **Q4** default mode: the second dispatch's handler runs _before_ the first dispatch's async
   listener resolves — pinning the documented non-guarantee so nobody "fixes" it into an await.
-- **Q5** `clear('identify')` empties the queue and reports the count; `clear` is not called on a
-  resume.
+- **Q5** a second READY empties the queue.
+- **Q6** a listener whose promise rejects is reported through the router's `error` path rather
+  than vanishing. Not in the original list, and needed: awaiting a promise marks it handled, so
+  a rejection that reached `unhandledRejection` on the default path would go silent the moment
+  serial mode was switched on.
+- **Q7** a `RESUMED` dispatch leaves the backlog alone — the other half of Q5, and the half a
+  "clear on any reconnect" reading gets wrong.
 
 ### 7.9 Replay and reconnect — `R`
 
@@ -2864,7 +2880,8 @@ each item is cross-referenced from the rule that depends on it.
   about V8 inline caches with no measurement behind it.
 - **D5. The extra `raw` emit costs one additional `emit` per event on the hot path** whether or not
   anyone listens, and serial mode costs a microtask per dispatch. Per CLAUDE.md both need a benchmark
-  before any claim, including the claim that they are free.
+  before any claim, including the claim that they are free. **The serial-mode half is done and the
+  claim was wrong** — `scripts/bench/dispatch-queue.ts`, §4.8. The `raw` half is still open.
 - **D6. Whether the single-hidden-class property survives contact with reality.** All the shape
   probes used two or three payload variants. A real bot sees dozens of `MESSAGE_UPDATE` subsets. The
   claim follows from the mechanism and held for every variant tried, but it has not been tested
@@ -2944,21 +2961,25 @@ implemented against would be guessing.
   one context object per client instead. `EventContext.user` is a plain writable field the
   handlers assign; `Client.user` is a getter that reads through to it. One owner, no runtime
   assignment to a getter, and the narrowing the interface existed for is unchanged.
-- **E5. Serial mode has no stated mechanism. OPEN, and now known to be unbuildable as
-  specified.** Nothing in `packages/core/src` implements it, and the reason is sharper than
-  "nobody has got to it": §4.8 says serial mode "changes `emit`, not `handle`", and `emit`
-  cannot do the job. Measured on Node 25: `EventEmitter.prototype.emit` returns `boolean` and
-  returns **before** an async listener settles, and nothing in the class exposes the promise
-  that listener returned. A queue built on `emit` therefore has nothing to await and would
-  serialise only the synchronous part of dispatch handling — which routing already does, since
-  `EventRouter.route` is synchronous. It would be a no-op with a configuration flag.
+- **E5. Serial mode has no stated mechanism. RESOLVED: built, and the objection was wrong.**
+  This entry previously called the feature unbuildable as specified, reasoning from
+  `EventEmitter.prototype.emit` returning `boolean` before an async listener settles. That much
+  is true and measured; the conclusion did not follow, because §4.8 never said the queue awaits
+  `emit` — it said the client's `emit` invokes `rawListeners(name)` and awaits each in turn, and
+  that is exactly what `Client.#dispatchEmit` and `events/DispatchQueue.ts` now do.
 
-  A workable design does exist, and it is not the specified one: invoke `rawListeners(event)`
-  directly and await what each returns. The cost is that the queue then owns `once` semantics,
-  listener ordering and error routing — everything `emit` does for free — and it changes what
-  a listener returning a promise _means_, which today is nothing. That is a public API decision
-  rather than an implementation detail, so it is left for whoever wants the feature. §4.8 should
-  be read as describing something that does not exist.
+  Two of the three costs claimed here also turned out not to exist. Invoking a `once` listener
+  through `rawListeners` **does** consume it — the wrapper Node stores removes itself when
+  called — so the queue does not take over `once` semantics, and listener ordering is just the
+  array order `rawListeners` returns. What survives is the third: a promise a listener returns
+  stops being ignored and becomes a completion signal, so an unrelated `async` listener starts
+  holding up its shard's queue simply by being `async`. That is documented on `serialDispatch`
+  rather than being an obstacle, and it is why the mode is opt-in.
+
+  One consequence worth naming: a rejection from an awaited listener promise would have gone
+  silent, because awaiting a promise marks it handled. `EventRouter.report` is public for that
+  reason and the queue routes rejections through it, so the failure behaves the same in both
+  modes. Q6 guards it.
 
 - **E6. `raw` is emitted outside the `try` in `routeDispatch` (§4.7). RESOLVED: it is emitted
   inside.** `EventRouter.route` puts it in the same `try` as the handler and says why — it runs
@@ -3000,7 +3021,8 @@ Per the working agreement that GitHub is the record:
    (§8-A18).
 10. **The benchmark issues** (§8-D): `structure-construction.ts` blocks quoting any conversion
     figure, `cache-dispatch.ts` blocks every memory claim in the cache docs, and
-    `dispatch-overhead.ts` blocks any statement about what `raw` and serial mode cost.
+    `dispatch-overhead.ts` blocks any statement about what `raw` costs. Serial mode's half is
+    measured — `scripts/bench/dispatch-queue.ts`.
 11. **The test-double sourcing decision** (§8-A17) — widened `rootDir` now, or `@vestra/test-utils`
     now — plus the `ManualTimers` extraction from `packages/gateway/test/fleet.test.ts`, which is an
     edit to Phase 3's tests and should be a deliberate commit rather than a surprise.

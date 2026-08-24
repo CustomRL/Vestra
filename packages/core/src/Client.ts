@@ -12,6 +12,7 @@ import {
 import { presencePayload, type PresenceOptions } from './ClientPresence.js'
 import { ClientError, ClientErrorCode } from './errors/ClientError.js'
 import type { ClientEvents } from './events/ClientEvents.js'
+import { collectListenerResult } from './events/DispatchQueue.js'
 import { EventRouter } from './events/EventRouter.js'
 import { handlers } from './events/registry.js'
 import { upsertUser } from './events/upsert.js'
@@ -90,8 +91,7 @@ export class Client extends EventEmitter<ClientEvents> {
       // One cast, at the one boundary. The emitter's own `emit` is typed over its event
       // map plus Node's built-ins, and no hand-written generic signature lines up with
       // that; the event name and its arguments were already checked at the call site.
-      emit: (event, ...args) =>
-        (this.emit as (name: string, ...rest: unknown[]) => boolean)(event, ...args),
+      emit: (event, ...args) => this.#dispatchEmit(event, args),
       listenerCount: (event) => this.listenerCount(event),
     }
     this.#router = new EventRouter(this.#context, handlers)
@@ -111,6 +111,46 @@ export class Client extends EventEmitter<ClientEvents> {
     })
 
     this.#attachManager()
+  }
+
+  /**
+   * Emits a routed event, and in serial mode collects what its listeners return.
+   *
+   * @param event - The client event.
+   * @param args - Its arguments.
+   * @returns Whether anything was listening.
+   *
+   * @remarks
+   * The seam §4.8 calls "the emit seam", and the reason serial mode can exist at all.
+   * `EventEmitter.prototype.emit` returns `boolean` and returns before an `async` listener
+   * settles, so a queue built on it would have nothing to await and would serialise only the
+   * synchronous part of dispatch handling — which routing already does. Walking
+   * `rawListeners` instead makes each listener's return value reachable, and a `once`
+   * listener still unregisters itself, because the wrapper Node stores is what gets called.
+   *
+   * Only the emits routing produces come through here. `client.emit(...)` from a consumer is
+   * not a dispatch and is left exactly as Node implements it, which also keeps its argument
+   * types intact — an override wide enough to satisfy the base signature would have had to
+   * take `unknown[]`.
+   *
+   * With no listeners it defers to `emit` rather than returning `false` directly. That is
+   * what preserves Node's rule that an unhandled `'error'` throws, which
+   * {@link EventRouter.report} depends on being able to avoid deliberately.
+   */
+  #dispatchEmit(event: keyof ClientEvents, args: unknown[]): boolean {
+    if (this.options.serialDispatch !== null) {
+      const listeners = this.rawListeners(event)
+      if (listeners.length > 0) {
+        for (const listener of listeners) {
+          collectListenerResult((listener as (...rest: unknown[]) => unknown).apply(this, args))
+        }
+        return true
+      }
+    }
+
+    // The cast stays on the call rather than being lifted to a `const`: extracting the
+    // method detaches it from its receiver, and `emit` reads `this._events`.
+    return (this.emit as (name: string, ...rest: unknown[]) => boolean)(event, ...args)
   }
 
   /**
@@ -362,6 +402,7 @@ export class Client extends EventEmitter<ClientEvents> {
     return new ShardBridge(shard, {
       router: this.#router,
       intents: this.options.intents,
+      serialDispatch: this.options.serialDispatch,
       hooks: {
         onReady: (shardId) => {
           this.#onShardReady(shardId)
@@ -371,6 +412,9 @@ export class Client extends EventEmitter<ClientEvents> {
         onGuildsReady: () => undefined,
         onError: (error, shardId) => {
           this.#onShardError(error, shardId)
+        },
+        onDropped: (payload, shardId, depth) => {
+          this.emit('dispatchDropped', payload, shardId, depth)
         },
       },
     })

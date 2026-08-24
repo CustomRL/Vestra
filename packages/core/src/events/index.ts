@@ -11,6 +11,12 @@ export {
   type EventContext,
   type EventHandler,
 } from './EventHandler.js'
+export {
+  DEFAULT_MAX_QUEUED,
+  DispatchQueue,
+  collectListenerResult,
+  type DispatchQueueOptions,
+} from './DispatchQueue.js'
 export { EventRouter } from './EventRouter.js'
 export { handlers } from './registry.js'
 export { UnhandledEvents } from './unhandled.js'

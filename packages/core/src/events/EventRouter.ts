@@ -94,7 +94,7 @@ export class EventRouter<Client = unknown> {
       ) => void
       handle(this.#context, payload.d, shard)
     } catch (error) {
-      this.#report(new EventHandlerError(payload.t, error), payload.t, shard.id)
+      this.report(new EventHandlerError(payload.t, error), payload.t, shard.id)
     }
   }
 
@@ -119,8 +119,14 @@ export class EventRouter<Client = unknown> {
    * connection down.
    *
    * A listener that throws is given the same treatment, for the same reason.
+   *
+   * Public because serial mode needs it. A listener's rejected promise is only observable
+   * once something awaits it, which nothing did before the dispatch queue existed — and the
+   * act of awaiting marks it handled, so a rejection that used to surface as an
+   * `unhandledRejection` would otherwise go silent the moment serial mode was switched on.
+   * Reporting it here keeps one policy for every failure a consumer's code produces.
    */
-  #report(error: EventHandlerError, event: string, shardId: number): void {
+  report(error: EventHandlerError, event: string, shardId: number): void {
     if (this.#context.listenerCount('error') === 0) {
       setImmediate(() => {
         throw error

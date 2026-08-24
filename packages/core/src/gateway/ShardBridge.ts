@@ -7,6 +7,7 @@ import {
   type Timers,
 } from '@vestra/gateway'
 import { GatewayIntentBits, GatewayOpcodes, type GatewayDispatchPayload } from '@vestra/types'
+import { DispatchQueue } from '../events/DispatchQueue.js'
 import type { DispatchShard } from '../events/EventHandler.js'
 import type { EventRouter } from '../events/EventRouter.js'
 
@@ -39,6 +40,8 @@ export interface ShardBridgeHooks {
   onGuildsReady: (shardId: number, unresolved: readonly string[]) => void
   /** Something went wrong on the shard itself. */
   onError: (error: Error, shardId: number) => void
+  /** A dispatch was discarded because the serial queue was full. */
+  onDropped: (payload: GatewayDispatchPayload, shardId: number, depth: number) => void
 }
 
 /** What the bridge needs beyond the shard. */
@@ -51,6 +54,15 @@ export interface ShardBridgeOptions {
   intents: number
   /** Timer sources. */
   timers?: Timers
+  /**
+   * Delivers dispatches one at a time, at this depth. `null` routes them directly.
+   *
+   * @remarks
+   * The queue is per shard, so it is built here rather than on the client. A single global
+   * one would serialise a forty-shard fleet behind one consumer's slow listener, and
+   * sequence ordering is only defined within a session anyway.
+   */
+  serialDispatch?: { maxQueued: number } | null
 }
 
 /**
@@ -76,6 +88,8 @@ export class ShardBridge {
   readonly #timers: Timers
   readonly #intents: number
   readonly #chunker: MemberChunker
+  /** Present only in serial mode; `undefined` means dispatches go straight to the router. */
+  readonly #queue: DispatchQueue | undefined
 
   /**
    * The guild-stream tracker for the current connection.
@@ -107,6 +121,23 @@ export class ShardBridge {
       this.#timers,
       this.#intents,
     )
+
+    const serial = options.serialDispatch ?? null
+    this.#queue =
+      serial === null
+        ? undefined
+        : new DispatchQueue({
+            maxQueued: serial.maxQueued,
+            route: (payload, shard, replayed) => {
+              this.#router.route(payload, shard, replayed)
+            },
+            onListenerError: (error, event, shardId) => {
+              this.#router.report(error, event, shardId)
+            },
+            onDropped: (payload, shardId, depth) => {
+              this.#hooks.onDropped(payload, shardId, depth)
+            },
+          })
 
     this.#attach()
   }
@@ -140,6 +171,7 @@ export class ShardBridge {
 
     this.#tracker?.stop()
     this.#tracker = undefined
+    this.#queue?.clear('destroy')
     this.#chunker.reset(reason)
   }
 
@@ -202,6 +234,10 @@ export class ShardBridge {
       // rather than re-seeded, because it is one-shot and cannot be re-used.
       this.#chunker.reset(new Error('The session was replaced by a fresh identify.'))
       this.#startTracker(payload.d.guilds.map((guild) => guild.id))
+      // A backlog belonging to the replaced session carries sequence numbers that no longer
+      // mean anything. Cleared on identify, and deliberately not on a resume, whose backlog
+      // is still in order and still wanted.
+      this.#queue?.clear('identify')
     }
 
     switch (payload.t) {
@@ -216,13 +252,29 @@ export class ShardBridge {
         break
     }
 
-    this.#router.route(payload, this.view, replayed)
-
     // Reported *after* routing, deliberately. `Shard` emits its own `ready` before the
     // matching `dispatch`, so a bridge that reported readiness from that event told the
     // client a shard was up before the READY handler had set the identity — and a client
     // announcing readiness with no identity to announce hangs `login()` forever.
-    if (payload.t === 'READY') this.#hooks.onReady(this.#shard.id)
+    //
+    // In serial mode routing is deferred, so the announcement rides along with the payload
+    // rather than being made here: the queue runs it once READY has been routed, and before
+    // awaiting that dispatch's listeners so a slow one cannot hold `login()` open.
+    const announce =
+      payload.t === 'READY'
+        ? (): void => {
+            this.#hooks.onReady(this.#shard.id)
+          }
+        : undefined
+
+    const queue = this.#queue
+    if (queue !== undefined) {
+      queue.push(payload, this.view, replayed, announce)
+      return
+    }
+
+    this.#router.route(payload, this.view, replayed)
+    announce?.()
   }
 }
 
