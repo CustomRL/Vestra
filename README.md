@@ -2,8 +2,9 @@
 
 A lightweight, fully-typed Discord library for Node.js.
 
-> **Status: early development.** The foundation is in place; the REST, gateway and client
-> packages are being built out phase by phase. Not yet published to npm.
+> **Status: early development.** All four packages are built — typings, REST, gateway and
+> client — and the test suite runs green on Node 22.15, 24 and 25. Not yet published to npm,
+> and the gateway's protocol assumptions have not been checked against a live connection.
 
 Vestra is in the tradition of [Eris](https://github.com/abalabahaha/eris) and
 [Oceanic](https://github.com/OceanicJS/Oceanic) — close to the wire, low indirection, low
@@ -40,8 +41,11 @@ removes the last dependency the gateway would otherwise need.
 ```ts
 import { Client, GatewayIntentBits } from 'vestra'
 
+const token = process.env.DISCORD_TOKEN
+if (token === undefined) throw new Error('DISCORD_TOKEN is not set')
+
 const client = new Client({
-  token: process.env.TOKEN,
+  token,
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
