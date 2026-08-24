@@ -1526,10 +1526,19 @@ policy (§8-C8).
 and empty iterators, and sweeps 0. It is constructed once per disabled scope. Its whole reason to
 exist is that no handler and no structure should ever branch on whether a scope is enabled.
 
-A note for the benchmark file rather than the docs: three adapter implementations at a shared
-call site is polymorphic, not megamorphic, and a fourth (a user's) may cross V8's threshold. That
-is an assertion about V8, so per CLAUDE.md it stays out of any claim until
-`scripts/bench/cache-dispatch.ts` measures it (§8-D4).
+**Measured, and the prediction was off by one.** This section used to guess that three adapter
+implementations at the shared call site would stay polymorphic and "a fourth (a user's) may
+cross V8's threshold". `scripts/bench/adapter-shapes.ts` puts the cliff between **two and
+three**: one or two classes cost ~17ns per read through `CacheStore.get`, three or more cost
+~40ns, and it is flat from there to eight. So the cost is not gradual and it is not at four —
+it is a single step of **~2.2x**, paid the moment a third class exists.
+
+Core ships two adapters, `MemoryCacheAdapter` and `NullCacheAdapter`, and a client with some
+scopes disabled uses both. That puts the shipped configuration on the last fast step, and makes
+a user's first custom adapter the one that crosses. **This does not reopen ADR 1's
+pluggability decision** — 22ns on a cached read is nothing beside a ~140ns dispatch, and being
+unable to plug in a Redis adapter would cost far more than that. It is worth saying plainly
+rather than leaving as a guess (§8-D4).
 
 ---
 
@@ -2650,7 +2659,8 @@ built from the partial and `changes === null`, never a fabricated previous objec
 
 **Benchmarks**, under `scripts/bench/`, run on the CI floor: `structure-construction.ts`
 (hand-written versus generic on a realistic `MESSAGE_CREATE`), `cache-dispatch.ts` (adapter
-call-site shape count, per-entry memory), and `dispatch-overhead.ts` (the cost of the extra `raw`
+call-site shape count, per-entry memory — landed as `adapter-shapes.ts` and `cache-memory.ts`),
+and `dispatch-overhead.ts` (the cost of the extra `raw`
 emit, and of serial mode's microtask). Nothing from §0.3's scratch bench may be quoted in
 user-facing documentation until the first of these exists.
 
@@ -2961,8 +2971,31 @@ each item is cross-referenced from the rule that depends on it.
   **Grouping is not free.** `group()` support costs ~72 B per entry, which is a fifth of a
   cached role. Worth knowing before a scope is given a `groupKeyOf` it does not need.
 
-- **D4. Adapter call-site shape count.** Three built-in implementations plus a user's is an assertion
-  about V8 inline caches with no measurement behind it.
+- **D4. Adapter call-site shape count. MEASURED, and the guess was off by one.**
+  `scripts/bench/adapter-shapes.ts`, Node 25.8.1, best of five passes, eight stores in every
+  case so only the class count varies:
+
+  | adapter classes sharing the call site | ns per read |
+  | ------------------------------------- | ----------- |
+  | 1                                     | ~17         |
+  | 2                                     | ~17         |
+  | 3                                     | **~40**     |
+  | 4, 5, 6, 8                            | ~40, flat   |
+
+  §4.11 predicted the threshold at four. It is at **three**, and it is a step rather than a
+  slope: ~2.2x, paid once, and no worse at eight than at three. Core ships two adapters, so the
+  shipped configuration sits on the last fast step and a user's first custom adapter is the one
+  that crosses.
+
+  Two confounds had to be removed before the number meant anything, and both made the effect
+  look larger than it is. Selecting a store with `index % shapes` made one and two classes look
+  fast because the modulo was cheaper, not the call. Building one store per class made the
+  three-class case walk three times as many `Map`s — a cache-locality difference wearing an
+  inline-cache costume. The benchmark now uses a precomputed rotation and a fixed eight stores.
+
+  This does not reopen ADR 1: 22ns on a cached read against a ~140ns dispatch is not a reason
+  to make the cache unpluggable.
+
 - **D5. The extra `raw` emit costs one additional `emit` per event on the hot path** whether or not
   anyone listens, and serial mode costs a microtask per dispatch. Per CLAUDE.md both needed a
   benchmark before any claim, including the claim that they are free. **Both halves are now
