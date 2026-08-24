@@ -37,8 +37,10 @@ export const UnhandledEvents: Readonly<Partial<Record<GatewayDispatchEvents, str
     'Mechanic. `MemberChunker` consumes these to resolve `client.fetchMembers()`. Routing them ' +
     'through a handler would let the opt-out list break member fetching.',
   RATE_LIMITED:
-    'Mechanic. A gateway-level signal about the connection rather than an event about Discord, ' +
-    'and the transport already reports it.',
+    'Mechanic. `ShardBridge` routes it to `MemberChunker.handleRateLimited`, which fails the ' +
+    'member request it names and holds that guild off until the retry window passes. A signal ' +
+    'about the connection rather than an event about Discord, and routing it through a handler ' +
+    'would let the opt-out list turn a rate-limited member fetch back into a silent hang.',
 
   // --- No structure yet: each becomes a handler when its entity is modelled. ---
   ENTITLEMENT_CREATE: 'No structure. Entitlement is not modelled.',

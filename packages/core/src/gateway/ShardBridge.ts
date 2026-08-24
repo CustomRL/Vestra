@@ -248,6 +248,15 @@ export class ShardBridge {
       case 'GUILD_MEMBERS_CHUNK':
         this.#chunker.handleChunk(payload.d)
         break
+      case 'RATE_LIMITED':
+        // Discord answers a rate-limited `REQUEST_GUILD_MEMBERS` with this rather than with
+        // chunks, and it carries the nonce. Unrouted, the request it names simply stopped
+        // existing: the caller waited out the full sixty-second timeout and was then told the
+        // request "may have been silently dropped, or the GuildMembers intent may be missing"
+        // — a guess, when the server had said exactly what happened. The per-guild gate also
+        // went unset, so the next attempt walked into the same limit.
+        this.#chunker.handleRateLimited(payload.d)
+        break
       default:
         break
     }
