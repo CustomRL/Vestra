@@ -150,8 +150,16 @@ proves it is reached.** Three of the six were "exported, documented, unit-tested
 nobody" — a shape this project has now hit four times, counting `GuildReadyTracker` and
 `MemberChunker` in Phase 3.
 
-Worth a lint rule or a test that walks the public surface for exports nothing constructs. Not
-built; recorded as the obvious next guard.
+**Built, as `tests/reachability.test.ts`.** The broad version of the rule does not work:
+"every public method is called somewhere in `src`" flags fifteen things that are simply
+consumer API — `guild.iconUrl()`, `client.setPresence()`, every REST route — and a rule with
+fifteen standing exceptions is one nobody trusts.
+
+Restricted to **classes one package constructs from another** it needs no exceptions at all.
+Four qualify today (`MemberChunker`, `GuildReadyTracker`, `ShardManager`, `REST`), every method
+of each is reached, and those classes exist precisely to be driven from above — so a method of
+one that nothing calls is either dead or unwired, and both deserve a failing test. Unwiring
+`handleRateLimited` again fails it by name.
 
 ---
 
