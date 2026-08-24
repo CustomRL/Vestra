@@ -3014,10 +3014,28 @@ each item is cross-referenced from the rule that depends on it.
   microbenchmark makes a pass slower and none makes it faster, and a single-pass mean gave the
   route cases a 133–246ns spread that buried a 10ns difference entirely.
 
-- **D6. Whether the single-hidden-class property survives contact with reality.** All the shape
-  probes used two or three payload variants. A real bot sees dozens of `MESSAGE_UPDATE` subsets. The
-  claim follows from the mechanism and held for every variant tried, but it has not been tested
-  against captured live traffic — worth doing with the same corpus §7.11 proposes.
+- **D6. Whether the single-hidden-class property survives contact with reality. HALF CLOSED, and
+  it is now asserted rather than argued.** The property was argued from how V8 works and probed
+  by hand against two or three payload variants — and never asserted anywhere, so nothing
+  stopped a future contributor from adding one `if (data.x !== undefined)` to a constructor and
+  silently undoing the reason forty structures are hand-written.
+
+  `packages/core/test/hidden-class.test.ts` puts it to V8 directly with `%HaveSameMap`, out of
+  process because the native needs `--allow-natives-syntax` and the test runner does not pass
+  it. **HC1** builds a `Message` from thirty distinct payload subsets and asserts one map and
+  one key set across all of them; **HC2** asserts `patch()` does not split it; **HC3** is the
+  control, a deliberately conditional constructor that must produce many — without it the first
+  two could be passing because the technique does not work.
+
+  Mutation-proven both ways, and one of the mutations is worth recording because it _failed_ to
+  break anything: making the constructor skip `webhook_id` when absent changes nothing, because
+  that field is absent from every variant and the shape stays uniform. Skipping `content`, which
+  some variants carry and others do not, fails HC1 immediately. The property being guarded is
+  divergence, not omission.
+
+  **Still open:** captured live traffic. Thirty synthetic subsets from one field list is a
+  stronger probe than the two or three that came before it and is still not a real bot's
+  `MESSAGE_UPDATE` stream — the corpus §7.11 proposes.
 
 ---
 
