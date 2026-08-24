@@ -1256,8 +1256,11 @@ deviation below; if it goes the other way, one line in `DefaultCacheOptions` cha
 computation is the single most common thing a bot does, and it is impossible offline without
 roles. Roles are bounded (250 per guild, a hard Discord limit) and arrive inside the guild
 payload anyway, so the marginal cost over a guild is bounded arithmetic rather than open-ended
-growth — an unmeasured estimate of 2,500 guilds x ~40 roles x ~200 B, roughly 20 MB, which per
-CLAUDE.md must be measured before it appears in user-facing docs. The alternative, considered
+growth. **Measured** by `scripts/bench/cache-memory.ts`: **374 B per role** in a grouped store,
+so 2,500 guilds x 40 roles is **35.7 MB** — the estimate of ~200 B and "roughly 20 MB" was
+1.8x low, and a floor at that, since the fixture's role names are short and none carries an
+`icon`, a `unicode_emoji` or `tags`. The conclusion survives the correction: 36 MB is bounded
+and modest, and the alternative is a bot that cannot compute permissions offline. The alternative, considered
 and rejected, was nesting `Map<Snowflake, Role>` inside the cached guild record: literally
 ADR-4-compliant, since roles ride along with a thing ADR 4 already caches, but it makes roles
 invisible to a third-party adapter, unserialisable by the codec, and exempt from policy and
@@ -1474,7 +1477,12 @@ overhead. The two-map form makes the default path one hash lookup and zero alloc
 cost of two lookups on TTL'd scopes and an invariant (`#expiry.size === #values.size`) that has
 to be tested rather than made impossible. That invariant is contained in one class where every
 mutation touches both maps in the same method, so it is a property test (§7 **CE7**), not an
-architectural risk. The allocation argument behind this choice is **unmeasured** (§8-D3).
+architectural risk.
+
+The allocation argument behind this choice is **measured**: `scripts/bench/cache-memory.ts`
+puts a wrapper-record map at **156.5 B per entry** against **116.7 B** for the two-map form
+with no TTL configured — **34% more**, paid on the default configuration where the wrapper's
+second field is always `undefined` (§8-D3).
 
 **Eviction order is write-recency: insertion order, refreshed on write, never on read.**
 
@@ -2929,10 +2937,30 @@ each item is cross-referenced from the rule that depends on it.
   What must not be repeated is the framing: eager conversion is **not** faster, and nothing in
   the repository should say it is.
 
-- **D3. Per-entry memory is unmeasured throughout**: the two-map versus wrapper-record choice, the
-  ~20 MB roles estimate, index `Set` overhead, composite-key string allocation. Per CLAUDE.md none
-  may appear in user-facing docs until `scripts/bench/` measures them, and the two-map decision in
-  particular rests on an allocation argument that has not been benchmarked.
+- **D3. Per-entry memory. MEASURED.** `scripts/bench/cache-memory.ts`, Node 25.8.1, forced
+  collection either side of each figure — it refuses to run without `--expose-gc` rather than
+  reporting whatever garbage had not been swept.
+
+  |                                     | bytes per entry        |
+  | ----------------------------------- | ---------------------- |
+  | two maps, expiry map unbuilt        | **116.7**              |
+  | one map of wrapper records          | **156.5**, 34% more    |
+  | `Role` in a grouped `CacheStore`    | **374.3**              |
+  | the same store without `groupKeyOf` | **302.1**              |
+  | the secondary index, by difference  | **~72**, 19% of a role |
+  | `guildUserKey`, held                | **~104**               |
+
+  **The two-map decision is confirmed**: the wrapper's second field is `undefined` on the
+  default configuration and costs 40 B per entry for the privilege.
+
+  **The roles estimate was 1.8x low.** §4.9 said ~200 B per role and "roughly 20 MB" for 2,500
+  guilds; it is 374 B and **35.7 MB**, and that is a floor — the fixture's names are short and
+  no role carries an `icon`, a `unicode_emoji` or `tags`. §4.9 now carries the measured figure.
+  The deviation still stands on it.
+
+  **Grouping is not free.** `group()` support costs ~72 B per entry, which is a fifth of a
+  cached role. Worth knowing before a scope is given a `groupKeyOf` it does not need.
+
 - **D4. Adapter call-site shape count.** Three built-in implementations plus a user's is an assertion
   about V8 inline caches with no measurement behind it.
 - **D5. The extra `raw` emit costs one additional `emit` per event on the hot path** whether or not
