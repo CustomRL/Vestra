@@ -110,6 +110,9 @@ export const GatewayDispatchEvents = {
   MessagePollVoteAdd: 'MESSAGE_POLL_VOTE_ADD',
   MessagePollVoteRemove: 'MESSAGE_POLL_VOTE_REMOVE',
 
+  // Rate limits
+  RateLimited: 'RATE_LIMITED',
+
   // Presence and typing
   PresenceUpdate: 'PRESENCE_UPDATE',
   TypingStart: 'TYPING_START',

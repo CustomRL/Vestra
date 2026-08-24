@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { ChannelType, type APIChannel, type APIGuildMember } from '@vestra/types'
+import {
+  ChannelType,
+  GatewayOpcodes,
+  type APIChannel,
+  type APIGuildMember,
+  type GatewayDispatchPayload,
+} from '@vestra/types'
 
 /**
  * `APIChannel` is a discriminated union on `type`. That is the single most valuable
@@ -118,5 +124,71 @@ describe('APIGuildMember', () => {
     }
 
     assert.equal(member.user, undefined)
+  })
+})
+
+/**
+ * Reaches into `d` after checking `t`, which only compiles if the two are correlated.
+ *
+ * @remarks
+ * `GatewayDispatchPayload` is the type every consumer of the `dispatch` event receives, so
+ * this property is the difference between using the typings and casting past them.
+ *
+ * It is worth pinning because the failure is silent and was real: as a single interface
+ * parameterised by the event name, `t` narrowed and `d` did not. Worse, `d` did not even
+ * resolve to the union of every event's data — an event missing from
+ * `GatewayDispatchEventMap` takes the `unknown` branch of `GatewayDispatchData`, and
+ * `unknown` absorbs every other member of a union, so `d` was exactly `unknown`.
+ *
+ * Taken across a function boundary rather than on a literal, so TypeScript cannot shortcut
+ * the narrowing.
+ */
+function describeDispatch(payload: GatewayDispatchPayload): string {
+  switch (payload.t) {
+    case 'MESSAGE_CREATE':
+      // `content` exists on no other event's data.
+      return `message:${payload.d.content}`
+    case 'THREAD_MEMBERS_UPDATE':
+      return `thread:${String(payload.d.member_count)}`
+    case 'VOICE_SERVER_UPDATE':
+      // Nullable on purpose: null means the voice server is being reallocated.
+      return `voice:${payload.d.endpoint ?? 'reallocating'}`
+    case 'CHANNEL_PINS_UPDATE':
+      // Optional *and* nullable, which are different things here.
+      return `pins:${payload.d.last_pin_timestamp ?? 'none'}`
+    default:
+      return payload.t
+  }
+}
+
+describe('GatewayDispatchPayload narrowing', () => {
+  it('correlates the event name with its payload data', () => {
+    const message = describeDispatch({
+      op: GatewayOpcodes.Dispatch,
+      t: 'MESSAGE_CREATE',
+      s: 1,
+      d: { content: 'hello' } as never,
+    })
+    assert.equal(message, 'message:hello')
+  })
+
+  it('narrows an event whose data is nullable', () => {
+    const reallocating = describeDispatch({
+      op: GatewayOpcodes.Dispatch,
+      t: 'VOICE_SERVER_UPDATE',
+      s: 2,
+      d: { token: 't', guild_id: '1', endpoint: null },
+    })
+    assert.equal(reallocating, 'voice:reallocating')
+  })
+
+  it('keeps the event name available on the branches it does not model', () => {
+    const other = describeDispatch({
+      op: GatewayOpcodes.Dispatch,
+      t: 'USER_UPDATE',
+      s: 3,
+      d: { id: '1' } as never,
+    })
+    assert.equal(other, 'USER_UPDATE')
   })
 })

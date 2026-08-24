@@ -151,3 +151,22 @@ export const GuildMemberFlags = {
  * A guild member flag.
  */
 export type GuildMemberFlags = (typeof GuildMemberFlags)[keyof typeof GuildMemberFlags]
+
+/**
+ * What a voice-channel invite points at.
+ *
+ * @remarks
+ * Only ever present on invites to a voice channel, and there is no `0`: Discord numbers
+ * these from 1, so a falsy check on the field is wrong for `Stream`.
+ */
+export const InviteTargetType = {
+  /** The invite opens a user's ongoing stream in the channel. */
+  Stream: 1,
+  /** The invite launches an embedded application in the channel. */
+  EmbeddedApplication: 2,
+} as const
+
+/**
+ * An invite target type.
+ */
+export type InviteTargetType = (typeof InviteTargetType)[keyof typeof InviteTargetType]
