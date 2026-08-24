@@ -18,6 +18,7 @@ import { handlers } from './events/registry.js'
 import { upsertUser } from './events/upsert.js'
 import type { EventContext } from './events/EventHandler.js'
 import { isConnected, ShardBridge } from './gateway/ShardBridge.js'
+import type { StructureClient } from './structures/capabilities.js'
 import type { ClientUser } from './structures/ClientUser.js'
 import { GuildMember } from './structures/GuildMember.js'
 
@@ -42,7 +43,7 @@ import { GuildMember } from './structures/GuildMember.js'
  * await client.login()
  * ```
  */
-export class Client extends EventEmitter<ClientEvents> {
+export class Client extends EventEmitter<ClientEvents<StructureClient>> {
   /** Cached entities, per scope. */
   readonly cache: CacheRegistry
   /** The REST client. */
@@ -390,7 +391,11 @@ export class Client extends EventEmitter<ClientEvents> {
       const user = entry.user
       if (user === undefined) continue
       upsertUser(this.#context, user)
-      members.push(this.cache.members.add(new GuildMember(entry, guildId, user.id, this)))
+      // The context, not `this`. It is what every handler hands a structure, and it is the
+      // honest answer: a structure holds something with `cache` and `rest`, not a whole client
+      // it could call `destroy()` on. Passing `this` here also made these members the one kind
+      // the cache would not accept, since the store is keyed to what the handlers produce.
+      members.push(this.cache.members.add(new GuildMember(entry, guildId, user.id, this.#context)))
     }
     return members
   }
@@ -508,7 +513,14 @@ export class Client extends EventEmitter<ClientEvents> {
 
     if (this.#announcedReady) return
     this.#announcedReady = true
-    this.emit('ready', user)
+
+    // Through the same seam a handler's emit takes. The handler pipeline is parameterised
+    // `unknown` and the public event surface is parameterised {@link StructureClient} — the
+    // same objects under two labels, since a structure's client is the context and the context
+    // carries `cache` and `rest`. `CacheRegistry` is invariant in that parameter (`add(value:
+    // V): V` puts `V` in both positions), so the two labels cannot be reconciled by the type
+    // system and the seam is where they meet.
+    this.#dispatchEmit('ready', [user])
   }
 
   #onShardError(error: Error, shardId: number): void {
