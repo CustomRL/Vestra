@@ -548,21 +548,37 @@ export class Client extends EventEmitter<ClientEvents> {
         reject(error)
       }
 
+      // **Destroy has to be able to end this wait.** Only `ready` and a fatal gateway error
+      // settled it, and neither happens when a client is destroyed mid-handshake — after
+      // `hello`, before `ready`, which is precisely where a bot that gives up on a slow
+      // connection calls `destroy()`. `login()` then never returned, and it is the promise on
+      // the first line of every bot.
+      const fail = (error: Error): void => {
+        detach()
+        reject(error)
+      }
+
       detach = (): void => {
         this.off('ready', onReady)
         this.off('error', onError)
+        this.#readyWaiters.delete(fail)
       }
 
+      this.#readyWaiters.add(fail)
       this.once('ready', onReady)
       this.on('error', onError)
     })
+
+    // Marked handled from the start. `destroy()` can reject this while `login()` is still
+    // inside `shards.connect()` and has not awaited it yet, which Node would report as an
+    // unhandled rejection and, by default, exit on. Attaching a handler does not swallow it:
+    // `login()`'s own `await` still sees the rejection.
+    promise.catch(() => undefined)
 
     return {
       promise,
       cancel: () => {
         detach()
-        // Handled, so an orphan cannot surface later as an unhandled rejection.
-        promise.catch(() => undefined)
       },
     }
   }
