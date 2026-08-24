@@ -1188,9 +1188,9 @@ export class DispatchQueue {
   `routeDispatch` directly. ~~The serial path costs a microtask per dispatch even with no async
   listeners~~ — **wrong, and measured.** The batch a dispatch's listeners return is empty when
   none of them is `async`, the `await` is skipped, and the drain runs to completion inside
-  `push`. `scripts/bench/dispatch-queue.ts` puts the real cost at about **130ns per dispatch**
-  over the direct path with a synchronous listener and about **450ns** with an `async` one, on
-  Node 25. The benchmark also found the queue's first implementation to be quadratic in backlog
+  `push`. `scripts/bench/dispatch-queue.ts` puts the real cost at about **65ns per dispatch**
+  over the direct path with a synchronous listener and about **300ns** with an `async` one, on
+  Node 25, taking the best of five passes. The benchmark also found the queue's first implementation to be quadratic in backlog
   depth — `Array.prototype.shift` at 40µs per dispatch on a 50,000-deep queue — which a moving
   head index fixed, and showed `Promise.allSettled` costing 2.5× a bare `await` for the
   overwhelmingly common single-listener case.
@@ -2882,9 +2882,23 @@ each item is cross-referenced from the rule that depends on it.
 - **D4. Adapter call-site shape count.** Three built-in implementations plus a user's is an assertion
   about V8 inline caches with no measurement behind it.
 - **D5. The extra `raw` emit costs one additional `emit` per event on the hot path** whether or not
-  anyone listens, and serial mode costs a microtask per dispatch. Per CLAUDE.md both need a benchmark
-  before any claim, including the claim that they are free. **The serial-mode half is done and the
-  claim was wrong** — `scripts/bench/dispatch-queue.ts`, §4.8. The `raw` half is still open.
+  anyone listens, and serial mode costs a microtask per dispatch. Per CLAUDE.md both needed a
+  benchmark before any claim, including the claim that they are free. **Both halves are now
+  measured.**
+
+  `scripts/bench/raw-emit.ts`: the unwatched emit is **~10ns**, and **~13ns** with a listener
+  attached, against a **~140ns** `CHANNEL_UPDATE` dispatch. Routing with the emit and routing
+  with it suppressed differ by **±0.7%**, which is inside the run-to-run spread of the route
+  measurement itself — so the honest statement is not "it is free" but "it is too small for this
+  benchmark to separate from noise, and it is ~7% of a dispatch when measured on its own".
+
+  `scripts/bench/dispatch-queue.ts`: **the serial-mode claim was wrong** — with no async
+  listeners the batch is empty and the path never yields. §4.8 carries the figures.
+
+  Both take the best of five passes rather than a mean. Every source of error in a
+  microbenchmark makes a pass slower and none makes it faster, and a single-pass mean gave the
+  route cases a 133–246ns spread that buried a 10ns difference entirely.
+
 - **D6. Whether the single-hidden-class property survives contact with reality.** All the shape
   probes used two or three payload variants. A real bot sees dozens of `MESSAGE_UPDATE` subsets. The
   claim follows from the mechanism and held for every variant tried, but it has not been tested

@@ -78,8 +78,8 @@ export interface DispatchQueueOptions {
  * **With no async listeners it does not yield at all.** The batch is empty, the `await` is
  * skipped, and the drain runs to completion inside `push`, so §4.8's claim that the serial
  * path "costs a microtask per dispatch even with no async listeners" is not true of this
- * implementation. `scripts/bench/dispatch-queue.ts` measures what it does cost: about 130ns
- * per dispatch over the direct path with a synchronous listener, and about 450ns with an
+ * implementation. `scripts/bench/dispatch-queue.ts` measures what it does cost: about **65ns**
+ * per dispatch over the direct path with a synchronous listener, and about **300ns** with an
  * `async` one, on Node 25 on the machine that ran it. Both are noise beside a socket read.
  */
 export class DispatchQueue {
@@ -239,7 +239,8 @@ export class DispatchQueue {
     // One listener is the common case by a wide margin, and `allSettled` is not cheap for
     // it: it allocates a wrapper promise and a result object per entry on top of the one
     // promise that actually needed waiting on. `scripts/bench/dispatch-queue.ts` measured
-    // 1,159ns per dispatch through `allSettled` against 450ns for a bare await.
+    // roughly 2.5x: 1,159ns per dispatch through `allSettled` against 450ns for a bare await,
+    // on the single-pass timing in use when the fast path was added.
     const only = batch.length === 1 ? batch[0] : undefined
     if (only !== undefined) {
       try {

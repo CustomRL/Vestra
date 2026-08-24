@@ -67,18 +67,32 @@ function seam(work: () => unknown): () => void {
   }
 }
 
-/** Runs one case and returns nanoseconds per dispatch. */
+/**
+ * Runs one case and returns the best nanoseconds-per-dispatch of several passes.
+ *
+ * @param name - What to print.
+ * @param run - The case, which must push `iterations` dispatches.
+ * @returns The fastest pass, per dispatch.
+ *
+ * @remarks
+ * The minimum rather than the mean. Every source of error here — a GC pause, the scheduler,
+ * another process — makes a pass slower and none makes it faster, so the fastest pass is the
+ * one least contaminated by things this is not trying to measure.
+ */
 async function measure(name: string, run: () => Promise<void> | void): Promise<number> {
-  // One untimed pass so the shapes are warm and the JIT has seen the loop.
-  await run()
+  const passes = 5
+  let best = Number.POSITIVE_INFINITY
 
-  const started = process.hrtime.bigint()
+  // One untimed pass first, so the shapes are warm and the JIT has seen the loop.
   await run()
-  const elapsed = Number(process.hrtime.bigint() - started)
+  for (let pass = 0; pass < passes; pass += 1) {
+    const started = process.hrtime.bigint()
+    await run()
+    best = Math.min(best, Number(process.hrtime.bigint() - started) / iterations)
+  }
 
-  const perDispatch = elapsed / iterations
-  console.log(`${name.padEnd(28)} ${perDispatch.toFixed(1).padStart(8)} ns/dispatch`)
-  return perDispatch
+  console.log(`${name.padEnd(28)} ${best.toFixed(1).padStart(8)} ns/dispatch`)
+  return best
 }
 
 /** Builds a queue whose route step is the given emit seam. */
