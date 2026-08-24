@@ -68,6 +68,8 @@ export class Client extends EventEmitter<ClientEvents> {
   readonly #bridges = new Map<number, ShardBridge>()
   readonly #sweeper: CacheSweeper
   readonly #readyShards = new Set<number>()
+  /** Callers awaiting {@link Client.whenReady}, so `destroy()` can fail them rather than hang. */
+  readonly #readyWaiters = new Set<(error: Error) => void>()
   #announcedReady = false
   #destroyed = false
 
@@ -244,11 +246,31 @@ export class Client extends EventEmitter<ClientEvents> {
    * finished — that is `shardGuildsReady`.
    */
   async whenReady(): Promise<void> {
+    this.#assertUsable()
     if (this.#allShardsReady()) return
-    await new Promise<void>((resolve) => {
-      this.shards.once('allReady', () => {
+
+    await new Promise<void>((resolve, reject) => {
+      // **Registered so `destroy()` can settle it.** Waiting on `allReady` alone meant a
+      // client destroyed while somebody awaited readiness left that promise pending for the
+      // life of the process, holding its closure and its listener — and a shutdown path
+      // written as `await Promise.all([client.whenReady(), client.destroy()])` simply
+      // deadlocked. The listener is removed on either outcome, not just on success, so a
+      // retry loop cannot stack one per attempt.
+      const settle = (): void => {
+        this.#readyWaiters.delete(fail)
+        this.shards.off('allReady', succeed)
+      }
+      const succeed = (): void => {
+        settle()
         resolve()
-      })
+      }
+      const fail = (error: Error): void => {
+        settle()
+        reject(error)
+      }
+
+      this.#readyWaiters.add(fail)
+      this.shards.once('allReady', succeed)
     })
   }
 
@@ -291,6 +313,12 @@ export class Client extends EventEmitter<ClientEvents> {
     )
     for (const bridge of this.#bridges.values()) bridge.destroy(reason)
     this.#bridges.clear()
+
+    // Before the shard manager goes, because these are waiting on an event it will now never
+    // emit. Copied first: each rejection removes itself from the set as it settles.
+    for (const fail of [...this.#readyWaiters]) fail(reason)
+    this.#readyWaiters.clear()
+
     this.#readyShards.clear()
     this.#announcedReady = false
 
