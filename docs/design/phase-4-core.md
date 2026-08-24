@@ -68,19 +68,19 @@ today. **Assumed** means it follows from something verified but was not itself c
 
 The floor is **22.15.0** and none of these were re-run there. See §8-B1.
 
-| Claim                                                                                           | Result                                                                                                                                                                                                                                                                                                        |
-| ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A listener throw propagates **synchronously** out of `emitter.emit()`                           | Confirmed                                                                                                                                                                                                                                                                                                     |
-| `emit('error', err)` with no `error` listener                                                   | Throws `err` itself, synchronously                                                                                                                                                                                                                                                                            |
-| A throw escaping a `zlib` write callback                                                        | Becomes an `uncaughtException` — process death by default. Whether the inflate context also corrupts was not isolated                                                                                                                                                                                         |
-| A generic `for (const k in d) this[camel(k)] = d[k]` transform produces dictionary-mode objects | **Refuted.** Instances stay in fast-properties mode and share a map _when the source key order is identical_. The folk justification for banning a generic transform is the wrong argument                                                                                                                    |
-| A generic transform over _differently shaped_ payloads                                          | Divergent: a full `MESSAGE_CREATE` and a subset `MESSAGE_UPDATE` give `%HaveSameMap === false`, and two different subsets differ from each other. A fixed-order constructor gives `true` for all three, because absent fields are assigned `undefined` rather than skipped                                    |
-| Conditional field assignment in a constructor                                                   | Produces divergent hidden classes. CONTRIBUTING's claim holds                                                                                                                                                                                                                                                 |
-| Conditional assignment inside `patch()` **after** a full constructor                            | Safe. Writing an already-present property is a store to a known offset, not a map transition: same-map and fast-properties across one-field and three-field patches                                                                                                                                           |
-| Cost of a generic transform, 17 fields, no nesting                                              | hand-written 40.8M ops/s; generic shallow 1.12M; generic with a precomputed key map and zero string work 1.60M. **~25–36x**, and the precomputed variant isolates the cause to keyed stores. **Scratch bench, not committed** — §8-D1                                                                         |
-| Holding the client in a `#client` private field behind a public prototype getter                | `JSON.stringify` returns `{"id":"1"}` and does not throw on a cyclic client; `Object.keys` and `util.inspect` omit it; instances stay same-map. A plain `this.client = client` makes `JSON.stringify` throw                                                                                                   |
-| `Object.create(Proto)`-based cloning                                                            | **Broken twice over.** With `#client` it throws `TypeError` on the first `this.client` read, because private fields are installed only by the constructor. With a `defineProperty` client instead, the clone's map still differs from the constructor's even after assigning every field in constructor order |
-| `%HaveSameMap` without `--allow-natives-syntax`                                                 | `SyntaxError` at parse time — but a dynamic `import()` catches it, so a shape suite can skip itself without spawning a child process                                                                                                                                                                          |
+| Claim                                                                                           | Result                                                                                                                                                                                                                                                                                                           |
+| ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A listener throw propagates **synchronously** out of `emitter.emit()`                           | Confirmed                                                                                                                                                                                                                                                                                                        |
+| `emit('error', err)` with no `error` listener                                                   | Throws `err` itself, synchronously                                                                                                                                                                                                                                                                               |
+| A throw escaping a `zlib` write callback                                                        | Becomes an `uncaughtException` — process death by default. Whether the inflate context also corrupts was not isolated                                                                                                                                                                                            |
+| A generic `for (const k in d) this[camel(k)] = d[k]` transform produces dictionary-mode objects | **Refuted.** Instances stay in fast-properties mode and share a map _when the source key order is identical_. The folk justification for banning a generic transform is the wrong argument                                                                                                                       |
+| A generic transform over _differently shaped_ payloads                                          | Divergent: a full `MESSAGE_CREATE` and a subset `MESSAGE_UPDATE` give `%HaveSameMap === false`, and two different subsets differ from each other. A fixed-order constructor gives `true` for all three, because absent fields are assigned `undefined` rather than skipped                                       |
+| Conditional field assignment in a constructor                                                   | Produces divergent hidden classes. CONTRIBUTING's claim holds                                                                                                                                                                                                                                                    |
+| Conditional assignment inside `patch()` **after** a full constructor                            | Safe. Writing an already-present property is a store to a known offset, not a map transition: same-map and fast-properties across one-field and three-field patches                                                                                                                                              |
+| Cost of a generic transform, 17 fields, no nesting                                              | Committed as `scripts/bench/structure-construction.ts`. Hand-written 95ns; naive generic **~26x**; generic with a precomputed key map and zero string work **~5.6x**. The scratch bench's magnitude held at the low end and its _attribution_ did not: most of the 26x was string work, not keyed stores — §8-D1 |
+| Holding the client in a `#client` private field behind a public prototype getter                | `JSON.stringify` returns `{"id":"1"}` and does not throw on a cyclic client; `Object.keys` and `util.inspect` omit it; instances stay same-map. A plain `this.client = client` makes `JSON.stringify` throw                                                                                                      |
+| `Object.create(Proto)`-based cloning                                                            | **Broken twice over.** With `#client` it throws `TypeError` on the first `this.client` read, because private fields are installed only by the constructor. With a `defineProperty` client instead, the clone's map still differs from the constructor's even after assigning every field in constructor order    |
+| `%HaveSameMap` without `--allow-natives-syntax`                                                 | `SyntaxError` at parse time — but a dynamic `import()` catches it, so a shape suite can skip itself without spawning a child process                                                                                                                                                                             |
 
 ### 0.4 What was not verified
 
@@ -310,8 +310,10 @@ constraint is: additive, and generated from the route classes rather than transc
 
 **No shared `patch.ts` helper.** An earlier layout put one in `util/`. Rejected for the same
 reason a generic snake-to-camel transform is rejected (§4.15): a shared helper writing
-`this[key] = value` is a keyed store that cannot be inline-cached to an offset, which is the
-measured 25–36x cost. Each structure's `patch` is hand-written to the same fixed-order rule.
+`this[key] = value` is a keyed store that cannot be inline-cached to an offset. Measured at
+**~5.6x** a hand-written constructor with every trace of string work removed — less than the
+26x a naive transform costs, and still not recoverable. Each structure's `patch` is
+hand-written to the same fixed-order rule.
 `Changes.ts` holds only the `Changes<T>` type and the lazy accumulator, which are data.
 
 **No `UncachedError`.** An earlier layout had one, "thrown only by explicitly-asserting
@@ -1756,10 +1758,23 @@ fast-properties mode and share a hidden class. Two arguments do hold:
    one map across all three payload shapes. This is the decisive argument and it is the _inverse_
    of the folk one: the generic transform is not inherently megamorphic, it is megamorphic
    precisely on the partial-payload case a Discord library hits constantly.
-2. **Cost, on the hot path.** ~25–36x at equal field count, and the precomputed-keymap variant —
-   which does no string work at all — was still ~25x slower, isolating the cause to keyed stores
-   that cannot be inline-cached to an offset. There is no version of the generic approach that
-   recovers this. **Scratch bench; not quotable until it lands under `scripts/bench/`** (§8-D1).
+
+   **Measured, and with a caveat the original probes missed.** A consumer reading one field off
+   generically-built objects costs **~2.2x** what the same read costs off hand-written ones —
+   but only past **four** payload variants. V8's inline caches stay fast while polymorphic, and
+   the first version of the committed benchmark used three variants and found the generic
+   transform _faster_ to read from. The argument is sound and it is specifically an argument
+   about **megamorphism**, not about polymorphism; a library that only ever saw three payload
+   shapes would not be able to make it.
+
+2. **Cost, on the hot path.** Measured in `scripts/bench/structure-construction.ts`: a naive
+   generic transform is **~26x** a hand-written constructor at equal field count, which lands at
+   the low end of the scratch bench's "~25–36x". Its _attribution_ was wrong. The
+   precomputed-keymap variant — which does no string work at all — was recorded as still ~25x
+   and is measured at **~5.6x**, so most of the original figure was the name conversion rather
+   than the keyed stores. Keyed stores that cannot be inline-cached to an offset still cost
+   ~5.6x and no version of the generic approach recovers that, so the conclusion stands on a
+   smaller number than the one that was quoted for it.
 
 **Rejected: build-time codegen of the constructors** from the `API*` interfaces. A real option,
 not a silly one — it would remove the boring half of the work and guarantee the naming rule. It
@@ -2864,17 +2879,56 @@ each item is cross-referenced from the rule that depends on it.
 
 ### D. Unresolved measurement
 
-- **D1. The 25–36x hand-written-versus-generic figure** is a scratch micro-benchmark on Node 25.8.1
-  with a synthetic 17-field payload, no nesting, and a loop V8 may optimise more aggressively than
-  real dispatch handling does. The _direction_ is not in doubt — the precomputed-keymap variant,
-  which does no string work at all, was still ~25x slower, isolating the cause to keyed stores. The
-  _magnitude_ is not yet a number this repo may publish. CONTRIBUTING is explicit: `scripts/bench/`
-  first.
-- **D2. Eager sub-structure conversion.** The retention argument for it is a mechanism, not a
-  measurement: lazy conversion pins the raw payload, which is real. But the cost of eagerly
-  allocating a `User` per message for bots that never read `message.author` was not measured, and it
-  is exactly the kind of per-dispatch allocation this library claims to avoid. Benchmark both before
-  the constructor pattern is copied across ten structures.
+- **D1. The 25–36x hand-written-versus-generic figure. MEASURED, and one half of it was wrong.**
+  `scripts/bench/structure-construction.ts`, Node 25.8.1, best of five passes, twelve payload
+  variants:
+
+  |                              | ns per object | against hand-written |
+  | ---------------------------- | ------------- | -------------------- |
+  | hand-written, fixed order    | ~95           | —                    |
+  | generic, camelCase per key   | ~2,500        | **~26x**             |
+  | generic, precomputed key map | ~550          | **~5.6x**            |
+
+  The magnitude held at the low end of "~25–36x". The **attribution did not**: the scratch bench
+  recorded the precomputed-keymap variant as "still ~25x slower, isolating the cause to keyed
+  stores", and it is 5.6x. Most of the original figure was the name conversion. Keyed stores are
+  still ~5.6x and still unrecoverable, so §4.15's conclusion stands — on a smaller number than
+  the one that was quoted for it.
+
+  The scratch bench also over-measured the hand-written side by letting it be optimised away. It
+  reported 40.8M ops/s (~24ns); with the result forced to escape, as a real structure does into a
+  cache, it is ~95ns.
+
+  **The decisive argument is confirmed with a caveat.** A consumer reading one field costs
+  **~2.2x** off generically-built objects — but only past four payload variants. The first
+  version of this benchmark used three and found the generic transform _faster_ to read from,
+  because V8 stays fast while polymorphic. §4.15's argument is specifically about
+  **megamorphism**, and it is now written that way.
+
+- **D2. Eager sub-structure conversion. MEASURED, and it is a memory decision rather than a speed
+  one.** Same benchmark:
+
+  |                                    |                                |
+  | ---------------------------------- | ------------------------------ |
+  | `new User` alone                   | ~35ns, **~38%** of a `Message` |
+  | eager `Message`, author never read | ~90ns                          |
+  | lazy `Message`, author never read  | ~10ns, so eager is **~9x**     |
+  | lazy `Message`, author read once   | ~40ns                          |
+  | retained, the payload alone        | 1,008 bytes                    |
+  | retained, eager `Message`          | **744 bytes**                  |
+  | retained, lazy `Message`           | **1,072 bytes**, **44%** more  |
+
+  So the concern was real and it points the other way from the conclusion: eager conversion does
+  cost ~9x per message for a bot that never touches `message.author`, and it is still right. The
+  eager structure retains **less than the payload it was built from**, because it drops the
+  fields it does not model — `components`, `sticker_items`, `referenced_message` and the rest —
+  while the lazy one pins all of them for as long as the message is cached. Under ADR 4, where
+  memory is the constraint that made caching opt-in at all, 44% per cached message is worth 80ns
+  of CPU that is not on the socket path.
+
+  What must not be repeated is the framing: eager conversion is **not** faster, and nothing in
+  the repository should say it is.
+
 - **D3. Per-entry memory is unmeasured throughout**: the two-map versus wrapper-record choice, the
   ~20 MB roles estimate, index `Set` overhead, composite-key string allocation. Per CLAUDE.md none
   may appear in user-facing docs until `scripts/bench/` measures them, and the two-map decision in
