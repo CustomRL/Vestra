@@ -81,7 +81,19 @@ export class Client extends EventEmitter<ClientEvents> {
     this.rest =
       options.rest instanceof REST
         ? options.rest
-        : new REST(options.rest ?? {}).setToken(this.options.token)
+        : new REST({
+            ...options.rest,
+            // **Hoisted, and it was not reaching here.** `userAgent` exists identically on
+            // `RESTOptions` and `ShardOptions`, which is the whole reason §4.2 lifts it to the
+            // client — and the client was fanning it out to the shards only. A user who set it
+            // once had set it for half their traffic, which is the silent half-fix hoisting
+            // exists to prevent, on a header Discord requires and may block traffic without.
+            //
+            // An explicitly nested one still wins, because it is the more specific statement.
+            userAgent: options.rest?.userAgent ?? this.options.userAgent,
+          }).setToken(this.options.token)
+
+    this.#warnOnVersionMismatch()
 
     this.cache = new CacheRegistry(this.options.cache)
     this.#context = {
@@ -111,6 +123,34 @@ export class Client extends EventEmitter<ClientEvents> {
     })
 
     this.#attachManager()
+  }
+
+  /**
+   * Says so when REST and the gateway are pointed at different API versions.
+   *
+   * @remarks
+   * The two versions are genuinely independent — §4.2 leaves them nested for that reason — so
+   * this cannot be an error. It is also almost always a mistake, and one that surfaces much
+   * later as a close code 4012 or a route that does not exist, neither of which mentions the
+   * other half of the configuration.
+   *
+   * `process.emitWarning` rather than a `debug` event, which is what the design document
+   * specified. There is no `debug` event on this client or on the shard, and inventing a
+   * public event to carry one sentence would be a larger commitment than the message is
+   * worth; Node's warning channel is on by default, suppressible, and exactly this.
+   */
+  #warnOnVersionMismatch(): void {
+    const gateway = this.options.gateway.version
+    if (gateway === undefined) return
+
+    const rest = this.rest.options.version
+    if (gateway === rest) return
+
+    process.emitWarning(
+      `Vestra is configured for API v${rest} over REST and v${gateway} over the gateway. ` +
+        'That is legal and almost never intended.',
+      'VestraVersionMismatch',
+    )
   }
 
   /**
