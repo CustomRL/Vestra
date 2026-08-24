@@ -79,6 +79,24 @@ export interface RESTOptions {
    * web request, where a ten-minute stall is worse than an error.
    */
   rateLimitTimeout?: number | null
+  /**
+   * Extra milliseconds to wait past every rate-limit reset before resuming.
+   *
+   * @remarks
+   * `x-ratelimit-reset-after` and `retry_after` are measured by Discord's edge at the
+   * instant it wrote the response. By the time a client has read them the window has
+   * already moved on, so a client that resumes at exactly the stated moment is left with
+   * nothing but that response's own transit time as slack — and a millisecond of jitter
+   * anywhere puts the retry back inside the window it was waiting out.
+   *
+   * A 429 earned that way is not free: it counts toward the invalid-request budget that
+   * ends in a Cloudflare ban on the IP, shared by every application behind it. Fifty
+   * milliseconds of throughput is a cheap premium against that.
+   *
+   * `0` disables it, which is only sensible against a server whose clock and latency you
+   * control — a test double, or a proxy that rewrites the headers.
+   */
+  rateLimitOffset?: number
   /** A `fetch` implementation, for testing or for routing through a proxy. */
   fetch?: typeof globalThis.fetch
 }
@@ -104,6 +122,7 @@ export const DefaultRESTOptions: ResolvedRESTOptions = {
   retries: 3,
   timeout: 15_000,
   rateLimitTimeout: null,
+  rateLimitOffset: 50,
   fetch: globalThis.fetch,
 }
 
