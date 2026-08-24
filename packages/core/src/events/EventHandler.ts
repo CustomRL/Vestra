@@ -14,9 +14,9 @@ import type { ClientEvents } from './ClientEvents.js'
  * something to catch in review. The client satisfies it structurally, so passing one costs
  * nothing — there is no wrapper object per dispatch.
  */
-export interface EventContext<Client = unknown> {
+export interface EventContext {
   /** Where structures go. */
-  readonly cache: CacheRegistry<Client>
+  readonly cache: CacheRegistry<EventContext>
   /** For handlers that must fetch something the cache cannot supply. */
   readonly rest: REST
   /**
@@ -26,7 +26,7 @@ export interface EventContext<Client = unknown> {
    * Writable, because READY and `USER_UPDATE` are the handlers that set it. That makes this
    * the one member a handler may assign, and it is deliberately the only one.
    */
-  user: ClientUser<Client> | undefined
+  user: ClientUser<EventContext> | undefined
   /**
    * Emits a client event.
    *
@@ -35,12 +35,12 @@ export interface EventContext<Client = unknown> {
    * TypeScript cannot prove a generic lookup into the event map is an array type, and the
    * conditional form that works around it produces a signature nothing can implement.
    */
-  emit: <Event extends keyof ClientEvents<Client>>(
+  emit: <Event extends keyof ClientEvents<EventContext>>(
     event: Event,
-    ...args: ClientEvents<Client>[Event] & unknown[]
+    ...args: ClientEvents<EventContext>[Event] & unknown[]
   ) => boolean
   /** How many listeners an event has, for handlers that can skip work when nobody is looking. */
-  listenerCount: (event: keyof ClientEvents<Client>) => number
+  listenerCount: (event: keyof ClientEvents<EventContext>) => number
 }
 
 /**
@@ -66,7 +66,7 @@ export interface DispatchShard {
  * @typeParam Event - The dispatch event name, which fixes the type of `data`.
  * @typeParam Client - The client type, threaded through to the structures.
  */
-export interface EventHandler<Event extends GatewayDispatchEvents, Client = unknown> {
+export interface EventHandler<Event extends GatewayDispatchEvents> {
   /**
    * The event name.
    *
@@ -95,11 +95,7 @@ export interface EventHandler<Event extends GatewayDispatchEvents, Client = unkn
    * one remembering to check a flag. Anything that genuinely needs to know reads
    * `client.on('raw')`.
    */
-  handle: (
-    context: EventContext<Client>,
-    data: GatewayDispatchData<Event>,
-    shard: DispatchShard,
-  ) => void
+  handle: (context: EventContext, data: GatewayDispatchData<Event>, shard: DispatchShard) => void
 }
 
 /**
@@ -112,8 +108,8 @@ export interface EventHandler<Event extends GatewayDispatchEvents, Client = unkn
  * assignable to one declared over the union — it would have to accept every event's data.
  * The union of handlers accepts each specific handler, which is what a registry holds.
  */
-export type AnyEventHandler<Client = unknown> = {
-  [Event in GatewayDispatchEvents]: EventHandler<Event, Client>
+export type AnyEventHandler = {
+  [Event in GatewayDispatchEvents]: EventHandler<Event>
 }[GatewayDispatchEvents]
 
 /**
@@ -128,9 +124,9 @@ export type AnyEventHandler<Client = unknown> = {
  * site. Written as a literal, every handler would need its type argument spelled out and
  * would silently accept the wrong one.
  */
-export function defineHandler<Event extends GatewayDispatchEvents, Client = unknown>(
+export function defineHandler<Event extends GatewayDispatchEvents>(
   event: Event,
-  handle: EventHandler<Event, Client>['handle'],
-): EventHandler<Event, Client> {
+  handle: EventHandler<Event>['handle'],
+): EventHandler<Event> {
   return { event, handle }
 }

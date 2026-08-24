@@ -28,7 +28,7 @@ import { guildUserKey } from './CacheKeys.js'
  * a user is not guild-scoped in the first place. Dropping them would be wrong rather than
  * merely wasteful.
  */
-export function evictGuild(cache: CacheRegistry, guildId: Snowflake): void {
+export function evictGuild<Client>(cache: CacheRegistry<Client>, guildId: Snowflake): void {
   cache.guilds.delete(guildId)
 
   for (const role of cache.roles.group(guildId)) cache.roles.delete(role.id)
@@ -71,7 +71,7 @@ export function evictGuild(cache: CacheRegistry, guildId: Snowflake): void {
  * A thread's own messages are handled by recursing, because a thread is a channel: its
  * messages are grouped under the thread's ID, not the parent's.
  */
-export function evictChannel(cache: CacheRegistry, channelId: Snowflake): void {
+export function evictChannel<Client>(cache: CacheRegistry<Client>, channelId: Snowflake): void {
   cache.channels.delete(channelId)
 
   for (const thread of cache.threads.group(channelId)) evictChannel(cache, thread.id)
@@ -96,7 +96,11 @@ export function evictChannel(cache: CacheRegistry, channelId: Snowflake): void {
  * The user itself is kept, for the same reason {@link evictGuild} keeps it: they may still be
  * in other guilds, and a user is not guild-scoped.
  */
-export function evictMember(cache: CacheRegistry, guildId: Snowflake, userId: Snowflake): void {
+export function evictMember<Client>(
+  cache: CacheRegistry<Client>,
+  guildId: Snowflake,
+  userId: Snowflake,
+): void {
   const key = guildUserKey(guildId, userId)
 
   cache.members.delete(key)

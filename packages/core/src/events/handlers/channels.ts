@@ -130,7 +130,7 @@ export const threadDelete = defineHandler('THREAD_DELETE', (client, data) => {
 export const threadListSync = defineHandler('THREAD_LIST_SYNC', (client, data) => {
   const scoped = data.channel_ids
   const arrived = new Set<Snowflake>()
-  const synced: ThreadChannel[] = []
+  const synced: ThreadChannel<EventContext>[] = []
 
   for (const payload of data.threads) {
     const channel = createChannel(payload, client, data.guild_id)
@@ -207,7 +207,7 @@ export function cacheChannel(
   client: EventContext,
   data: APIChannel,
   guildId?: Snowflake,
-): Channel | undefined {
+): Channel<EventContext> | undefined {
   const channel = createChannel(data, client, guildId)
   if (channel === undefined) return undefined
 
@@ -227,7 +227,7 @@ export function cacheChannel(
  * runs on the new value, its `ttl` stays measured from the original write, and its
  * write-recency stays at the original insertion — which is backwards for a bounded cache.
  */
-function recache(client: EventContext, channel: Channel): Channel {
+function recache(client: EventContext, channel: Channel<EventContext>): Channel<EventContext> {
   if (channel.isThread()) return client.cache.threads.add(channel)
   return client.cache.channels.add(channel)
 }
@@ -243,6 +243,6 @@ function recache(client: EventContext, channel: Channel): Channel {
  * Both are checked because the dispatch does not say which store to look in, and a thread
  * arriving as a `CHANNEL_UPDATE` is a real payload rather than a hypothetical.
  */
-function findChannel(client: EventContext, id: Snowflake): Channel | undefined {
+function findChannel(client: EventContext, id: Snowflake): Channel<EventContext> | undefined {
   return client.cache.channels.get(id) ?? client.cache.threads.get(id)
 }

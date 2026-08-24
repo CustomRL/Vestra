@@ -25,7 +25,7 @@ export {
   type AutoModerationActionMetadata,
   type AutoModerationTriggerMetadata,
 } from './AutoModerationRule.js'
-export type { CacheCapable, RestCapable, StructureClient } from './capabilities.js'
+export type { CacheCapable, RestCapable } from './capabilities.js'
 export {
   defaultAvatarUrl,
   guildBannerUrl,

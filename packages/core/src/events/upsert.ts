@@ -22,7 +22,7 @@ import type { EventContext } from './EventHandler.js'
  * Cheap when the scope is off, which is the default: `get` on a disabled store is a miss, so
  * this costs one lookup and a construction nothing retains.
  */
-export function upsertUser(client: EventContext, data: APIUser): User {
+export function upsertUser(client: EventContext, data: APIUser): User<EventContext> {
   const cached = client.cache.users.get(data.id)
   if (cached !== undefined) {
     cached.patch(data)

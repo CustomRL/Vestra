@@ -19,15 +19,15 @@ import type { AnyEventHandler, DispatchShard, EventContext } from './EventHandle
  * not meant to. They reach consumers through `raw` and nothing else, so adding a handler
  * later is purely additive rather than a change to an existing event's arguments.
  */
-export class EventRouter<Client = unknown> {
-  readonly #handlers = new Map<string, AnyEventHandler<Client>>()
-  readonly #context: EventContext<Client>
+export class EventRouter {
+  readonly #handlers = new Map<string, AnyEventHandler>()
+  readonly #context: EventContext
 
   /**
    * @param context - What handlers are allowed to touch.
    * @param handlers - The handlers to register.
    */
-  constructor(context: EventContext<Client>, handlers: readonly AnyEventHandler<Client>[] = []) {
+  constructor(context: EventContext, handlers: readonly AnyEventHandler[] = []) {
     this.#context = context
     for (const handler of handlers) this.register(handler)
   }
@@ -48,7 +48,7 @@ export class EventRouter<Client = unknown> {
    * always a mistake — a duplicated registry line, or a copy-paste that kept the wrong
    * event name — and the version that wins would otherwise depend on registration order.
    */
-  register(handler: AnyEventHandler<Client>): void {
+  register(handler: AnyEventHandler): void {
     if (this.#handlers.has(handler.event)) {
       throw new Error(`A handler for ${handler.event} is already registered.`)
     }
@@ -88,7 +88,7 @@ export class EventRouter<Client = unknown> {
       // correlation into the type. Narrowing `payload` and the handler together would need
       // a switch over all seventy-six events to prove what one lookup already guarantees.
       const handle = handler.handle as (
-        context: EventContext<Client>,
+        context: EventContext,
         data: unknown,
         shard: DispatchShard,
       ) => void
