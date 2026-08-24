@@ -141,6 +141,26 @@ construction. These rules apply _there_; elsewhere, prefer clarity.
 If you believe a change is faster, add a benchmark under `scripts/bench/` showing it.
 Assertions about V8 without measurements get asked for measurements.
 
+```bash
+pnpm bench scripts/bench/structure-construction.ts    # hand-written against a generic transform
+pnpm bench scripts/bench/cache-memory.ts              # bytes per cached entry
+pnpm bench scripts/bench/adapter-shapes.ts            # what a pluggable adapter costs at the call site
+pnpm bench scripts/bench/dispatch-queue.ts            # serial dispatch
+pnpm bench scripts/bench/raw-emit.ts                  # the extra `raw` emit
+```
+
+`pnpm bench` is `node` with `--expose-gc` and `--allow-natives-syntax`, because a heap figure
+taken without a forced collection is whatever garbage had not been swept and a shape claim
+checked without `%HaveSameMap` is an argument rather than a measurement. Take the best of
+several passes, not the mean: every source of error in a microbenchmark makes a pass slower and
+none makes it faster.
+
+Two mistakes cost more time than the benchmarks themselves, so they are worth naming. Let the
+result escape — a constructor whose object never leaves the loop is deleted outright, and one
+of these scripts timed a four-field allocation at 1.6ns before that was fixed. And hold
+everything but the variable constant: selecting between stores with `index % shapes` made one
+shape look twice as fast as three, which was the modulo, not the inline cache.
+
 ## Commits and pull requests
 
 - Imperative subject, roughly 50 characters. No Conventional Commits prefixes, no emoji.

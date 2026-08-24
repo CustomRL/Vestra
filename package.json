@@ -20,6 +20,7 @@
     "test:coverage": "node --experimental-strip-types --experimental-test-coverage --test --test-timeout=60000 \"tests/**/*.test.ts\" \"packages/*/test/**/*.test.ts\"",
     "check:packaging": "turbo run check:packaging",
     "check:drift": "node --experimental-strip-types scripts/check-api-drift.ts",
+    "bench": "node --experimental-strip-types --expose-gc --allow-natives-syntax",
     "changeset": "changeset",
     "release": "turbo run build && changeset publish"
   },
