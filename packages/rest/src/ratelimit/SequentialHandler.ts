@@ -210,13 +210,18 @@ export class SequentialHandler {
 
       if (response.status === 429) {
         const retryAfter = this.#retryAfterFrom(response)
+        // Retrying at exactly `retry_after` is how one 429 becomes two, and a 429 counts
+        // toward the invalid-request budget that ends in a Cloudflare ban.
+        const wait = retryAfter + options.rateLimitOffset
         const scope = response.headers.get('x-ratelimit-scope')
         const isGlobal = scope === 'global' || response.headers.get('x-ratelimit-global') === 'true'
 
-        if (isGlobal) global.blockUntil(Date.now() + retryAfter)
+        if (isGlobal) global.blockUntil(Date.now() + wait)
 
         this.#context.onRateLimit({
           bucket: this.bucketKey,
+          // Discord's own figure, not the padded one. A listener logging this is reporting
+          // what the server said; the padding is this client's business.
           timeToReset: retryAfter,
           limit: state.limit,
           method,
@@ -228,9 +233,22 @@ export class SequentialHandler {
         if (attempt >= options.retries) return response
         attempt += 1
 
-        this.#assertWithinTimeout(retryAfter, identity, method, isGlobal)
+        this.#assertWithinTimeout(wait, identity, method, isGlobal)
         await discard(response)
-        await sleep(retryAfter, undefined, signal ? { signal } : undefined)
+        await sleep(wait, undefined, signal ? { signal } : undefined)
+
+        // **The window this 429 described is over, so say so before looping.** A 429 carries
+        // `x-ratelimit-remaining: 0` alongside a `reset-after` that `#applyHeaders` has
+        // already turned into a `resetAt` — and `#awaitAvailability` at the top of the loop
+        // would then derive a second wait from the same response this sleep was for. The two
+        // are computed from `Date.now()` calls a fraction of a millisecond apart, so which one
+        // wins is a coin toss: on the losing side one 429 reported `rateLimited` twice and
+        // waited an extra tick for nothing. Observed on CI, on Node 24, as `2 !== 1`.
+        //
+        // The same assumption `#awaitAvailability` makes after its own sleep, for the same
+        // reason: the wait is over, so assume the allowance is fresh until a response says
+        // otherwise.
+        state.remaining = Number.isFinite(state.limit) ? state.limit : 1
         continue
       }
 
@@ -331,13 +349,19 @@ export class SequentialHandler {
 
     // `reset-after` is relative, so it is immune to clock skew between this machine and
     // Discord's. `reset` is an absolute Unix time and is only a fallback.
+    //
+    // Both carry `rateLimitOffset`, because the figure Discord sends was true when its edge
+    // wrote the response and is already stale by the transit time. Resuming at exactly the
+    // stated moment leaves that transit time as the entire safety margin, and on a fast
+    // connection that is a fraction of a millisecond.
+    const offset = this.#context.options.rateLimitOffset
     const resetAfter = numericHeader(headers, 'x-ratelimit-reset-after')
     if (resetAfter !== null) {
-      state.resetAt = Date.now() + resetAfter * 1000
+      state.resetAt = Date.now() + resetAfter * 1000 + offset
       return
     }
     const reset = numericHeader(headers, 'x-ratelimit-reset')
-    if (reset !== null) state.resetAt = reset * 1000
+    if (reset !== null) state.resetAt = reset * 1000 + offset
   }
 
   /**

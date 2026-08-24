@@ -7,5 +7,12 @@
     "module": "nodenext",
     "types": ["node"]
   },
-  "include": ["**/*.ts"]
+  "include": ["**/*.ts"],
+  "//references": "A script that imports a workspace package needs the reference, or its types resolve to `error` until something has built `dist`. CI lints before it builds, so without these the benchmark passed locally and failed there.",
+  "references": [
+    { "path": "../packages/types" },
+    { "path": "../packages/rest" },
+    { "path": "../packages/gateway" },
+    { "path": "../packages/core" }
+  ]
 }

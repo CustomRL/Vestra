@@ -1,0 +1,384 @@
+import assert from 'node:assert/strict'
+import { fileURLToPath } from 'node:url'
+import { describe, it } from 'node:test'
+import ts from 'typescript'
+
+/**
+ * The snake_case to camelCase rule structures convert payloads with.
+ *
+ * @remarks
+ * `docs/design/phase-4-core.md` §4.15 fixes the rule as mechanical camelCase — split on
+ * `_`, uppercase the following character — with a short allowlist for names where the
+ * mechanical result would be ambiguous or misleading. §8-A14 recorded that whether the
+ * rule is unambiguous across every payload file was **not** verified, and noted that "I saw
+ * no digits or doubled underscores" is not the same as "there are none".
+ *
+ * This settles it, and keeps it settled. The spec says to write this before a single
+ * structure is written, because the answer decides whether the rule can be mechanical at
+ * all: one collision means every structure needs a hand-maintained field map instead.
+ *
+ * Reading the API types through the compiler API rather than by regex matters here — a
+ * regex over the source cannot tell a property signature from a field name inside a
+ * comment, a template literal, or a nested object type.
+ */
+
+/** Applies the mechanical rule. */
+function toCamelCase(field: string): string {
+  return field.replaceAll(/_(.)/g, (_match, next: string) => next.toUpperCase())
+}
+
+/**
+ * Every field name declared by an exported `API*` type.
+ *
+ * @returns Field names mapped to the types that declare them.
+ */
+function readApiFieldNames(): Map<string, Set<string>> {
+  const entry = fileURLToPath(new URL('../../types/src/index.ts', import.meta.url))
+  const program = ts.createProgram([entry], {
+    target: ts.ScriptTarget.ES2023,
+    module: ts.ModuleKind.NodeNext,
+    moduleResolution: ts.ModuleResolutionKind.NodeNext,
+    strict: true,
+    skipLibCheck: true,
+    noEmit: true,
+  })
+
+  const checker = program.getTypeChecker()
+  const source = program.getSourceFile(entry)
+  assert.ok(source !== undefined, `could not load ${entry}`)
+
+  const moduleSymbol = checker.getSymbolAtLocation(source)
+  assert.ok(moduleSymbol !== undefined, 'the types entry point exports nothing')
+
+  const fields = new Map<string, Set<string>>()
+  for (const exported of checker.getExportsOfModule(moduleSymbol)) {
+    const name = exported.getName()
+    // `Gateway*` as well as `API*`: a structure mirrors the dispatch payload, not only the
+    // resource. `Guild.large` comes from `GatewayGuildCreateExtraFields` and nothing else, and
+    // reading only `API*` reported it as a rename with no reason — a false positive that would
+    // have been paid for with a fictional entry in RENAMES.
+    //
+    // The `Gateway*` half is restricted to interfaces, and the `API*` half deliberately is not.
+    // `Gateway*` also covers `GatewayDispatchEvents` (a const object of SCREAMING_SNAKE names)
+    // and several string-union aliases, and `getPropertiesOfType` on a string type hands back
+    // `charAt` and friends. Widening without this filter reports the whole String prototype as
+    // API surface.
+    const isApi = name.startsWith('API')
+    const isGatewayInterface =
+      name.startsWith('Gateway') &&
+      (exported.getDeclarations() ?? []).some((declaration) =>
+        ts.isInterfaceDeclaration(declaration),
+      )
+    if (!isApi && !isGatewayInterface) continue
+
+    const declared = checker.getDeclaredTypeOfSymbol(exported)
+    for (const property of checker.getPropertiesOfType(declared)) {
+      const field = property.getName()
+      // Symbol-keyed properties are not wire fields. Some `Gateway*` exports are iterable, and
+      // their `__@iterator@N` entries are neither snake_case nor camelCase — they fail the
+      // mechanical-rule checks for a reason that has nothing to do with naming.
+      if (field.startsWith('__@')) continue
+      // Enum-like constants, not wire fields. `Gateway*` includes `GatewayDispatchEvents`,
+      // whose members are SCREAMING_SNAKE event names — a wire field is lowercase snake_case
+      // and never all-caps, so this cannot exclude a real one.
+      if (/^[A-Z0-9_]+$/.test(field)) continue
+
+      const owners = fields.get(field) ?? new Set<string>()
+      owners.add(name)
+      fields.set(field, owners)
+    }
+  }
+  return fields
+}
+
+const apiFields = readApiFieldNames()
+
+describe('payload field naming', () => {
+  it('N1: finds the API surface at all', () => {
+    // Guards the test itself. If the compiler API stops resolving the entry point, every
+    // assertion below passes over an empty set and proves nothing.
+    assert.ok(
+      apiFields.size > 300,
+      `expected the payload surface to be large; got ${String(apiFields.size)} fields`,
+    )
+    assert.ok(apiFields.has('guild_id'), 'a known field is missing, so extraction is wrong')
+  })
+
+  it('N2: converts no two API fields to the same structure field', () => {
+    // A collision would mean two wire fields wanting one property name, which the
+    // mechanical rule cannot express. One is enough to sink the whole approach.
+    const byCamel = new Map<string, string[]>()
+    for (const field of apiFields.keys()) {
+      const camel = toCamelCase(field)
+      byCamel.set(camel, [...(byCamel.get(camel) ?? []), field])
+    }
+
+    const collisions = [...byCamel.entries()]
+      .filter(([, raws]) => raws.length > 1)
+      .map(([camel, raws]) => `${camel} <- ${raws.sort().join(', ')}`)
+
+    assert.deepEqual(collisions, [], 'the mechanical rule must be injective')
+  })
+
+  it('N3: sees no field the mechanical rule handles ambiguously', () => {
+    // The specific shapes that would make `_(.)` do something surprising: a digit after an
+    // underscore has no uppercase form, a doubled underscore leaves one behind, and an edge
+    // underscore has nothing to fold into.
+    const awkward: string[] = []
+    for (const field of apiFields.keys()) {
+      if (field.includes('__')) awkward.push(`${field} (doubled underscore)`)
+      if (field.startsWith('_') || field.endsWith('_')) awkward.push(`${field} (edge underscore)`)
+      if (/_\d/.test(field)) awkward.push(`${field} (digit after underscore)`)
+    }
+
+    assert.deepEqual(awkward.sort(), [], 'these names need an allowlist entry')
+  })
+
+  it('N4: round-trips every field back to its wire name', () => {
+    // The rule has to be reversible, or the drift check and any future codec cannot map a
+    // structure field back to the payload it came from.
+    const toSnake = (field: string): string =>
+      field.replaceAll(/[A-Z]/g, (upper) => `_${upper.toLowerCase()}`)
+
+    const broken = [...apiFields.keys()]
+      .filter((field) => field === field.toLowerCase())
+      .filter((field) => toSnake(toCamelCase(field)) !== field)
+
+    assert.deepEqual(broken, [], 'camelCase must be reversible for all-lowercase wire names')
+  })
+
+  it('N5: leaves an already-camelCase field untouched', () => {
+    // `@vestra/types` mirrors the wire format, which is snake_case, so a mixed-case field
+    // name is either a mistake in the typings or a genuine Discord inconsistency. Either
+    // way it needs a human, because the rule cannot know which.
+    const mixed = [...apiFields.keys()].filter(
+      (field) => field !== field.toLowerCase() && !field.startsWith('$'),
+    )
+    assert.deepEqual(mixed.sort(), [], 'a mixed-case wire field needs an allowlist decision')
+  })
+})
+
+/**
+ * Which API type each structure mirrors.
+ *
+ * @remarks
+ * A structure absent from this table is simply not checked, which is why the test reports
+ * its coverage count — an empty failure list over an empty table means nothing at all. Add
+ * a row when you add a structure.
+ */
+const STRUCTURE_SOURCES: { structure: string; api: string }[] = [
+  { structure: 'User', api: 'APIUser' },
+  { structure: 'Role', api: 'APIRole' },
+  { structure: 'GuildMember', api: 'APIGuildMember' },
+  { structure: 'Message', api: 'APIMessage' },
+  { structure: 'Guild', api: 'APIGuild' },
+  { structure: 'AutoModerationRule', api: 'APIAutoModerationRule' },
+  { structure: 'AuditLogEntry', api: 'APIAuditLogEntry' },
+  { structure: 'Interaction', api: 'APIInteraction' },
+  { structure: 'GuildScheduledEvent', api: 'APIGuildScheduledEvent' },
+  { structure: 'AutoModerationActionExecution', api: 'APIAutoModerationActionExecution' },
+  { structure: 'VoiceState', api: 'APIVoiceState' },
+  { structure: 'Presence', api: 'APIPresenceUpdate' },
+  { structure: 'Activity', api: 'APIActivity' },
+  { structure: 'Emoji', api: 'APIEmoji' },
+  { structure: 'Sticker', api: 'APISticker' },
+  { structure: 'ReactionEmoji', api: 'APIPartialEmoji' },
+  { structure: 'TextChannel', api: 'APITextChannel' },
+  { structure: 'VoiceChannel', api: 'APIVoiceChannel' },
+  { structure: 'ThreadChannel', api: 'APIThreadChannel' },
+  { structure: 'ForumChannel', api: 'APIForumChannel' },
+  { structure: 'DMChannel', api: 'APIDMChannel' },
+  { structure: 'GroupDMChannel', api: 'APIGroupDMChannel' },
+  { structure: 'CategoryChannel', api: 'APICategoryChannel' },
+]
+
+/**
+ * Structure fields whose name is not the mechanical camelCase of an API field.
+ *
+ * @remarks
+ * Every entry needs a reason, because the bar for renaming is high: a rename is something
+ * users must learn, and it breaks grep against Discord's own documentation. §4.15 sets the
+ * bar at "the mechanical result is ambiguous or collides", not "the mechanical result is
+ * ugly".
+ *
+ * Removing an entry is how you decide a rename was wrong.
+ */
+const RENAMES: Record<string, Record<string, string>> = {
+  GuildScheduledEvent: {
+    scheduledStartTimestamp:
+      'scheduled_start_time. The suffix rule for raw ISO strings, with scheduledStartAt as ' +
+      'the Date getter beside it.',
+    scheduledEndTimestamp: 'scheduled_end_time. The same rule, from the same pair.',
+  },
+  Guild: {
+    joinedTimestamp:
+      'joined_at. The mechanical result, joinedAt, collides with the Date getter of the ' +
+      'same name — the same collision GuildMember.joinedTimestamp resolves the same way.',
+  },
+  Activity: {
+    createdTimestamp:
+      'created_at. The suffix rule for raw timestamps, and createdAt is the Date getter ' +
+      'beside it. Note this one is epoch milliseconds rather than an ISO string, which is ' +
+      'what the payload sends.',
+  },
+  ForumChannel: {
+    lastThreadId:
+      'last_message_id, which is what it is not. The posts in a forum are threads, so ' +
+      'mirroring the name would make lastMessageId mean the newest message on a text ' +
+      'channel and the newest thread on a forum — one name for two things.',
+  },
+  MediaChannel: {
+    lastThreadId: 'last_message_id. The same rename as ForumChannel, from the same shared base.',
+  },
+  Message: {
+    sentTimestamp:
+      'timestamp. A bare `timestamp` sitting next to `editedTimestamp` reads as "the ' +
+      'relevant one", which it is not, and the suffix rule then matches the other ISO ' +
+      'fields. Not `createdTimestamp`, which it was: that name means epoch milliseconds ' +
+      'decoded from the ID on all eleven other structures that have one, and a Message ' +
+      'holding a string under it made `a.createdTimestamp - b.createdTimestamp` produce ' +
+      'NaN for the single most used structure in the library.',
+    partial:
+      'Not a payload field. The discriminant `isComplete()` narrows on, recording that ' +
+      'the payload did not carry every field.',
+  },
+  GuildMember: {
+    guildId:
+      'Not on the payload at all — Discord puts guild_id on the dispatch, not on the ' +
+      'member. Supplied by the caller so the guildId:userId cache key is derivable.',
+    userId:
+      'Not on the payload. Read from user.id would be undefined for message.member, ' +
+      'which is the most common member a bot touches.',
+    joinedTimestamp:
+      'joined_at. The mechanical result, joinedAt, collides with the Date getter of the ' +
+      'same name — exactly the ambiguity §4.15 sets the renaming bar at.',
+    premiumSinceTimestamp:
+      'premium_since. Follows the same suffix rule as joinedTimestamp: a rule with one ' +
+      'exception is harder to remember than a rule.',
+    communicationDisabledUntilTimestamp:
+      'communication_disabled_until. Same suffix rule, and the natural name is taken by ' +
+      'the Date getter.',
+  },
+}
+
+/**
+ * The instance fields a structure class declares.
+ *
+ * @param className - The class to read.
+ * @returns Its declared property names, excluding methods and accessors.
+ */
+const coreProgram = (() => {
+  const entry = fileURLToPath(new URL('../src/index.ts', import.meta.url))
+  const program = ts.createProgram([entry], {
+    target: ts.ScriptTarget.ES2023,
+    module: ts.ModuleKind.NodeNext,
+    moduleResolution: ts.ModuleResolutionKind.NodeNext,
+    strict: true,
+    skipLibCheck: true,
+    noEmit: true,
+  })
+  const source = program.getSourceFile(entry)
+  assert.ok(source !== undefined, `could not load ${entry}`)
+  return { checker: program.getTypeChecker(), source }
+})()
+
+function readStructureFields(className: string): string[] {
+  const { checker, source } = coreProgram
+  const moduleSymbol = checker.getSymbolAtLocation(source)
+  assert.ok(moduleSymbol !== undefined)
+
+  const exported = checker
+    .getExportsOfModule(moduleSymbol)
+    .find((symbol) => symbol.getName() === className)
+  assert.ok(exported !== undefined, `${className} is not exported`)
+
+  const declared = checker.getDeclaredTypeOfSymbol(exported)
+  return (
+    checker
+      .getPropertiesOfType(declared)
+      .filter((property) =>
+        (property.getDeclarations() ?? []).some((declaration) =>
+          ts.isPropertyDeclaration(declaration),
+        ),
+      )
+      .map((property) => property.getName())
+      // Private fields are implementation, not the mirrored surface. `#client` comes from
+      // `Base` and has no payload to be named after.
+      .filter((name) => !name.startsWith('#'))
+  )
+}
+
+describe('structure field naming', () => {
+  it('N6: names every structure field after the payload, or records why not', () => {
+    // The rule is only mechanical if nothing quietly departs from it. Without this, a
+    // rename is a comment in one class that nobody else ever sees.
+    const unexplained: string[] = []
+    let checked = 0
+
+    for (const { structure, api } of STRUCTURE_SOURCES) {
+      const allowed = RENAMES[structure] ?? {}
+      const apiCamel = new Set([...apiFields.keys()].map(toCamelCase))
+
+      for (const field of readStructureFields(structure)) {
+        checked += 1
+        if (apiCamel.has(field)) continue
+        if (typeof allowed[field] === 'string' && allowed[field].length > 0) continue
+        unexplained.push(`${structure}.${field} (mirrors nothing on ${api}, and has no reason)`)
+      }
+    }
+
+    assert.ok(checked > 20, `expected to check a real surface; checked ${String(checked)}`)
+    assert.deepEqual(unexplained.sort(), [], 'each of these needs a RENAMES entry with a reason')
+  })
+
+  it('N8: gives createdTimestamp the same type on every structure that has one', () => {
+    // **One name, one type.** `createdTimestamp` is epoch milliseconds everywhere, which is
+    // what makes `a.createdTimestamp - b.createdTimestamp` an interval rather than a guess
+    // about which two structures are being subtracted. It used to be an ISO string on
+    // `Message` and on `Invite`, so that subtraction produced `NaN` on the most used
+    // structure in the library and nowhere else -- silently, since a string minus a string
+    // is not a type error.
+    //
+    // Swept rather than asserted per class: the divergence arrived by a structure being
+    // written to a local rule, and only a sweep sees a structure that has not been written
+    // yet. The raw wire value keeps a name of its own -- `Message.sentTimestamp` -- which is
+    // the suffix rule, and is exactly what this leaves room for.
+    const { checker, source } = coreProgram
+    const moduleSymbol = checker.getSymbolAtLocation(source)
+    assert.ok(moduleSymbol !== undefined)
+
+    const wrong: string[] = []
+    let found = 0
+
+    for (const exported of checker.getExportsOfModule(moduleSymbol)) {
+      const declared = checker.getDeclaredTypeOfSymbol(exported)
+      const property = checker
+        .getPropertiesOfType(declared)
+        .find((candidate) => candidate.getName() === 'createdTimestamp')
+      if (property === undefined) continue
+
+      const declaration = property.valueDeclaration ?? (property.getDeclarations() ?? [])[0]
+      if (declaration === undefined) continue
+
+      found += 1
+      const type = checker.typeToString(checker.getTypeOfSymbolAtLocation(property, declaration))
+      if (type !== 'number') wrong.push(`${exported.getName()}.createdTimestamp is ${type}`)
+    }
+
+    assert.ok(found > 8, `expected many structures to carry one; found ${String(found)}`)
+    assert.deepEqual(wrong.sort(), [], 'createdTimestamp must be epoch milliseconds everywhere')
+  })
+
+  it('N7: keeps no stale rename entries', () => {
+    // A rename that no longer exists is worse than none: it documents a decision the code
+    // has already walked back, and the next reader trusts it.
+    const stale: string[] = []
+    for (const { structure } of STRUCTURE_SOURCES) {
+      const fields = new Set(readStructureFields(structure))
+      for (const renamed of Object.keys(RENAMES[structure] ?? {})) {
+        if (!fields.has(renamed)) stale.push(`${structure}.${renamed}`)
+      }
+    }
+    assert.deepEqual(stale.sort(), [], 'these renames name fields that no longer exist')
+  })
+})

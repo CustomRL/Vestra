@@ -264,6 +264,60 @@ describe('GlobalLimiter sliding window', () => {
   })
 })
 
+describe('one 429, one wait', () => {
+  it('does not wait a second time on the window the 429 already described', async () => {
+    // **Found by CI, on Node 24, as `2 !== 1`.** A 429 carries
+    // `x-ratelimit-remaining: 0` alongside its reset headers, so after sleeping out
+    // `retry_after` the handler looped back into `#awaitAvailability`, which derived a
+    // *second* wait from the very response the sleep was for. Both waits came from
+    // `Date.now()` calls a fraction of a millisecond apart, so which one won was a coin
+    // toss — and on the losing side one 429 reported `rateLimited` twice and stalled again
+    // for no reason. `REST.test.ts`'s "waits out a 429" case had been failing on that tie
+    // intermittently for weeks and was filed as flakiness.
+    //
+    // Made deterministic here by separating the two figures the way Discord's own headers
+    // can: `retry-after` says when to retry, `x-ratelimit-reset` says when the bucket's
+    // window ends, and they are not the same instant. Without the fix the second wait is
+    // five seconds rather than a rounding error, so the tie cannot go the passing way.
+    let calls = 0
+    const mock = await startMockDiscord((_request, response) => {
+      calls += 1
+      if (calls === 1) {
+        json(
+          response,
+          429,
+          { message: 'You are being rate limited.', retry_after: 0.05, global: false },
+          {
+            'retry-after': '0.05',
+            'x-ratelimit-bucket': 'b',
+            'x-ratelimit-limit': '5',
+            'x-ratelimit-remaining': '0',
+            'x-ratelimit-reset': ((Date.now() + 5_000) / 1000).toFixed(3),
+            'x-ratelimit-scope': 'user',
+          },
+        )
+        return
+      }
+      json(response, 200, { ok: true })
+    })
+    try {
+      const rest = clientFor(mock)
+      const limits: unknown[] = []
+      rest.on('rateLimited', (info) => limits.push(info))
+
+      const started = Date.now()
+      await rest.get('/channels/1/messages')
+      const elapsed = Date.now() - started
+
+      assert.equal(calls, 2, 'the request must have been retried exactly once')
+      assert.equal(limits.length, 1, 'one 429 must produce one rateLimited report')
+      assert.ok(elapsed < 2_000, `waited ${String(elapsed)}ms; the 429 asked for 50`)
+    } finally {
+      await mock.close()
+    }
+  })
+})
+
 describe('rateLimitTimeout during a global block', () => {
   it('fails fast instead of sleeping out a block that lands after the check', async () => {
     const mock = await startMockDiscord((request, response) => {

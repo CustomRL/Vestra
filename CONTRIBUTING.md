@@ -8,10 +8,19 @@ bug worth reporting.
 
 ```bash
 pnpm install
-pnpm build         # tsc --build across the project graph
+pnpm build         # turbo, which builds each package's own sources
+pnpm typecheck     # tsc --build --force across the whole solution, tests included
 pnpm test          # node:test, no test framework to learn
 pnpm lint
 ```
+
+**`pnpm build` does not typecheck the tests.** It runs `turbo run build`, and each package's
+build task compiles that package's `src` only — `packages/*/test/tsconfig.json` are projects
+in the root solution but not turbo tasks, so nothing in them is ever checked. A green
+`pnpm build` is compatible with a test file that does not compile at all: change a
+constructor signature and every call site in `src` fails while the ones in `test` stay
+silent. Run `pnpm typecheck` before you trust it. CI runs it too, so this costs a round trip
+rather than a broken release.
 
 Node **22.15.0 or newer** is required. That floor is not arbitrary — it is the first
 version with native zstd in `node:zlib`, which is what lets the gateway decompress Discord
@@ -106,13 +115,25 @@ failure mode.
 Vestra's hot path is: socket frame → inflate → JSON parse → event handler → structure
 construction. These rules apply _there_; elsewhere, prefer clarity.
 
-- **Assign fields explicitly, in a fixed order,** in the constructor. `Object.assign` and
-  conditional field assignment produce megamorphic object shapes that defeat V8's inline
-  caches. This is lint-enforced.
+- **Assign fields explicitly, in a fixed order, in the constructor** — every field, every
+  time, including the ones the payload omitted. `Object.assign` and _conditional_ assignment
+  there produce a different object shape per payload variant, which defeats V8's inline caches
+  on exactly the objects the library builds most. `Object.assign` is lint-enforced; the order
+  and the unconditional-in-the-constructor half are not, and are on you.
+
+  **`patch` is the opposite, and deliberately so.** An update carries only what changed, so a
+  `patch` that assigned absent fields would blank them — turning an edit into data loss. That
+  is safe precisely because the constructor already created every property: a conditional
+  assignment in `patch` cannot add one, so it cannot change the shape. The rule is about where
+  the shape is established, not about the keyword.
+
 - **Never `delete`.** It deoptimises the object's shape permanently. Assign `undefined`, or
   use a `Map`. Also lint-enforced.
 - **Declare structure fields with `declare`** and assign them in the constructor, so no
-  redundant field initialisation is emitted before your assignment.
+  redundant field initialisation is emitted before your assignment. Enforced by
+  `packages/core/test/shape.test.ts`, which reads the compiled output rather than the source —
+  a bare declaration becomes `field;` in the class body under `useDefineForClassFields`, so
+  every instance is defined as `undefined` and then immediately assigned.
 - **Snowflakes stay `string`.** They are used as map keys and compared for equality, never
   for arithmetic. Converting to `bigint` costs on every payload and serialises badly.
 - **Reuse buffers in the inflator.** It runs on every single gateway frame.
@@ -120,12 +141,33 @@ construction. These rules apply _there_; elsewhere, prefer clarity.
 If you believe a change is faster, add a benchmark under `scripts/bench/` showing it.
 Assertions about V8 without measurements get asked for measurements.
 
+```bash
+pnpm bench scripts/bench/structure-construction.ts    # hand-written against a generic transform
+pnpm bench scripts/bench/cache-memory.ts              # bytes per cached entry
+pnpm bench scripts/bench/adapter-shapes.ts            # what a pluggable adapter costs at the call site
+pnpm bench scripts/bench/dispatch-queue.ts            # serial dispatch
+pnpm bench scripts/bench/raw-emit.ts                  # the extra `raw` emit
+```
+
+`pnpm bench` is `node` with `--expose-gc` and `--allow-natives-syntax`, because a heap figure
+taken without a forced collection is whatever garbage had not been swept and a shape claim
+checked without `%HaveSameMap` is an argument rather than a measurement. Take the best of
+several passes, not the mean: every source of error in a microbenchmark makes a pass slower and
+none makes it faster.
+
+Two mistakes cost more time than the benchmarks themselves, so they are worth naming. Let the
+result escape — a constructor whose object never leaves the loop is deleted outright, and one
+of these scripts timed a four-field allocation at 1.6ns before that was fixed. And hold
+everything but the variable constant: selecting between stores with `index % shapes` made one
+shape look twice as fast as three, which was the modulo, not the inline cache.
+
 ## Commits and pull requests
 
 - Imperative subject, roughly 50 characters. No Conventional Commits prefixes, no emoji.
 - Add a body only when the diff does not explain _why_; say what breaks without the change.
 - Prefer several small focused commits over one large one.
-- Run `pnpm lint && pnpm test && pnpm build` before pushing.
+- Run `pnpm lint && pnpm typecheck && pnpm test` before pushing. `typecheck` rather than
+  `build`: it is the one that covers the test projects.
 - Add a changeset (`pnpm changeset`) for anything user-visible.
 
 Real defects, broken assumptions and known limitations belong in GitHub issues, not only in

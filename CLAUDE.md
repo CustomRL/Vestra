@@ -28,8 +28,8 @@ change, or to write an ADR superseding the old one.
 ## Commands
 
 ```bash
-pnpm build            # tsc --build across the graph
-pnpm typecheck        # tsc --build --force
+pnpm build            # turbo; each package's own sources, NOT the test projects
+pnpm typecheck        # tsc --build --force; the whole solution, tests included
 pnpm test             # node:test
 pnpm lint
 pnpm check:packaging  # publint + arethetypeswrong

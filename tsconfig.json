@@ -10,6 +10,7 @@
     { "path": "packages/types/test" },
     { "path": "packages/rest/test" },
     { "path": "packages/gateway/test" },
+    { "path": "packages/core/test" },
     { "path": "scripts" },
     { "path": "tests" }
   ]
