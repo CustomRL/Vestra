@@ -20,8 +20,8 @@
  *
  * **Two payload shapes, two ways of writing the same thing.** An absolute payload — a whole
  * guild, role, user or presence — assigns every field on every dispatch, so only the record
- * needs a comparison and each field is two lines: `if (data.x !== this.x) (changes ??= {}).x =
- * this.x` then the assignment. A partial payload — a message, a member — assigns only what
+ * needs a comparison — so each field is two lines, a guarded record followed by an
+ * unconditional assignment. A partial payload — a message, a member — assigns only what
  * arrived, so both the assignment and the record sit inside the same guard. Which shape a
  * `patch` uses follows from the dispatch, not from taste.
  *
@@ -103,7 +103,11 @@ export function sameStrings(
   after: readonly string[] | undefined,
 ): boolean {
   if (before === after) return true
-  if (before === undefined || after === undefined) return false
+  // Absent counts as empty, because that is what the structures make of it: a payload with no
+  // `applied_tags` produces `[]`, and reporting `[] -> undefined` as a change would put a
+  // spurious record on every thread update that did not mention its tags.
+  if (before === undefined) return after === undefined || after.length === 0
+  if (after === undefined) return before.length === 0
   if (before.length !== after.length) return false
   for (let index = 0; index < before.length; index += 1) {
     if (before[index] !== after[index]) return false

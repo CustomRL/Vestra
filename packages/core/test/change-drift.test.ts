@@ -81,7 +81,7 @@ const RECORDING: readonly Recording[] = [
   },
 ]
 
-/** Parses one structure's source. */
+/** Parses one structure's source, named relative to `src/structures`. */
 function parse(file: string): ts.SourceFile {
   return ts.createSourceFile(
     file,
@@ -91,17 +91,26 @@ function parse(file: string): ts.SourceFile {
   )
 }
 
-/** The `patch` method declared in this file. */
-function patchMethod(source: ts.SourceFile, name: string): ts.MethodDeclaration {
-  let found: ts.MethodDeclaration | undefined
+/** The named methods declared in this file. Private names count, and are spelled with the `#`. */
+function methods(source: ts.SourceFile, wanted: readonly string[]): ts.MethodDeclaration[] {
+  const found: ts.MethodDeclaration[] = []
   const visit = (node: ts.Node): void => {
-    if (ts.isMethodDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === 'patch') {
-      found = node
+    if (ts.isMethodDeclaration(node)) {
+      const name = ts.isIdentifier(node.name)
+        ? node.name.text
+        : ts.isPrivateIdentifier(node.name)
+          ? node.name.text
+          : undefined
+      if (name !== undefined && wanted.includes(name)) found.push(node)
     }
     ts.forEachChild(node, visit)
   }
   ts.forEachChild(source, visit)
-  assert.ok(found !== undefined, `${name}.patch was not found, so this guard reads nothing`)
+  assert.equal(
+    found.length,
+    wanted.length,
+    `expected ${wanted.join(', ')} in ${source.fileName}; found ${String(found.length)}`,
+  )
   return found
 }
 
@@ -134,11 +143,8 @@ function assignedField(node: ts.Node): string | undefined {
   return node.left.name.text
 }
 
-/** Every field name the two readers above find in one `patch`. */
-function fieldsInPatch(
-  source: ts.SourceFile,
-  name: string,
-): { recorded: string[]; assigned: string[] } {
+/** Every field name the two readers above find in the given methods. */
+function fieldsIn(bodies: readonly ts.Node[]): { recorded: Set<string>; assigned: Set<string> } {
   const recorded = new Set<string>()
   const assigned = new Set<string>()
   const visit = (node: ts.Node): void => {
@@ -148,7 +154,17 @@ function fieldsInPatch(
     if (assign !== undefined) assigned.add(assign)
     ts.forEachChild(node, visit)
   }
-  visit(patchMethod(source, name))
+  for (const body of bodies) visit(body)
+  return { recorded, assigned }
+}
+
+/** The same, for one structure whose whole record lives in its `patch`. */
+function fieldsInPatch(
+  source: ts.SourceFile,
+  name: string,
+): { recorded: string[]; assigned: string[] } {
+  void name
+  const { recorded, assigned } = fieldsIn(methods(source, ['patch']))
   return { recorded: [...recorded].sort(), assigned: [...assigned].sort() }
 }
 
@@ -234,4 +250,102 @@ describe('change records cannot drift from the patches that fill them', () => {
       )
     })
   }
+})
+
+/**
+ * The channel classes, which share one record instead of declaring one each.
+ *
+ * @remarks
+ * `channelUpdate` emits the base {@link Channel}, so the record has to hold every field any
+ * subclass can report — see `ChannelChanges.ts`. That means the check is a different shape
+ * from the one above: rather than one union per class, the fields recorded across the whole
+ * hierarchy have to add up to exactly the keys of `ChannelFields`.
+ *
+ * `ThreadChannel` is listed with `#applyMetadata` beside its `patch`, because the six thread
+ * metadata fields have one assignment site shared with the constructor and `patch` reads
+ * across it rather than through it. Without that entry the assignment reader would find six
+ * records with nothing assigning them.
+ */
+const CHANNEL_PATCHES: readonly { file: string; methods: readonly string[] }[] = [
+  { file: 'channels/Channel.ts', methods: ['patch'] },
+  { file: 'channels/GuildChannel.ts', methods: ['patch'] },
+  { file: 'channels/GuildTextBasedChannel.ts', methods: ['patch'] },
+  { file: 'channels/TextChannel.ts', methods: ['patch'] },
+  { file: 'channels/AnnouncementChannel.ts', methods: ['patch'] },
+  { file: 'channels/VoiceChannel.ts', methods: ['patch'] },
+  { file: 'channels/ThreadOnlyChannel.ts', methods: ['patch'] },
+  { file: 'channels/ForumChannel.ts', methods: ['patch'] },
+  { file: 'channels/ThreadChannel.ts', methods: ['patch', '#applyMetadata'] },
+  { file: 'channels/DMChannel.ts', methods: ['patch'] },
+  { file: 'channels/GroupDMChannel.ts', methods: ['patch'] },
+]
+
+/**
+ * Fields a channel patch writes and deliberately never reports.
+ *
+ * @remarks
+ * `availableTags` is a list of tag definitions rather than IDs, so telling a renamed tag from
+ * an unchanged one means comparing objects by value. `recipients` is rebuilt into fresh `User`
+ * structures on every dispatch, and who is in a DM does not change — a bot cannot be added to
+ * a group DM after the fact.
+ */
+const CHANNEL_UNREPORTABLE = ['availableTags', 'recipients']
+
+/** The keys of the `ChannelFields` interface, which is what the record can hold. */
+function channelFieldKeys(): string[] {
+  const source = parse('channels/ChannelChanges.ts')
+  let found: string[] | undefined
+  ts.forEachChild(source, (node) => {
+    if (!ts.isInterfaceDeclaration(node) || node.name.text !== 'ChannelFields') return
+    found = node.members.map((member) => {
+      assert.ok(
+        ts.isPropertySignature(member) && ts.isIdentifier(member.name),
+        'ChannelFields carries a member this guard cannot read',
+      )
+      return member.name.text
+    })
+  })
+  assert.ok(found !== undefined, 'ChannelFields was not found')
+  return [...found].sort()
+}
+
+/** Everything recorded and assigned across the whole channel hierarchy. */
+function channelFields(): { recorded: string[]; assigned: string[] } {
+  const recorded = new Set<string>()
+  const assigned = new Set<string>()
+  for (const target of CHANNEL_PATCHES) {
+    const found = fieldsIn(methods(parse(target.file), target.methods))
+    for (const field of found.recorded) recorded.add(field)
+    for (const field of found.assigned) assigned.add(field)
+  }
+  return { recorded: [...recorded].sort(), assigned: [...assigned].sort() }
+}
+
+describe('the channel record covers the whole hierarchy', () => {
+  it('CD3: every ChannelFields key is recorded by some patch, and no patch records more', () => {
+    const keys = channelFieldKeys()
+    // The canary. Eleven patches feed this, and a reader that stopped matching would leave two
+    // sets agreeing on nothing.
+    assert.ok(keys.length > 25, `expected the full channel field set; found ${String(keys.length)}`)
+
+    assert.deepEqual(
+      channelFields().recorded,
+      keys,
+      'ChannelFields and the channel patches disagree. A key nothing records is one the ' +
+        'record offers and never fills; a field recorded without a key does not compile for ' +
+        'a consumer.',
+    )
+  })
+
+  it('CD4: no channel patch overwrites a value it neither reports nor excuses', () => {
+    const { recorded, assigned } = channelFields()
+    const silent = assigned.filter((field) => !recorded.includes(field))
+    assert.deepEqual(
+      silent,
+      [...CHANNEL_UNREPORTABLE].sort(),
+      'a field added to a channel patch is overwriting a value nobody can recover. Either ' +
+        'record it and add it to ChannelFields, or list it above with the reason its ' +
+        'previous value cannot be handed back.',
+    )
+  })
 })

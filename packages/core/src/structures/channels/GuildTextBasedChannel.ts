@@ -9,6 +9,7 @@ import type { TextBased } from './Channel.js'
 import type { RestCapable } from '../capabilities.js'
 import { Message } from '../Message.js'
 import { GuildChannel } from './GuildChannel.js'
+import type { ChannelChanges, ChannelChangesDraft } from './ChannelChanges.js'
 
 /**
  * A guild channel that carries messages.
@@ -98,12 +99,24 @@ export abstract class GuildTextBasedChannel<Client = unknown>
    *
    * @param data - The payload to apply.
    */
-  override patch(data: APITextBasedChannelBase<ChannelType>): void {
-    super.patch(data)
+  override patch(data: APITextBasedChannelBase<ChannelType>): ChannelChanges<Client> | null {
+    let changes: ChannelChangesDraft<Client> | null = super.patch(data)
 
+    if (data.last_message_id !== this.lastMessageId) {
+      ;(changes ??= {}).lastMessageId = this.lastMessageId
+    }
     this.lastMessageId = data.last_message_id
+    if (data.last_pin_timestamp !== this.lastPinTimestamp) {
+      ;(changes ??= {}).lastPinTimestamp = this.lastPinTimestamp
+    }
     this.lastPinTimestamp = data.last_pin_timestamp
+    if (data.rate_limit_per_user !== this.rateLimitPerUser) {
+      ;(changes ??= {}).rateLimitPerUser = this.rateLimitPerUser
+    }
     this.rateLimitPerUser = data.rate_limit_per_user
+    if (data.topic !== this.topic) (changes ??= {}).topic = this.topic
     this.topic = data.topic
+
+    return changes
   }
 }

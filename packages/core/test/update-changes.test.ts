@@ -321,3 +321,160 @@ describe('presence and user change records', () => {
     }
   })
 })
+
+const CHANNEL = '290926798999357250'
+const THREAD = '111111111111111111'
+
+/** A guild text channel payload. */
+function channel(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    id: CHANNEL,
+    type: 0,
+    guild_id: GUILD,
+    name: 'general',
+    position: 0,
+    permission_overwrites: [{ id: ROLE, type: 0, allow: '0', deny: '0' }],
+    parent_id: null,
+    nsfw: false,
+    topic: 'before',
+    last_message_id: null,
+    rate_limit_per_user: 0,
+    flags: 0,
+    ...overrides,
+  }
+}
+
+/** A public thread payload. */
+function thread(metadata: Record<string, unknown>): Record<string, unknown> {
+  return {
+    id: THREAD,
+    type: 11,
+    guild_id: GUILD,
+    parent_id: CHANNEL,
+    name: 'a thread',
+    owner_id: USER,
+    thread_metadata: {
+      auto_archive_duration: 1440,
+      archive_timestamp: '2024-01-01T00:00:00.000000+00:00',
+      locked: false,
+      ...metadata,
+    },
+    message_count: 1,
+    member_count: 1,
+    total_message_sent: 1,
+    rate_limit_per_user: 0,
+    last_message_id: null,
+    flags: 0,
+  }
+}
+
+describe('channel and thread change records', () => {
+  it('UC10: channelUpdate reports the previous name and topic', async () => {
+    const { client, socket } = await clientWith()
+    const seen: unknown[] = []
+    client.on('channelUpdate', (_channel, changes) => {
+      seen.push(changes)
+    })
+
+    try {
+      socket.dispatch('CHANNEL_CREATE', channel(), 10)
+      await tick()
+      socket.dispatch('CHANNEL_UPDATE', channel({ name: 'renamed', topic: 'after' }), 11)
+      await tick()
+
+      assert.deepEqual(seen, [{ name: 'general', topic: 'before' }])
+    } finally {
+      await client.destroy()
+    }
+  })
+
+  it('UC11: channelUpdate reports nothing for an unchanged channel, overwrites included', async () => {
+    // `permission_overwrites` is converted into a fresh array of fresh objects by every patch,
+    // so a reference comparison would report a permission change on every channel update.
+    const { client, socket } = await clientWith()
+    const seen: unknown[] = []
+    client.on('channelUpdate', (_channel, changes) => {
+      seen.push(changes)
+    })
+
+    try {
+      socket.dispatch('CHANNEL_CREATE', channel(), 10)
+      await tick()
+      socket.dispatch('CHANNEL_UPDATE', channel(), 11)
+      await tick()
+
+      assert.deepEqual(seen, [null])
+    } finally {
+      await client.destroy()
+    }
+  })
+
+  it('UC12: channelUpdate reports the previous overwrites when they actually move', async () => {
+    const { client, socket } = await clientWith()
+    const seen: unknown[] = []
+    client.on('channelUpdate', (_channel, changes) => {
+      seen.push(changes)
+    })
+
+    try {
+      socket.dispatch('CHANNEL_CREATE', channel(), 10)
+      await tick()
+      socket.dispatch(
+        'CHANNEL_UPDATE',
+        channel({ permission_overwrites: [{ id: ROLE, type: 0, allow: '1024', deny: '0' }] }),
+        11,
+      )
+      await tick()
+
+      assert.deepEqual(seen, [
+        { permissionOverwrites: [{ id: ROLE, type: 0, allow: '0', deny: '0' }] },
+      ])
+    } finally {
+      await client.destroy()
+    }
+  })
+
+  it('UC13: channelUpdate reports nothing when the channel type changed', async () => {
+    // A type change rebuilds rather than patches, because the object is the wrong class now.
+    // The old object described a channel of a different type, so its field values are not the
+    // previous state of this one and reporting them would be a lie about what moved.
+    const { client, socket } = await clientWith()
+    const seen: unknown[] = []
+    client.on('channelUpdate', (_channel, changes) => {
+      seen.push(changes)
+    })
+
+    try {
+      socket.dispatch('CHANNEL_CREATE', channel(), 10)
+      await tick()
+      socket.dispatch('CHANNEL_UPDATE', channel({ type: 5, name: 'announcements' }), 11)
+      await tick()
+
+      assert.deepEqual(seen, [null])
+    } finally {
+      await client.destroy()
+    }
+  })
+
+  it('UC14: threadUpdate reports the previous archive state, read across #applyMetadata', async () => {
+    // The six thread metadata fields have one assignment site, shared with the constructor, so
+    // `patch` reads their previous values before calling it rather than threading a record
+    // through. Archiving is the change a thread listener is there for.
+    const { client, socket } = await clientWith({ threads: true })
+    const seen: unknown[] = []
+    client.on('threadUpdate', (_thread, changes) => {
+      seen.push(changes)
+    })
+
+    try {
+      socket.dispatch('THREAD_CREATE', thread({ archived: false }), 10)
+      await tick()
+      socket.dispatch('THREAD_UPDATE', thread({ archived: true, locked: true }), 11)
+      await tick()
+
+      assert.deepEqual(seen, [{ archived: false, locked: false }])
+    } finally {
+      await client.destroy()
+    }
+  })
+})
