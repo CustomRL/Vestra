@@ -3,6 +3,7 @@ import type { APIAttachment } from '../payloads/attachment.js'
 import type { APIMessageComponent } from '../payloads/component.js'
 import type { APIEmbed } from '../payloads/embed.js'
 import type { APIMessage } from '../payloads/message.js'
+import type { APIPollCreateRequest } from '../payloads/poll.js'
 import type { APIWebhook } from '../payloads/webhook.js'
 import type { APIAllowedMentions } from './channel.js'
 
@@ -108,3 +109,47 @@ export type RESTPatchAPIWebhookResult = APIWebhook
  * `undefined` unless `wait=true` was asked for, because Discord answers `204` otherwise.
  */
 export type RESTPostAPIWebhookExecuteResult = APIMessage | undefined
+
+/**
+ * `GET|PATCH|DELETE /webhooks/{webhook.id}/{webhook.token}/messages/{message.id}`
+ *
+ * @remarks
+ * **`thread_id` is required when the message is in a thread**, and nothing in the path says
+ * so. Without it the route answers 404 for a message that plainly exists — the same shape of
+ * mistake as executing a webhook into a thread and reading the result back from the channel.
+ */
+export interface RESTGetAPIWebhookMessageQuery {
+  /** The thread the message is in. */
+  thread_id?: Snowflake
+}
+
+/**
+ * `PATCH /webhooks/{webhook.id}/{webhook.token}/messages/{message.id}`
+ *
+ * @remarks
+ * A partial update: absent fields are left alone. `attachments` is the exception and behaves
+ * the other way round — it is the list of attachments to **keep**, so omitting it keeps them
+ * all and sending an empty array removes every one.
+ */
+export interface RESTPatchAPIWebhookMessageJSONBody {
+  /** New content. */
+  content?: string | null
+  /** New embeds, replacing the existing list. */
+  embeds?: APIEmbed[] | null
+  /** New components, replacing the existing list. */
+  components?: APIMessageComponent[] | null
+  /** Which mentions are allowed to ping. */
+  allowed_mentions?: APIAllowedMentions | null
+  /** The attachments to keep, plus descriptors for any new uploads. */
+  attachments?: Partial<APIAttachment>[] | null
+  /** New flags. Only `SuppressEmbeds` and `IsComponentsV2` can be set here. */
+  flags?: number | null
+  /** New poll. Only accepted where a poll was already present. */
+  poll?: APIPollCreateRequest | null
+}
+
+/** The result of `PATCH /webhooks/{webhook.id}/{webhook.token}/messages/{message.id}`. */
+export type RESTPatchAPIWebhookMessageResult = APIMessage
+
+/** The result of `GET /webhooks/{webhook.id}/{webhook.token}/messages/{message.id}`. */
+export type RESTGetAPIWebhookMessageResult = APIMessage
