@@ -133,9 +133,13 @@ while the socket was down. The cache is already correct — handlers are pure fu
 (cache, data), so applying one twice leaves it where the first application did — but state kept
 outside the cache is not.
 
-`shardDisconnect` fires on every close, including the ones the client immediately recovers from,
-because a resume begins with a socket closing. Treat it as a health signal rather than a failure;
-a terminal close raises `error` as well.
+`shardDisconnect` fires on every close **the client did not ask for**, including the ones it
+immediately recovers from, because a resume begins with a socket closing. Treat it as a health
+signal rather than a failure; a terminal close raises `error` as well.
+
+It does not fire on `client.destroy()`. A deliberate shutdown moves the shard to its closing state
+before the socket is touched, so a bot logging disconnects does not log its own shutdown as an
+incident.
 
 ### Guilds
 

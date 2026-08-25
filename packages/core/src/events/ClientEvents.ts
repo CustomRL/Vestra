@@ -100,12 +100,16 @@ export interface ClientEvents<Client = unknown> {
    * A shard's socket closed.
    *
    * @remarks
-   * Fires on every close, including the ones the client immediately recovers from — a resume
-   * begins with a socket closing. It is a health signal rather than a failure: `code` and
-   * `reason` are Discord's, and the shard reconnects on its own unless the code is terminal,
-   * in which case `error` fires as well.
+   * Fires on every close the client did not ask for, including the ones it immediately
+   * recovers from — a resume begins with a socket closing. It is a health signal rather than a
+   * failure: `code` and `reason` are Discord's, and the shard reconnects on its own unless the
+   * code is terminal, in which case `error` fires as well.
    *
-   * Also fires on {@link Client.destroy}, because that closes the socket like anything else.
+   * **It does not fire on {@link Client.destroy}.** A deliberate shutdown moves the shard to
+   * `Closing` before the socket is touched, and the close that follows is suppressed — so a
+   * bot logging disconnects does not log its own shutdown as an incident. Verified against
+   * live Discord by the testing bot's `lifecycle-check`, whose first version drove the close
+   * through `destroy()` and reported this event missing.
    */
   shardDisconnect: [shardId: number, code: number, reason: string]
 
