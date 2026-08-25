@@ -18,6 +18,8 @@ import {
   type RateLimitInfo,
 } from './ratelimit/SequentialHandler.js'
 import { ApplicationCommandRoutes } from './routes/application-commands.js'
+import { EmojiRoutes } from './routes/emojis.js'
+import { StickerRoutes } from './routes/stickers.js'
 import { ChannelRoutes } from './routes/channels.js'
 import { GatewayRoutes } from './routes/gateway.js'
 import { InteractionRoutes } from './routes/interactions.js'
@@ -130,6 +132,23 @@ export class REST extends EventEmitter<RESTEvents> {
    * a deployment decision rather than an argument.
    */
   readonly commands: ApplicationCommandRoutes
+  /**
+   * Emoji endpoints, for guilds and for the application itself.
+   *
+   * @remarks
+   * Both live here because they are one resource with two owners. A guild emoji counts
+   * against a guild's slots and can be limited to roles; an application emoji belongs to the
+   * bot and works everywhere it does.
+   */
+  readonly emojis: EmojiRoutes
+  /**
+   * Sticker endpoints.
+   *
+   * @remarks
+   * Creating one is the only route in the API whose parameters are discrete form parts rather
+   * than a `payload_json` object, which is why `RequestData` has a `fields` member at all.
+   */
+  readonly stickers: StickerRoutes
 
   /**
    * @param options - Overrides for the client defaults.
@@ -155,6 +174,8 @@ export class REST extends EventEmitter<RESTEvents> {
     this.webhooks = new WebhookRoutes(this)
     this.invites = new InviteRoutes(this)
     this.commands = new ApplicationCommandRoutes(this)
+    this.emojis = new EmojiRoutes(this)
+    this.stickers = new StickerRoutes(this)
     this.users = new UserRoutes(this)
     this.gateway = new GatewayRoutes(this)
   }
@@ -302,7 +323,7 @@ export class REST extends EventEmitter<RESTEvents> {
     if (request.files !== undefined && request.files.length > 0) {
       // Content-Type is deliberately left unset: fetch adds it with the boundary, and
       // overriding it produces a request Discord cannot parse.
-      body = buildFormData(request.body, request.files)
+      body = buildFormData(request.body, request.files, request.fields)
     } else if (request.body !== undefined) {
       headers.set('Content-Type', 'application/json')
       body = JSON.stringify(request.body)

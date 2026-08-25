@@ -5,6 +5,7 @@ import type { RawFile } from '../RESTOptions.js'
  *
  * @param body - The JSON body, sent as the `payload_json` part.
  * @param files - The files to attach.
+ * @param fields - Text parts sent as their own fields rather than inside `payload_json`.
  * @returns A `FormData` instance ready to pass to `fetch`.
  *
  * @remarks
@@ -14,13 +15,25 @@ import type { RawFile } from '../RESTOptions.js'
  *
  * File part names matter: `files[n]` is what the `attachments` array in the JSON body
  * refers to by index, and a mismatch silently drops the attachment.
+ *
+ * `fields` exists for `POST /guilds/{id}/stickers`, the one endpoint whose parameters are
+ * discrete text parts rather than a `payload_json` object. Both may be passed, though no
+ * route needs both today.
  */
-export function buildFormData(body: unknown, files: RawFile[]): FormData {
+export function buildFormData(
+  body: unknown,
+  files: RawFile[],
+  fields?: Record<string, string>,
+): FormData {
   const form = new FormData()
 
   for (const [index, file] of files.entries()) {
     const key = file.key ?? `files[${String(index)}]`
     form.append(key, toBlob(file), file.name)
+  }
+
+  if (fields !== undefined) {
+    for (const [key, value] of Object.entries(fields)) form.append(key, value)
   }
 
   if (body !== undefined) {
