@@ -1,5 +1,5 @@
 import type { ISO8601Timestamp, Snowflake } from '../globals.js'
-import type { EntitlementType, SubscriptionStatus } from '../enums/monetisation.js'
+import type { EntitlementType, SKUType, SubscriptionStatus } from '../enums/monetisation.js'
 
 /**
  * Premium offerings: what a message announces about a purchase, and the entitlements and
@@ -187,4 +187,27 @@ export interface APISubscription {
    * OpenAPI specification also allows `null`.
    */
   country?: string | null
+}
+
+/**
+ * Something an application sells.
+ *
+ * @remarks
+ * A subscription SKU always arrives with a `SubscriptionGroup` beside it, created by Discord
+ * and not purchasable. A caller listing SKUs to show a store has to filter, or it offers the
+ * container as if it were a product.
+ */
+export interface APISKU {
+  /** The SKU's ID. */
+  id: Snowflake
+  /** What it sells. */
+  type: SKUType
+  /** The application it belongs to. */
+  application_id: Snowflake
+  /** The customer-facing name. */
+  name: string
+  /** A URL-safe name Discord generates. Not settable. */
+  slug: string
+  /** `SKUFlags`, as a bit set. */
+  flags: number
 }
