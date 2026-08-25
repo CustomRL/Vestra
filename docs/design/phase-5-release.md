@@ -26,20 +26,33 @@ Verified by reading the repository and running it on 2026-08-24, not recalled.
 
 **REST was the thinnest layer** and is less thin than when this was written:
 
-| Namespace      | Routes                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `channels`     | get, edit, delete, getMessages, getMessage, createMessage, editMessage, deleteMessage, bulkDeleteMessages, triggerTyping; addReaction, removeOwnReaction, removeUserReaction, getReactions, removeAllReactions, removeEmojiReactions; getPinnedMessages, pinMessage, unpinMessage; getInvites, createInvite; startThread, startThreadFromMessage, joinThread, leaveThread, addThreadMember, removeThreadMember, getThreadMembers |
-| `guilds`       | get, getMember, getMembers, editMember, removeMember, createBan, removeBan, getBan, getRoles, createRole, editRole, deleteRole, addMemberRole, removeMemberRole, getChannels, createChannel, getInvites, getActiveThreads                                                                                                                                                                                                        |
-| `webhooks`     | create, getForChannel, getForGuild, get, getWithToken, edit, editWithToken, delete, deleteWithToken, execute                                                                                                                                                                                                                                                                                                                     |
-| `invites`      | get, delete                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `users`        | getCurrent, get, editCurrent, createDM                                                                                                                                                                                                                                                                                                                                                                                           |
-| `interactions` | reply, getReply, editReply, deleteReply, followUp, getFollowUp, editFollowUp, deleteFollowUp                                                                                                                                                                                                                                                                                                                                     |
-| `gateway`      | get, getBot                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Namespace         | Methods                                                                                                                                                               |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `channels`        | get, edit, delete; messages, reactions and pins; invites; `startThread`, `startThreadFromMessage`; `setPermission`, `deletePermission`; `triggerTyping`               |
+| `threads`         | join, leave, addMember, removeMember, getMember, getMembers; the three archived listings                                                                              |
+| `guilds`          | get, edit, delete, preview, prune and its dry run, voice regions, vanity URL, welcome screen, onboarding, widget, integrations, channels and their positions, invites |
+| `members`         | get, getAll, search, edit, editCurrent, addRole, removeRole, remove                                                                                                   |
+| `bans`            | get, getAll, create, createBulk, remove                                                                                                                               |
+| `roles`           | get, getAll, create, edit, setPositions, delete                                                                                                                       |
+| `emojis`          | guild and application forms of get, list, create, edit, delete                                                                                                        |
+| `stickers`        | get, packs, guild list, guild get, create, edit, delete                                                                                                               |
+| `webhooks`        | create, list, get, edit, delete and their token forms; execute; message get, edit, delete                                                                             |
+| `invites`         | get, delete                                                                                                                                                           |
+| `users`           | getCurrent, get, editCurrent, createDM, getGuilds, getGuildMember, leaveGuild, getConnections                                                                         |
+| `interactions`    | reply, getReply, editReply, deleteReply, followUp, getFollowUp, editFollowUp, deleteFollowUp                                                                          |
+| `commands`        | global and guild registration, bulk replacement, permissions                                                                                                          |
+| `auditLogs`       | get                                                                                                                                                                   |
+| `autoModeration`  | getRules, getRule, create, edit, delete                                                                                                                               |
+| `scheduledEvents` | getForGuild, get, create, edit, delete, getSubscribers                                                                                                                |
+| `stageInstances`  | create, get, edit, delete                                                                                                                                             |
+| `polls`           | getAnswerVoters, end                                                                                                                                                  |
+| `monetisation`    | SKUs, entitlements including test grants and consumption, subscriptions                                                                                               |
+| `gateway`         | get, getBot                                                                                                                                                           |
 
-Still missing: **emoji, sticker, scheduled-event and audit-log routes**, guild editing, and
-the archived-thread listings. A bot that reads the gateway, replies, registers slash commands
-and manages channels, roles, invites, threads and webhooks is served; one that manages emoji
-or reads an audit log is not.
+Twenty namespaces, 163 methods. **Still missing:** `GET`/`PATCH /applications/@me`, which needs
+the whole `APIApplication` payload modelled. A bot that reads the gateway, replies, registers
+slash commands, manages channels, roles, members, bans, invites, threads, webhooks, emoji,
+stickers, events, stages and auto-moderation, and reads an audit log, is served.
 
 ---
 
@@ -195,8 +208,8 @@ one that nothing calls is either dead or unwired, and both deserve a failing tes
 The API is in good shape and §1's blockers are clear. What is missing is not a feature — it is
 that **nobody has used this**. Every line of evidence in §0 comes from one test bot in two
 guilds, driven by its author. The ergonomics have never met somebody who did not write them,
-and the REST surface is thin enough (§2) that the first real user will want routes that do not
-exist, which is exactly when signatures get revised.
+and even with §2's surface now broad, the first real user will want a signature shaped
+differently from the one they find — which is exactly when signatures get revised.
 
 1.0 is worth declaring when the answer to "what would you change if you could" is "nothing",
 and that answer is only trustworthy after other people have asked for things. A 0.x costs
@@ -205,7 +218,8 @@ nothing and buys the right to be wrong once.
 The concrete gate for 1.0, then, is not a feature list:
 
 - the REST surface covers what a guild-managing bot needs, because that is where signature
-  churn will happen. Substantially there now
+  churn will happen. **Met** — twenty namespaces and 163 methods, with only
+  `/applications/@me` outstanding
 - at least one bot that is not this one has run on it
 - a soak of hours rather than minutes, with a reconnect observed in the wild
 - #7's remaining items answered or explicitly accepted as permanent unknowns
