@@ -101,6 +101,27 @@ describe('interaction responses', () => {
     }
   })
 
+  it('IX6: reads a followup back from the message path, without a bot token', async () => {
+    // The last untested method in this namespace. A followup is addressed as a webhook
+    // message, so reading one is `/webhooks/{app}/{token}/messages/{id}` and not anything
+    // under `/interactions` -- and like every route here it must carry no bot token.
+    const mock = await startMockDiscord((_request, response) => {
+      json(response, 200, { id: '1', content: 'hi' })
+    })
+    try {
+      const rest = clientFor(mock)
+      await rest.interactions.getFollowUp(APPLICATION_ID, TOKEN, '1')
+      const request = mock.requests[0]
+      assert.ok(request !== undefined)
+
+      assert.equal(request.method, 'GET')
+      assert.equal(request.url, `/v10/webhooks/${APPLICATION_ID}/${TOKEN}/messages/1`)
+      assert.equal(request.headers.authorization, undefined, 'a followup read carried the token')
+    } finally {
+      await mock.close()
+    }
+  })
+
   it('IX4: does not queue interaction callbacks behind each other', async () => {
     // **The three-second deadline is why.** Every other route family is serialised per bucket,
     // and a queue would spend that budget waiting. `BucketRegistry` marks anything under
