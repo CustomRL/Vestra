@@ -13,7 +13,7 @@ import type { GuildScheduledEvent } from '../structures/GuildScheduledEvent.js'
 import type { Interaction } from '../structures/Interaction.js'
 import type { GuildMember } from '../structures/GuildMember.js'
 import type { Invite } from '../structures/Invite.js'
-import type { Message } from '../structures/Message.js'
+import type { Message, MessageChanges } from '../structures/Message.js'
 import type { Presence } from '../structures/Presence.js'
 import type { ReactionEmoji } from '../structures/ReactionEmoji.js'
 import type { Role } from '../structures/Role.js'
@@ -277,10 +277,15 @@ export interface ClientEvents<Client = unknown> {
    * A message was edited.
    *
    * @remarks
-   * Carries the message as it now is. There is no "old message" argument: producing one
-   * needs a clone, and a partial update means most of the old message was never known.
+   * Carries the message as it now is, and the previous values of whatever changed. There is
+   * no "old message" argument: producing one needs a clone, every clone this design tried
+   * either threw or landed on a second hidden class, and a partial update means most of the
+   * old message was never known anyway.
+   *
+   * `changes` is `null` when the message was not cached — the usual case under the default
+   * policy — and when the edit changed nothing this library mirrors.
    */
-  messageUpdate: [message: Message<Client>]
+  messageUpdate: [message: Message<Client>, changes: MessageChanges<Client> | null]
   /** A message was deleted. Carries IDs, because the message itself may never have been cached. */
   messageDelete: [messageId: Snowflake, channelId: Snowflake, guildId: Snowflake | undefined]
   /**
