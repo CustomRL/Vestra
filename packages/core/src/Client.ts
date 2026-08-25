@@ -495,8 +495,12 @@ export class Client extends EventEmitter<ClientEvents<EventContext>> {
         onReady: (shardId) => {
           this.#onShardReady(shardId)
         },
-        onResumed: () => undefined,
-        onDisconnect: () => undefined,
+        onResumed: (shardId) => {
+          this.emit('shardResumed', shardId)
+        },
+        onDisconnect: (shardId, code, reason) => {
+          this.emit('shardDisconnect', shardId, code, reason)
+        },
         onGuildsReady: (shardId, unresolved) => {
           this.emit('shardGuildsReady', shardId, unresolved)
         },
