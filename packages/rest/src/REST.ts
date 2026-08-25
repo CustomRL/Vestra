@@ -21,6 +21,8 @@ import { ApplicationCommandRoutes } from './routes/application-commands.js'
 import { AuditLogRoutes } from './routes/audit-logs.js'
 import { AutoModerationRoutes } from './routes/auto-moderation.js'
 import { EmojiRoutes } from './routes/emojis.js'
+import { ScheduledEventRoutes } from './routes/scheduled-events.js'
+import { StageInstanceRoutes } from './routes/stage-instances.js'
 import { StickerRoutes } from './routes/stickers.js'
 import { ThreadRoutes } from './routes/threads.js'
 import { ChannelRoutes } from './routes/channels.js'
@@ -171,6 +173,16 @@ export class REST extends EventEmitter<RESTEvents> {
   readonly auditLogs: AuditLogRoutes
   /** Auto-moderation rule endpoints. */
   readonly autoModeration: AutoModerationRoutes
+  /** Guild scheduled event endpoints. */
+  readonly scheduledEvents: ScheduledEventRoutes
+  /**
+   * Stage instance endpoints.
+   *
+   * @remarks
+   * Addressed by the stage *channel's* ID rather than the instance's, which is the one thing
+   * about this resource that reads wrong and compiles fine.
+   */
+  readonly stageInstances: StageInstanceRoutes
 
   /**
    * @param options - Overrides for the client defaults.
@@ -201,6 +213,8 @@ export class REST extends EventEmitter<RESTEvents> {
     this.threads = new ThreadRoutes(this)
     this.auditLogs = new AuditLogRoutes(this)
     this.autoModeration = new AutoModerationRoutes(this)
+    this.scheduledEvents = new ScheduledEventRoutes(this)
+    this.stageInstances = new StageInstanceRoutes(this)
     this.users = new UserRoutes(this)
     this.gateway = new GatewayRoutes(this)
   }
