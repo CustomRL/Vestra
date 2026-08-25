@@ -11,6 +11,7 @@
  * blocker.
  */
 
+export * from './application.js'
 export * from './application-command.js'
 export * from './audit-log.js'
 export * from './auto-moderation.js'

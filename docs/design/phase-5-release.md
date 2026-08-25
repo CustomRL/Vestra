@@ -47,12 +47,17 @@ Verified by reading the repository and running it on 2026-08-24, not recalled.
 | `stageInstances`  | create, get, edit, delete                                                                                                                                             |
 | `polls`           | getAnswerVoters, end                                                                                                                                                  |
 | `monetisation`    | SKUs, entitlements including test grants and consumption, subscriptions                                                                                               |
+| `applications`    | getCurrent, editCurrent, get                                                                                                                                          |
 | `gateway`         | get, getBot                                                                                                                                                           |
 
-Twenty namespaces, 163 methods. **Still missing:** `GET`/`PATCH /applications/@me`, which needs
-the whole `APIApplication` payload modelled. A bot that reads the gateway, replies, registers
-slash commands, manages channels, roles, members, bans, invites, threads, webhooks, emoji,
-stickers, events, stages and auto-moderation, and reads an audit log, is served.
+Twenty-one namespaces, 166 methods, covering every resource family Discord documents for a bot
+token. A bot that reads the gateway, replies, registers slash commands, manages channels, roles,
+members, bans, invites, threads, webhooks, emoji, stickers, events, stages and auto-moderation,
+reads an audit log and configures itself, is served.
+
+What is left out is deliberate rather than pending: the OAuth2 token endpoints, which are not a
+bot-token surface and belong to whatever handles the authorisation flow, and the RPC and voice
+protocols, which are not REST at all.
 
 ---
 
@@ -218,8 +223,8 @@ nothing and buys the right to be wrong once.
 The concrete gate for 1.0, then, is not a feature list:
 
 - the REST surface covers what a guild-managing bot needs, because that is where signature
-  churn will happen. **Met** — twenty namespaces and 163 methods, with only
-  `/applications/@me` outstanding
+  churn will happen. **Met** — twenty-one namespaces and 166 methods, with no bot-token family
+  outstanding
 - at least one bot that is not this one has run on it
 - a soak of hours rather than minutes, with a reconnect observed in the wild
 - #7's remaining items answered or explicitly accepted as permanent unknowns

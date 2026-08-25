@@ -11,6 +11,7 @@
  * runtime code.
  */
 
+export * from './application.js'
 export * from './audit-log.js'
 export * from './auto-moderation.js'
 export * from './channel.js'
