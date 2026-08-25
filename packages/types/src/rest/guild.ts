@@ -3,6 +3,7 @@ import type { ChannelType } from '../enums/channel.js'
 import type {
   DefaultMessageNotificationLevel,
   ExplicitContentFilterLevel,
+  GuildOnboardingMode,
   VerificationLevel,
 } from '../enums/guild.js'
 import type { APIChannel, APIOverwrite } from '../payloads/channel.js'
@@ -10,7 +11,11 @@ import type { APIIntegration } from '../payloads/integration.js'
 import type {
   APIBan,
   APIGuild,
+  APIGuildOnboarding,
+  APIGuildOnboardingPrompt,
   APIGuildPreview,
+  APIGuildWidget,
+  APIGuildWidgetSettings,
   APIGuildWelcomeScreen,
   APIGuildWelcomeScreenChannel,
   APIVoiceRegion,
@@ -441,3 +446,62 @@ export type RESTPatchAPIGuildChannelPositionsJSONBody = RESTPatchAPIGuildChannel
  * rather than of the type.
  */
 export type RESTGetAPIGuildIntegrationsResult = APIIntegration[]
+
+/** The result of `GET /guilds/{guild.id}/onboarding`. */
+export type RESTGetAPIGuildOnboardingResult = APIGuildOnboarding
+
+/**
+ * `PUT /guilds/{guild.id}/onboarding`
+ *
+ * @remarks
+ * **A `PUT`, and it replaces the whole configuration.** There is no partial edit: every field
+ * is required, so reading the current onboarding and writing it back with one change is the
+ * only safe way to modify it.
+ *
+ * Prompt and option IDs are required and must be **unique across the whole payload**, not just
+ * within a prompt. Discord assigns real IDs on the way out, but a caller creating new prompts
+ * has to invent them — any distinct number will do, and reusing one silently merges two
+ * options.
+ */
+export interface RESTPutAPIGuildOnboardingJSONBody {
+  /** The complete prompt list. */
+  prompts: APIGuildOnboardingPrompt[]
+  /** Channels every new member sees. */
+  default_channel_ids: Snowflake[]
+  /** Whether onboarding runs. */
+  enabled: boolean
+  /** What counts towards Discord's minimum requirements. */
+  mode: GuildOnboardingMode
+}
+
+/** The result of `PUT /guilds/{guild.id}/onboarding`. */
+export type RESTPutAPIGuildOnboardingResult = APIGuildOnboarding
+
+/** The result of `GET /guilds/{guild.id}/widget-settings`. */
+export type RESTGetAPIGuildWidgetSettingsResult = APIGuildWidgetSettings
+
+/**
+ * `PATCH /guilds/{guild.id}/widget`
+ *
+ * @remarks
+ * Enabling the widget makes the guild's name, an invite, its voice channels and everybody
+ * currently online readable by anybody with the guild ID and no token at all. That is what a
+ * widget is for, and it is worth being deliberate about.
+ */
+export interface RESTPatchAPIGuildWidgetSettingsJSONBody {
+  /** Whether the widget is on. */
+  enabled?: boolean
+  /** The channel its invite points at, or `null` for none. */
+  channel_id?: Snowflake | null
+}
+
+/** The result of `PATCH /guilds/{guild.id}/widget`. */
+export type RESTPatchAPIGuildWidgetSettingsResult = APIGuildWidgetSettings
+
+/**
+ * The result of `GET /guilds/{guild.id}/widget.json`.
+ *
+ * @remarks
+ * The unauthenticated one. Its `members` carry anonymised IDs rather than user snowflakes.
+ */
+export type RESTGetAPIGuildWidgetResult = APIGuildWidget

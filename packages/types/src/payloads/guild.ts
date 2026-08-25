@@ -1,5 +1,7 @@
 import type { ISO8601Timestamp, Permissions, Snowflake } from '../globals.js'
 import type {
+  GuildOnboardingMode,
+  GuildOnboardingPromptType,
   DefaultMessageNotificationLevel,
   ExplicitContentFilterLevel,
   GuildNSFWLevel,
@@ -337,4 +339,149 @@ export interface APIVoiceRegion {
   deprecated: boolean
   /** Whether it is a custom region for an event rather than a general one. */
   custom: boolean
+}
+
+/**
+ * One choice within an onboarding prompt.
+ *
+ * @remarks
+ * Choosing it grants the channels and roles it names. Both lists may be empty, and an option
+ * that names neither does nothing at all — which is a valid configuration and almost never an
+ * intended one.
+ */
+export interface APIGuildOnboardingPromptOption {
+  /** The option's ID. */
+  id: Snowflake
+  /** Channels a member picking this option gains. */
+  channel_ids: Snowflake[]
+  /** Roles a member picking this option gains. */
+  role_ids: Snowflake[]
+  /** The emoji shown beside it, when there is one. */
+  emoji?: APIEmoji
+  /** The custom emoji's ID, on the way in. */
+  emoji_id?: Snowflake
+  /** The emoji's name, or the unicode character, on the way in. */
+  emoji_name?: string
+  /** Whether the emoji is animated, on the way in. */
+  emoji_animated?: boolean
+  /** The option's title. */
+  title: string
+  /** The line under the title. */
+  description: string | null
+}
+
+/**
+ * One question in a guild's onboarding flow.
+ *
+ * @remarks
+ * `in_onboarding` is what decides whether a prompt is part of the initial flow or only appears
+ * later in Customise Community. A prompt with it `false` is configured, visible in settings,
+ * and never shown to somebody joining — which is the state a caller who did not set it ends
+ * up in.
+ */
+export interface APIGuildOnboardingPrompt {
+  /** The prompt's ID. */
+  id: Snowflake
+  /** How it is presented. */
+  type: GuildOnboardingPromptType
+  /** The choices offered. */
+  options: APIGuildOnboardingPromptOption[]
+  /** The question. */
+  title: string
+  /** Whether only one option may be chosen. */
+  single_select: boolean
+  /** Whether an answer is required before onboarding completes. */
+  required: boolean
+  /** Whether it appears in the initial flow rather than only in Customise Community. */
+  in_onboarding: boolean
+}
+
+/**
+ * A guild's onboarding configuration.
+ *
+ * @remarks
+ * `enabled` is not the whole story: Discord requires a minimum number of default channels and
+ * prompts before onboarding may be turned on, and {@link GuildOnboardingMode} decides what
+ * counts towards that minimum. A configuration that no longer meets it is disabled by Discord
+ * rather than rejected at the time.
+ */
+export interface APIGuildOnboarding {
+  /** The guild this belongs to. */
+  guild_id: Snowflake
+  /** The prompts, in order. */
+  prompts: APIGuildOnboardingPrompt[]
+  /** Channels every new member sees regardless of what they pick. */
+  default_channel_ids: Snowflake[]
+  /** Whether onboarding runs for new members. */
+  enabled: boolean
+  /** What counts towards Discord's minimum requirements. */
+  mode: GuildOnboardingMode
+}
+
+/**
+ * Whether a guild's widget is on, and what it points at.
+ */
+export interface APIGuildWidgetSettings {
+  /** Whether the widget is enabled. */
+  enabled: boolean
+  /** The channel its invite points at, or `null` for none. */
+  channel_id: Snowflake | null
+}
+
+/**
+ * The public widget payload.
+ *
+ * @remarks
+ * **Readable without authentication**, which is the whole point of it and the reason enabling
+ * a widget is a decision rather than a default: it exposes the guild's name, an invite, its
+ * voice channels and everybody currently online to anybody with the guild ID.
+ *
+ * `members` is capped at 100 and carries fabricated IDs rather than real user IDs, because the
+ * route is unauthenticated. Treating them as user snowflakes gets nothing.
+ */
+export interface APIGuildWidget {
+  /** The guild's ID. */
+  id: Snowflake
+  /** The guild's name. */
+  name: string
+  /** An invite to the configured channel, or `null`. */
+  instant_invite: string | null
+  /** The guild's voice channels. */
+  channels: APIGuildWidgetChannel[]
+  /** Up to 100 online members, with anonymised IDs. */
+  members: APIGuildWidgetMember[]
+  /** How many members are online. */
+  presence_count: number
+}
+
+/** A voice channel as the widget describes it. */
+export interface APIGuildWidgetChannel {
+  /** The channel's ID. */
+  id: Snowflake
+  /** Its name. */
+  name: string
+  /** Its position. */
+  position: number
+}
+
+/**
+ * An online member as the widget describes them.
+ *
+ * @remarks
+ * `id` is **not** a user ID. The route is unauthenticated, so Discord anonymises it; the only
+ * fields worth reading are the display name, the status and the avatar URL.
+ */
+export interface APIGuildWidgetMember {
+  /** An anonymised identifier, unique only within this payload. */
+  id: string
+  /** The display name. */
+  username: string
+  /** A discriminator, always `0000` here. */
+  discriminator: string
+  /** The avatar hash, usually `null`. */
+  avatar: string | null
+  /** Their status. */
+  status: string
+  /** A URL to the avatar Discord chose for them. */
+  avatar_url: string
 }

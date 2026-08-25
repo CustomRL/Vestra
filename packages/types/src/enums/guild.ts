@@ -170,3 +170,36 @@ export const InviteTargetType = {
  * An invite target type.
  */
 export type InviteTargetType = (typeof InviteTargetType)[keyof typeof InviteTargetType]
+
+/**
+ * How strictly Discord counts a guild's onboarding as complete.
+ *
+ * @remarks
+ * Not a cosmetic setting. A guild must offer a minimum number of default channels and prompts
+ * before onboarding can be enabled at all, and this decides what counts towards that minimum —
+ * `Advanced` lets prompts count, `Default` does not. A guild that switches to `Default` with
+ * too few default channels has its onboarding turned off by Discord.
+ */
+export const GuildOnboardingMode = {
+  /** Only default channels count towards the requirements. */
+  Default: 0,
+  /** Default channels and prompts both count. */
+  Advanced: 1,
+} as const
+
+/** One of {@link GuildOnboardingMode}. */
+export type GuildOnboardingMode = (typeof GuildOnboardingMode)[keyof typeof GuildOnboardingMode]
+
+/**
+ * How an onboarding prompt is presented.
+ */
+export const GuildOnboardingPromptType = {
+  /** A grid of options. */
+  MultipleChoice: 0,
+  /** A dropdown list. */
+  Dropdown: 1,
+} as const
+
+/** One of {@link GuildOnboardingPromptType}. */
+export type GuildOnboardingPromptType =
+  (typeof GuildOnboardingPromptType)[keyof typeof GuildOnboardingPromptType]
