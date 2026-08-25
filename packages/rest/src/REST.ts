@@ -19,6 +19,8 @@ import {
 } from './ratelimit/SequentialHandler.js'
 import { ApplicationCommandRoutes } from './routes/application-commands.js'
 import { EmojiRoutes } from './routes/emojis.js'
+import { ScheduledEventRoutes } from './routes/scheduled-events.js'
+import { StageInstanceRoutes } from './routes/stage-instances.js'
 import { StickerRoutes } from './routes/stickers.js'
 import { ChannelRoutes } from './routes/channels.js'
 import { GatewayRoutes } from './routes/gateway.js'
@@ -149,6 +151,16 @@ export class REST extends EventEmitter<RESTEvents> {
    * than a `payload_json` object, which is why `RequestData` has a `fields` member at all.
    */
   readonly stickers: StickerRoutes
+  /** Guild scheduled event endpoints. */
+  readonly scheduledEvents: ScheduledEventRoutes
+  /**
+   * Stage instance endpoints.
+   *
+   * @remarks
+   * Addressed by the stage *channel's* ID rather than the instance's, which is the one thing
+   * about this resource that reads wrong and compiles fine.
+   */
+  readonly stageInstances: StageInstanceRoutes
 
   /**
    * @param options - Overrides for the client defaults.
@@ -176,6 +188,8 @@ export class REST extends EventEmitter<RESTEvents> {
     this.commands = new ApplicationCommandRoutes(this)
     this.emojis = new EmojiRoutes(this)
     this.stickers = new StickerRoutes(this)
+    this.scheduledEvents = new ScheduledEventRoutes(this)
+    this.stageInstances = new StageInstanceRoutes(this)
     this.users = new UserRoutes(this)
     this.gateway = new GatewayRoutes(this)
   }
