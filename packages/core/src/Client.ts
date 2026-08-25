@@ -113,6 +113,12 @@ export class Client extends EventEmitter<ClientEvents<EventContext>> {
       this.cache.stores,
       this.options.gateway.timers ?? SystemTimers,
       this.options.sweepInterval,
+      // On the same tick as the cache, because a client should own one timer rather than two.
+      // Without this nothing ever dropped an idle rate-limit handler, and `REST.sweep()`'s own
+      // documentation says the count is unbounded without it.
+      () => {
+        this.rest.sweep()
+      },
     )
 
     this.shards = new ShardManager({

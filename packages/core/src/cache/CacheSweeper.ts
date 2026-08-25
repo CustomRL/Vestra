@@ -22,28 +22,48 @@ export class CacheSweeper {
   readonly #stores: readonly AnyCacheStore[]
   readonly #timers: Timers
   readonly #intervalMs: number
+  readonly #also: (() => void) | undefined
   #handle: ReturnType<Timers['setTimeout']> | undefined
 
   /**
    * @param stores - Every store; the ones with no TTL are filtered out once, here.
    * @param timers - Timer and clock sources.
    * @param intervalMs - How often to sweep, or `null` to never arm a timer.
+   * @param also - Other periodic maintenance to run on the same tick.
+   *
+   * @remarks
+   * `also` exists so the client keeps **one** timer rather than two. `REST.sweep()` drops
+   * rate-limit handlers that have gone idle, and its own TSDoc warns that "the count is
+   * unbounded without this" — but nothing called it, in `src` or in any test, so a
+   * long-running client accumulated one handler per route and major parameter for the life of
+   * the process. Found by `tests/reachability.test.ts` once that guard was rebuilt to resolve
+   * call sites through the type checker.
    */
   constructor(
     stores: readonly AnyCacheStore[],
     timers: Timers,
     intervalMs: number | null = 60_000,
+    also?: () => void,
   ) {
     // Filtered once at construction rather than on every tick. A scope with no TTL can
     // never have an expired entry, so visiting it is pure cost.
     this.#stores = stores.filter((store) => store.enabled && store.expires)
     this.#timers = timers
     this.#intervalMs = intervalMs ?? 0
+    this.#also = also
   }
 
-  /** Whether anything needs sweeping at all. */
+  /**
+   * Whether anything needs sweeping at all.
+   *
+   * @remarks
+   * The default cache configuration has no TTL'd scope, so before `also` existed this was
+   * false for almost every client and no timer was ever armed — which is the right answer for
+   * the cache and was the wrong one for the rate-limit handlers riding along with it.
+   */
   get needed(): boolean {
-    return this.#stores.length > 0 && this.#intervalMs > 0
+    if (this.#intervalMs <= 0) return false
+    return this.#stores.length > 0 || this.#also !== undefined
   }
 
   /** Whether the timer is currently armed. */
@@ -93,6 +113,7 @@ export class CacheSweeper {
     const now = this.#timers.now()
     let dropped = 0
     for (const store of this.#stores) dropped += store.sweep(now)
+    this.#also?.()
     return dropped
   }
 

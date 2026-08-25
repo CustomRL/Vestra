@@ -83,6 +83,50 @@ describe('client option fan-out', () => {
     }
   })
 
+  it('O2b: sweeps the REST rate-limit handlers on the client tick', async () => {
+    // **The leak the rebuilt reachability guard found.** `REST.sweep()` drops handlers that
+    // have gone idle, and its own TSDoc warns "the count is unbounded without this" -- but
+    // nothing called it, in `src` or in any test, so a long-running client accumulated one
+    // handler per route and major parameter for the life of the process.
+    //
+    // Driven through the real timer seam rather than by reconstructing a sweeper, because the
+    // thing under test is the client's own wiring. The interval is distinctive so the sweep
+    // callback can be told apart from the gateway's own timers.
+    const SWEEP_MS = 45_678
+    let tick: (() => void) | undefined
+    const timers = {
+      ...SystemTimers,
+      setTimeout: (callback: () => void, ms: number) => {
+        if (ms === SWEEP_MS) tick = callback
+        return SystemTimers.setTimeout(callback, ms)
+      },
+    }
+
+    const { client: built } = await scriptedClient({
+      sweepInterval: SWEEP_MS,
+      gateway: { timers },
+    })
+
+    let swept = 0
+    const original = built.rest.sweep.bind(built.rest)
+    built.rest.sweep = () => {
+      swept += 1
+      return original()
+    }
+
+    try {
+      // The default cache has no TTL'd scope, so before this fix `needed` was false and the
+      // timer was never armed at all -- which is the right answer for the cache and was the
+      // wrong one for the rate-limit handlers meant to ride along with it.
+      assert.ok(tick !== undefined, 'the client armed no sweep timer')
+
+      tick()
+      assert.equal(swept, 1, 'the client tick did not sweep the rate-limit handlers')
+    } finally {
+      await built.destroy()
+    }
+  })
+
   it('O3: folds an intents array to the same bit set as the bitwise form', async () => {
     const array = client({
       intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages],

@@ -59,21 +59,57 @@ interface Accessor {
 }
 
 /**
- * Whether a method's `this` is constrained on the cache capability.
+ * Whether a type is one that carries a cache, however it was spelled.
  *
- * @param method - The declaration to inspect.
- * @returns Whether it reads the cache.
+ * @param type - The candidate constraint or type argument.
+ * @returns Whether reaching the cache through it is possible.
  *
  * @remarks
- * Matched on the constraint rather than on the body, because the constraint is what the
- * design uses to say "this one needs the cache" — `roles<C extends CacheCapable>(this:
- * Guild<C>)`. A body-based check would also catch methods that happen to mention the cache
- * without promising anything about it.
+ * The **structural** question rather than the textual one, and that is the correction. The
+ * first version compared `constraint.getText()` to the literal string `CacheCapable`, so
+ * three legal spellings escaped it silently — an intersection (`C extends CacheCapable &
+ * RestCapable`), any alias or renamed import, and the plainest form of all,
+ * `this: Message<CacheCapable>`, which has no method type parameter to inspect. Each
+ * compiles, reads the cache, and was invisible; an audit added all three to `Message` and
+ * this file still reported 3/3 green.
+ *
+ * Asking whether the type has a `cache` property answers all of them at once, because that
+ * is what "can reach the cache" actually means.
+ */
+function carriesCache(type: ts.Type): boolean {
+  const parts = type.isIntersection() ? type.types : [type]
+  return parts.some((part) => checker.getPropertyOfType(part, 'cache') !== undefined)
+}
+
+/**
+ * Whether a method can reach the cache through its `this`.
+ *
+ * @param method - The declaration to inspect.
+ * @returns Whether it is a cache-backed accessor.
+ *
+ * @remarks
+ * Both routes are checked: a constrained method type parameter (`roles<C extends
+ * CacheCapable>(this: Guild<C>)`) and a `this` parameter whose type arguments carry the
+ * capability directly (`channel(this: Message<CacheCapable>)`). Only the first existed
+ * before, which is why the second was an escape hatch rather than a style choice.
  */
 function readsCache(method: ts.MethodDeclaration): boolean {
-  return (method.typeParameters ?? []).some(
-    (parameter) => parameter.constraint?.getText() === 'CacheCapable',
+  for (const parameter of method.typeParameters ?? []) {
+    if (parameter.constraint === undefined) continue
+    if (carriesCache(checker.getTypeFromTypeNode(parameter.constraint))) return true
+  }
+
+  const self = method.parameters.find(
+    (parameter) => ts.isIdentifier(parameter.name) && parameter.name.text === 'this',
   )
+  if (self?.type === undefined) return false
+
+  const reference = checker.getTypeFromTypeNode(self.type) as ts.TypeReference
+  for (const argument of checker.getTypeArguments(reference)) {
+    if (carriesCache(argument)) return true
+  }
+
+  return false
 }
 
 /** Every cache-backed accessor across the package's sources. */
