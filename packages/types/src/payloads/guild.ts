@@ -260,3 +260,81 @@ export interface APIInvite {
   /** When the invite expires. */
   expires_at?: ISO8601Timestamp | null
 }
+
+/**
+ * The public face of a discoverable guild.
+ *
+ * @remarks
+ * What `GET /guilds/{id}/preview` returns, and the only guild shape readable without being a
+ * member — a bot can fetch this for any guild with `DISCOVERABLE`, which is what makes it
+ * useful for a "should I join" check. It is a strict subset of {@link APIGuild} plus two
+ * counts, both approximate.
+ */
+export interface APIGuildPreview {
+  /** The guild's ID. */
+  id: Snowflake
+  /** The guild's name. */
+  name: string
+  /** The icon hash. */
+  icon: string | null
+  /** The splash hash. */
+  splash: string | null
+  /** The discovery splash hash. */
+  discovery_splash: string | null
+  /** The guild's custom emojis. */
+  emojis: APIEmoji[]
+  /** The guild's feature flags. */
+  features: string[]
+  /** Roughly how many members it has. */
+  approximate_member_count: number
+  /** Roughly how many are online. */
+  approximate_presence_count: number
+  /** The description shown in discovery. */
+  description: string | null
+  /** The guild's stickers. */
+  stickers: APISticker[]
+}
+
+/**
+ * One channel offered on a guild's welcome screen.
+ */
+export interface APIGuildWelcomeScreenChannel {
+  /** The channel to show. */
+  channel_id: Snowflake
+  /** The blurb beside it. */
+  description: string
+  /** The custom emoji to show, or `null` for a unicode one. */
+  emoji_id: Snowflake | null
+  /** The emoji's name, or the unicode character itself. */
+  emoji_name: string | null
+}
+
+/**
+ * The panel a community guild shows somebody who has just joined.
+ */
+export interface APIGuildWelcomeScreen {
+  /** The text above the channels. */
+  description: string | null
+  /** The channels offered, at most five. */
+  welcome_channels: APIGuildWelcomeScreenChannel[]
+}
+
+/**
+ * A voice server region.
+ *
+ * @remarks
+ * `id` is what a voice channel's `rtc_region` holds. `deprecated` regions still work and still
+ * appear, so filtering on it is the caller's decision rather than the API's.
+ */
+export interface APIVoiceRegion {
+  /** The region's ID, as used by `rtc_region`. */
+  id: string
+  /** A human-readable name. */
+  name: string
+  /** Whether this is the closest region to the current user. */
+  optimal: boolean
+  /** Whether Discord considers the region deprecated. */
+  deprecated: boolean
+  /** Whether it is a custom region for an event rather than a general one. */
+  custom: boolean
+}
