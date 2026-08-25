@@ -85,3 +85,46 @@ export const SubscriptionStatus = {
  * A subscription status.
  */
 export type SubscriptionStatus = (typeof SubscriptionStatus)[keyof typeof SubscriptionStatus]
+
+/**
+ * What a SKU sells.
+ *
+ * @remarks
+ * Only `Subscription` is purchasable; `SubscriptionGroup` is the container Discord creates
+ * alongside it and shows in the store, and a bot listing SKUs sees both. Filtering to
+ * `Subscription` is almost always what a caller wants — the group has no price and cannot be
+ * bought.
+ */
+export const SKUType = {
+  /** A one-off purchase that stays owned. */
+  Durable: 2,
+  /** A one-off purchase that is used up. */
+  Consumable: 3,
+  /** A recurring subscription. */
+  Subscription: 5,
+  /** The system-created container for a subscription. Not purchasable. */
+  SubscriptionGroup: 6,
+} as const
+
+/** One of {@link SKUType}. */
+export type SKUType = (typeof SKUType)[keyof typeof SKUType]
+
+/**
+ * Flags on a SKU.
+ *
+ * @remarks
+ * `GuildSubscription` and `UserSubscription` are mutually exclusive and decide who owns the
+ * entitlement a purchase creates — a guild-wide unlock or one person's. Reading the wrong one
+ * grants the wrong scope.
+ */
+export const SKUFlags = {
+  /** The SKU is available for purchase. */
+  Available: 1 << 2,
+  /** Bought once for a guild, and everybody in it has access. */
+  GuildSubscription: 1 << 7,
+  /** Bought by one user, who has access everywhere. */
+  UserSubscription: 1 << 8,
+} as const
+
+/** One of {@link SKUFlags}. */
+export type SKUFlags = (typeof SKUFlags)[keyof typeof SKUFlags]

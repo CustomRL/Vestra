@@ -21,6 +21,7 @@ import { ApplicationCommandRoutes } from './routes/application-commands.js'
 import { AuditLogRoutes } from './routes/audit-logs.js'
 import { BanRoutes } from './routes/bans.js'
 import { MemberRoutes } from './routes/members.js'
+import { MonetisationRoutes } from './routes/monetisation.js'
 import { PollRoutes } from './routes/polls.js'
 import { RoleRoutes } from './routes/roles.js'
 import { AutoModerationRoutes } from './routes/auto-moderation.js'
@@ -173,6 +174,15 @@ export class REST extends EventEmitter<RESTEvents> {
    */
   readonly polls: PollRoutes
   /**
+   * Entitlement, SKU and subscription endpoints.
+   *
+   * @remarks
+   * A SKU is what is for sale and an entitlement is what a purchase produced. Listing
+   * entitlements includes expired ones unless `exclude_ended` says otherwise, which is the
+   * easiest mistake to make in this family.
+   */
+  readonly monetisation: MonetisationRoutes
+  /**
    * Membership of and access to existing threads.
    *
    * @remarks
@@ -232,6 +242,7 @@ export class REST extends EventEmitter<RESTEvents> {
     this.emojis = new EmojiRoutes(this)
     this.stickers = new StickerRoutes(this)
     this.polls = new PollRoutes(this)
+    this.monetisation = new MonetisationRoutes(this)
     this.threads = new ThreadRoutes(this)
     this.auditLogs = new AuditLogRoutes(this)
     this.autoModeration = new AutoModerationRoutes(this)
