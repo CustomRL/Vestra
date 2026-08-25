@@ -14,19 +14,22 @@ Node itself.
 
 - `@vestra/types` — hand-written Discord API typings, no dependencies.
 - `@vestra/rest` — REST client with bucket-accurate rate limiting, a shared global limiter and
-  an invalid-request tracker that refuses to send rather than earn a Cloudflare ban.
+  an invalid-request tracker that refuses to send rather than earn a Cloudflare ban. Twenty
+  route namespaces, from messages and members to emoji, stickers, scheduled events,
+  auto-moderation, polls and the audit log.
 - `@vestra/gateway` — sharding, session resumption, identify pacing, and pluggable transport,
   compression, encoding and session-store seams.
-- `@vestra/core` — the client: 51 dispatch handlers covering every gateway event that has
-  one, an opt-in per-scope cache, and structures that admit a cache miss rather than
-  asserting.
+- `@vestra/core` — the client: 51 dispatch handlers covering every gateway event that has one,
+  58 typed events, an opt-in per-scope cache, and structures that admit a cache miss rather
+  than asserting. Update events report what the edit displaced, since a cheap clone of a
+  structure turns out not to exist.
 - `vestra` — the meta-package.
 
-**`0.1.0` rather than `1.0.0`, deliberately.** The API is in the shape we want and the test
-suite is thorough, but nobody outside this repository has used it: every line of evidence comes
-from one test bot in two guilds, driven by its author. The REST surface is also incomplete — there are no
-emoji, sticker, scheduled-event or audit-log routes — and the first real
-user will want signatures that do not exist yet, which is exactly when signatures get revised. `docs/design/phase-5-release.md`
-records the reasoning and the concrete gate for a 1.0.
+**`0.1.0` rather than `1.0.0`, deliberately.** The API is in the shape we want, the test suite
+is thorough and the REST surface covers twenty resource families, but nobody outside this
+repository has used it: every line of evidence comes from one test bot in two guilds, driven by
+its author. The first real user will want a signature shaped differently from the one they
+find, which is exactly when signatures get revised. `docs/design/phase-5-release.md` records the
+reasoning and the concrete gate for a 1.0.
 
 Requires Node 22.15.0 or newer, the first version with native zstd in `node:zlib`.
