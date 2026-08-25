@@ -15,7 +15,7 @@ import type {
   Snowflake,
 } from '@vestra/types'
 import type { REST } from '../REST.js'
-import type { RouteOptions } from './channels.js'
+import type { RouteOptions } from './options.js'
 
 /**
  * Guild, member, ban and role endpoints.

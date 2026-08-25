@@ -16,21 +16,7 @@ import type {
   Snowflake,
 } from '@vestra/types'
 import type { REST } from '../REST.js'
-import type { RawFile } from '../RESTOptions.js'
-
-/** Options accepted by every route method. */
-export interface RouteOptions {
-  /** A reason recorded in the guild's audit log. */
-  reason?: string
-  /** Aborts the request, including while it waits in a rate-limit queue. */
-  signal?: AbortSignal
-}
-
-/** Options for sending or editing a message. */
-export interface MessageOptions extends RouteOptions {
-  /** Files to upload alongside the message. */
-  files?: RawFile[]
-}
+import type { MessageOptions, RouteOptions } from './options.js'
 
 /**
  * Channel and message endpoints.

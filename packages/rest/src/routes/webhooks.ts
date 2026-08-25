@@ -8,7 +8,7 @@ import type {
   Snowflake,
 } from '@vestra/types'
 import type { REST } from '../REST.js'
-import type { MessageOptions, RouteOptions } from './channels.js'
+import type { MessageOptions, RouteOptions } from './options.js'
 
 /**
  * Webhook endpoints.

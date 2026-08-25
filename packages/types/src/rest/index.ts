@@ -13,10 +13,12 @@
 
 export * from './application-command.js'
 export * from './channel.js'
+export * from './emoji.js'
 export * from './gateway.js'
 export * from './guild.js'
 export * from './interaction.js'
 export * from './invite.js'
+export * from './sticker.js'
 export * from './thread.js'
 export * from './user.js'
 export * from './webhook.js'

@@ -27,6 +27,17 @@ export interface RequestData {
   /** Files to upload, which switches the request to `multipart/form-data`. */
   files?: RawFile[]
   /**
+   * Form parts sent beside the files, each as its own field rather than inside `payload_json`.
+   *
+   * @remarks
+   * For the one endpoint that needs it. `POST /guilds/{id}/stickers` takes `name`,
+   * `description` and `tags` as three separate text parts; sending them the usual way, inside
+   * `payload_json`, gets a validation error naming fields the caller believes it did send.
+   *
+   * Only read when `files` is present, because there is no multipart body without one.
+   */
+  fields?: Record<string, string>
+  /**
    * A reason recorded in the guild's audit log.
    *
    * @remarks
