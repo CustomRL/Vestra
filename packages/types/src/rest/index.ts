@@ -12,6 +12,8 @@
  */
 
 export * from './application-command.js'
+export * from './audit-log.js'
+export * from './auto-moderation.js'
 export * from './channel.js'
 export * from './emoji.js'
 export * from './gateway.js'

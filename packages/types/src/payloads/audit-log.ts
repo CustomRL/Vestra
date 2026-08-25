@@ -1,5 +1,12 @@
 import type { Snowflake } from '../globals.js'
 import type { AuditLogEvent } from '../enums/audit-log.js'
+import type { APIApplicationCommand } from './application-command.js'
+import type { APIAutoModerationRule } from './auto-moderation.js'
+import type { APIChannel } from './channel.js'
+import type { APIIntegration } from './integration.js'
+import type { APIGuildScheduledEvent } from './scheduled-event.js'
+import type { APIUser } from './user.js'
+import type { APIWebhook } from './webhook.js'
 
 /**
  * A single administrative action taken in a guild.
@@ -144,4 +151,42 @@ export interface APIAuditLogEntryInfo {
   integration_type?: string
   /** The voice channel status that was set. */
   status?: string
+}
+
+/**
+ * A page of audit log entries, plus every entity those entries refer to.
+ *
+ * @remarks
+ * **The side lists are the point.** An entry names a target and an executor by ID and
+ * nothing else, so a log page on its own reads as a list of snowflakes doing things to
+ * other snowflakes. Discord ships the referenced users, webhooks, integrations, threads,
+ * commands, rules and events alongside precisely so a caller does not have to make a
+ * request per row.
+ *
+ * They cover only what this page refers to. An entity mentioned by an entry on the next
+ * page will not be here, so a consumer paginating has to accumulate rather than assume.
+ */
+export interface APIAuditLog {
+  /** The entries themselves, newest first. */
+  audit_log_entries: APIAuditLogEntry[]
+  /** The users named by the entries, as executors or as targets. */
+  users: APIUser[]
+  /** The webhooks the entries refer to. */
+  webhooks: APIWebhook[]
+  /** The integrations the entries refer to, partial. */
+  integrations: APIIntegration[]
+  /**
+   * The threads the entries refer to.
+   *
+   * @remarks
+   * Only threads the bot can currently see. A thread archived since the action was taken
+   * is absent, which is why an entry's target may have no entry here.
+   */
+  threads: APIChannel[]
+  /** The application commands the entries refer to. */
+  application_commands: APIApplicationCommand[]
+  /** The auto-moderation rules the entries refer to. */
+  auto_moderation_rules: APIAutoModerationRule[]
+  /** The scheduled events the entries refer to. */
+  guild_scheduled_events: APIGuildScheduledEvent[]
 }
