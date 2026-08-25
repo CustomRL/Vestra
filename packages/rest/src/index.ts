@@ -34,7 +34,8 @@ export {
 export { buildFormData } from './files/FormDataBuilder.js'
 
 export { ApplicationCommandRoutes } from './routes/application-commands.js'
-export { ChannelRoutes, type MessageOptions, type RouteOptions } from './routes/channels.js'
+export { ChannelRoutes } from './routes/channels.js'
+export type { MessageOptions, RouteOptions } from './routes/options.js'
 export { GatewayRoutes } from './routes/gateway.js'
 export { GuildRoutes } from './routes/guilds.js'
 export { InteractionRoutes } from './routes/interactions.js'
