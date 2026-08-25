@@ -11,6 +11,7 @@
  * blocker.
  */
 
+export * from './application-command.js'
 export * from './channel.js'
 export * from './gateway.js'
 export * from './guild.js'

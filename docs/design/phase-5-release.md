@@ -36,10 +36,10 @@ Verified by reading the repository and running it on 2026-08-24, not recalled.
 | `interactions` | reply, getReply, editReply, deleteReply, followUp, getFollowUp, editFollowUp, deleteFollowUp                                                                                                                                                                                                                                                                                                                                     |
 | `gateway`      | get, getBot                                                                                                                                                                                                                                                                                                                                                                                                                      |
 
-Still missing: **emoji, sticker, scheduled-event, application-command and audit-log routes**,
-guild editing, and the archived-thread listings. A bot that reads the gateway, replies,
-manages channels, roles, invites, threads and webhooks is served; one that registers slash
-commands or manages emoji is not.
+Still missing: **emoji, sticker, scheduled-event and audit-log routes**, guild editing, and
+the archived-thread listings. A bot that reads the gateway, replies, registers slash commands
+and manages channels, roles, invites, threads and webhooks is served; one that manages emoji
+or reads an audit log is not.
 
 ---
 
@@ -88,10 +88,9 @@ The REST gap in §0 is different in kind. Those routes are additive too, but the
 what a user hits first. Nothing about the library's shape depends on them, so they do not
 block a major — they block being _useful_, which is a different and more urgent problem.
 
-Thirty-one routes have landed since this was written, which closed the worst of it: creating
-a channel, editing and deleting roles, pinning, the full reaction set, invites, threads and
-webhooks. What remains is narrower and more specialised — application commands above all,
-without which a slash-command bot cannot register anything.
+Forty-two routes have landed since this was written, which closed the worst of it: creating a
+channel, editing and deleting roles, pinning, the full reaction set, invites, threads,
+webhooks and application commands. What remains is narrower and more specialised.
 
 **This is the strongest argument for shipping 0.x first.** Adding fifteen REST routes to a 0.x
 is a Tuesday. Discovering after 1.0 that one of them needed a different signature is a major.
@@ -187,7 +186,7 @@ nothing and buys the right to be wrong once.
 The concrete gate for 1.0, then, is not a feature list:
 
 - the REST surface covers what a guild-managing bot needs, because that is where signature
-  churn will happen. Mostly there; application commands are the conspicuous hole
+  churn will happen. Substantially there now
 - at least one bot that is not this one has run on it
 - a soak of hours rather than minutes, with a reconnect observed in the wild
 - #7's remaining items answered or explicitly accepted as permanent unknowns
