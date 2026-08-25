@@ -4,6 +4,7 @@ import type {
   APIGuildPreview,
   APIGuildWelcomeScreen,
   APIInvite,
+  RESTGetAPIGuildIntegrationsResult,
   RESTGetAPIGuildPruneCountQuery,
   RESTGetAPIGuildPruneCountResult,
   RESTGetAPIGuildVanityURLResult,
@@ -261,6 +262,47 @@ export class GuildRoutes {
     options: RouteOptions = {},
   ): Promise<void> {
     await this.#rest.patch<undefined>(`/guilds/${guildId}/channels`, { ...options, body })
+  }
+
+  /**
+   * Lists a guild's integrations. Needs `ManageGuild`.
+   *
+   * @param guildId - The guild.
+   * @param options - Request options.
+   * @returns At most fifty integrations, each partial.
+   *
+   * @remarks
+   * Capped at fifty by Discord with no pagination, so a guild with more has no way to list the
+   * rest. Each entry omits `user` and the OAuth-only fields.
+   */
+  async getIntegrations(
+    guildId: Snowflake,
+    options: RouteOptions = {},
+  ): Promise<RESTGetAPIGuildIntegrationsResult> {
+    return await this.#rest.get<RESTGetAPIGuildIntegrationsResult>(
+      `/guilds/${guildId}/integrations`,
+      options,
+    )
+  }
+
+  /**
+   * Removes an integration and everything it created. Needs `ManageGuild`.
+   *
+   * @param guildId - The guild.
+   * @param integrationId - The integration.
+   * @param options - Request options.
+   *
+   * @remarks
+   * **Deletes what the integration owns, not just the link.** Any role it created and any
+   * webhook it made go with it, and members who had that role lose it. That is Discord's
+   * behaviour rather than a convenience here, and it is why the route is worth a sentence.
+   */
+  async deleteIntegration(
+    guildId: Snowflake,
+    integrationId: Snowflake,
+    options: RouteOptions = {},
+  ): Promise<void> {
+    await this.#rest.delete<undefined>(`/guilds/${guildId}/integrations/${integrationId}`, options)
   }
 
   /**
