@@ -1,7 +1,19 @@
 import type { ISO8601Timestamp, Permissions, Snowflake } from '../globals.js'
 import type { ChannelType } from '../enums/channel.js'
+import type {
+  DefaultMessageNotificationLevel,
+  ExplicitContentFilterLevel,
+  VerificationLevel,
+} from '../enums/guild.js'
 import type { APIChannel, APIOverwrite } from '../payloads/channel.js'
-import type { APIBan, APIGuild } from '../payloads/guild.js'
+import type {
+  APIBan,
+  APIGuild,
+  APIGuildPreview,
+  APIGuildWelcomeScreen,
+  APIGuildWelcomeScreenChannel,
+  APIVoiceRegion,
+} from '../payloads/guild.js'
 import type { APIGuildMember } from '../payloads/member.js'
 import type { APIRole } from '../payloads/role.js'
 
@@ -247,3 +259,174 @@ export type RESTPatchAPIGuildRolePositionsJSONBody = RESTPatchAPIGuildRolePositi
 
 /** The result of `PATCH /guilds/{guild.id}/roles`, which is every role in its new order. */
 export type RESTPatchAPIGuildRolePositionsResult = APIRole[]
+
+/**
+ * `PATCH /guilds/{guild.id}`
+ *
+ * @remarks
+ * **Every field is optional and every one is a whole replacement.** `features` in particular
+ * is the complete list — sending one feature removes the rest, and only a handful are settable
+ * at all (`COMMUNITY`, `DISCOVERABLE`, `INVITES_DISABLED`, `RAID_ALERTS_DISABLED`); the others
+ * are granted by Discord and rejected here.
+ *
+ * Several fields depend on each other. Turning `COMMUNITY` on requires `rules_channel_id` and
+ * `public_updates_channel_id` in the same request, and turning it off clears them. The image
+ * fields take data URIs, and `banner` and `splash` need the guild to have the corresponding
+ * feature or boost level.
+ */
+export interface RESTPatchAPIGuildJSONBody {
+  /** A new name. */
+  name?: string
+  /** How strictly Discord verifies members, or `null` for the default. */
+  verification_level?: VerificationLevel | null
+  /** Which messages notify by default, or `null` for the default. */
+  default_message_notifications?: DefaultMessageNotificationLevel | null
+  /** How aggressively Discord scans attachments, or `null` for the default. */
+  explicit_content_filter?: ExplicitContentFilterLevel | null
+  /** The AFK voice channel, or `null` for none. */
+  afk_channel_id?: Snowflake | null
+  /** Seconds of silence before somebody is moved to the AFK channel. */
+  afk_timeout?: number
+  /** A new icon as a data URI, or `null` to remove it. */
+  icon?: string | null
+  /** The new owner. Only the current owner may send this, and it needs MFA. */
+  owner_id?: Snowflake
+  /** A new invite splash as a data URI. Needs the `INVITE_SPLASH` feature. */
+  splash?: string | null
+  /** A new discovery splash as a data URI. Needs `DISCOVERABLE`. */
+  discovery_splash?: string | null
+  /** A new banner as a data URI. Needs the `BANNER` feature or boost level two. */
+  banner?: string | null
+  /** Where Discord posts join and boost messages, or `null` for nowhere. */
+  system_channel_id?: Snowflake | null
+  /** Which system messages to suppress, as a bit set. */
+  system_channel_flags?: number
+  /** The rules channel. Required while `COMMUNITY` is on. */
+  rules_channel_id?: Snowflake | null
+  /** Where Discord sends community updates. Required while `COMMUNITY` is on. */
+  public_updates_channel_id?: Snowflake | null
+  /** The locale Discord uses for community features. */
+  preferred_locale?: string | null
+  /** The complete feature list. Only a few are settable. */
+  features?: string[]
+  /** The description shown in discovery. */
+  description?: string | null
+  /** Whether boosts pay for the boost progress bar. */
+  premium_progress_bar_enabled?: boolean
+  /** Where Discord sends safety alerts, or `null` for nowhere. */
+  safety_alerts_channel_id?: Snowflake | null
+}
+
+/** The result of `PATCH /guilds/{guild.id}`. */
+export type RESTPatchAPIGuildResult = APIGuild
+
+/** The result of `GET /guilds/{guild.id}/preview`. */
+export type RESTGetAPIGuildPreviewResult = APIGuildPreview
+
+/**
+ * `GET /guilds/{guild.id}/prune`
+ *
+ * @remarks
+ * **A dry run, and the only safe way to find out what a prune would do.** `include_roles` is
+ * the field that decides whether the number means anything: by default a prune counts only
+ * members with *no* roles at all, so on a guild that auto-assigns a role the answer is zero
+ * and the prune that follows removes nobody.
+ */
+export interface RESTGetAPIGuildPruneCountQuery {
+  /** How many days of inactivity count as inactive, 1 to 30. Defaults to 7. */
+  days?: number
+  /** Roles to count as prunable, comma-separated. Members with any other role are spared. */
+  include_roles?: string
+}
+
+/** The result of `GET /guilds/{guild.id}/prune`. */
+export interface RESTGetAPIGuildPruneCountResult {
+  /** How many members the prune would remove. */
+  pruned: number
+}
+
+/**
+ * `POST /guilds/{guild.id}/prune`
+ *
+ * @remarks
+ * `compute_prune_count` defaults to `true` and is the wrong default on a large guild: it makes
+ * the request wait for a count Discord has to compute, and the route times out rather than
+ * failing to prune. Send `false` on anything big and read the result as `null`.
+ */
+export interface RESTPostAPIGuildPruneJSONBody {
+  /** Days of inactivity, 1 to 30. */
+  days?: number
+  /** Whether to count what was removed. Defaults to `true`. */
+  compute_prune_count?: boolean
+  /** Roles to count as prunable. Members with any other role are spared. */
+  include_roles?: Snowflake[]
+}
+
+/** The result of `POST /guilds/{guild.id}/prune`. */
+export interface RESTPostAPIGuildPruneResult {
+  /** How many were removed, or `null` when the count was not computed. */
+  pruned: number | null
+}
+
+/** The result of `GET /guilds/{guild.id}/regions`. */
+export type RESTGetAPIGuildVoiceRegionsResult = APIVoiceRegion[]
+
+/**
+ * The result of `GET /guilds/{guild.id}/vanity-url`.
+ *
+ * @remarks
+ * A partial invite rather than a full one: only the code and its use count. `code` is `null`
+ * on a guild that has the feature and has not set one.
+ */
+export interface RESTGetAPIGuildVanityURLResult {
+  /** The vanity code, or `null` if unset. */
+  code: string | null
+  /** How many times it has been used. */
+  uses: number
+}
+
+/** The result of `GET /guilds/{guild.id}/welcome-screen`. */
+export type RESTGetAPIGuildWelcomeScreenResult = APIGuildWelcomeScreen
+
+/**
+ * `PATCH /guilds/{guild.id}/welcome-screen`
+ *
+ * @remarks
+ * `welcome_channels` replaces the list. `enabled` is what actually shows the panel — a screen
+ * with channels configured and `enabled: false` is invisible, which is the state a caller who
+ * only sent channels ends up in.
+ */
+export interface RESTPatchAPIGuildWelcomeScreenJSONBody {
+  /** Whether the screen is shown at all. */
+  enabled?: boolean | null
+  /** The complete channel list, at most five. */
+  welcome_channels?: APIGuildWelcomeScreenChannel[] | null
+  /** The text above the channels. */
+  description?: string | null
+}
+
+/** The result of `PATCH /guilds/{guild.id}/welcome-screen`. */
+export type RESTPatchAPIGuildWelcomeScreenResult = APIGuildWelcomeScreen
+
+/**
+ * One entry of `PATCH /guilds/{guild.id}/channels`.
+ *
+ * @remarks
+ * Positions are per-category and contiguous, so moving one channel renumbers its siblings.
+ * `parent_id` moves a channel between categories, and `lock_permissions` decides whether it
+ * inherits the new category's overwrites — omitting it keeps the old ones, which is how a
+ * channel ends up in a private category and still publicly readable.
+ */
+export interface RESTPatchAPIGuildChannelPositionsEntry {
+  /** The channel to move. */
+  id: Snowflake
+  /** Its new position, or `null` to leave it. */
+  position?: number | null
+  /** Whether to adopt the new parent's permission overwrites. */
+  lock_permissions?: boolean | null
+  /** The category to move it into, or `null` for none. */
+  parent_id?: Snowflake | null
+}
+
+/** `PATCH /guilds/{guild.id}/channels` */
+export type RESTPatchAPIGuildChannelPositionsJSONBody = RESTPatchAPIGuildChannelPositionsEntry[]
