@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, it } from 'node:test'
 import ts from 'typescript'
@@ -129,6 +130,29 @@ function declaredSurface(): Record<string, number> {
   return found
 }
 
+/**
+ * The events `docs/events.md` documents, read from the first cell of its tables.
+ *
+ * @returns Each documented event name.
+ *
+ * @remarks
+ * A reference that lists 56 of 58 events is worse than none: a reader who does not find an
+ * event concludes it does not exist. The deviation table above them is skipped for free,
+ * because its first column holds gateway names and those are upper snake case.
+ */
+function documentedEvents(): string[] {
+  const doc = readFileSync(
+    fileURLToPath(new URL('../../../docs/events.md', import.meta.url)),
+    'utf8',
+  )
+  const found = new Set<string>()
+  for (const line of doc.split(/\r?\n/)) {
+    const match = /^\|\s*`([a-z][A-Za-z]*)`\s*\|/.exec(line)
+    if (match?.[1] !== undefined) found.add(match[1])
+  }
+  return [...found].sort()
+}
+
 const declared = declaredSurface()
 
 describe('public event surface', () => {
@@ -140,6 +164,25 @@ describe('public event surface', () => {
       `expected the full event surface; found ${String(Object.keys(declared).length)}`,
     )
     assert.ok('messageCreate' in declared, 'messageCreate is missing, so the parse is wrong')
+  })
+
+  it('ES3: is documented, every event of it', () => {
+    // A reference that lists 56 of 58 is worse than none — a reader who does not find an event
+    // concludes it does not exist. This is what stops `docs/events.md` rotting the moment
+    // somebody adds an event and updates only the snapshot above.
+    const documented = documentedEvents()
+    assert.ok(
+      documented.length > 40,
+      `expected the docs to list the event surface; found ${String(documented.length)}`,
+    )
+
+    assert.deepEqual(
+      documented,
+      Object.keys(declared).sort(),
+      'docs/events.md and ClientEvents disagree. An event missing from the reference is one ' +
+        'a reader will conclude does not exist; a row for an event that no longer exists is ' +
+        'worse, because it compiles in their head and not in their editor.',
+    )
   })
 
   it('ES2: matches the snapshot, name and arity', () => {

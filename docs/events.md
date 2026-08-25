@@ -3,7 +3,7 @@
 Every event `Client` emits, what it carries, and the rules behind those choices.
 
 The list is generated from `ClientEvents` and pinned by `packages/core/test/event-surface.test.ts`,
-which snapshots all 56 events by name and argument count. Renaming one, removing one or changing
+which snapshots all 58 events by name and argument count. Renaming one, removing one or changing
 its arity fails that test — which is the point, because after publication each of those is a major
 version.
 
@@ -32,13 +32,13 @@ An event's name is the camelCase of its gateway name: `MESSAGE_CREATE` becomes `
 `GUILD_MEMBER_ADD` becomes `guildMemberAdd`. `packages/core/test/naming.test.ts` enforces that
 mechanically, so the rule holds for every event that does not appear in the table below.
 
-| Gateway         | Client surface                          | Why                                                                                                                  |
-| --------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `READY`         | `ready`, once per client                | A twenty-shard bot would otherwise run its startup code twenty times                                                   |
-| `RESUMED`       | not emitted                             | Nothing a consumer can act on that `ready` has not already said                                                        |
-| `GUILD_CREATE`  | `guildCreate` **or** `guildUnavailable` | A guild arriving during the startup stream, or returning from an outage, is not a join                                 |
-| `GUILD_DELETE`  | `guildDelete` **or** `guildUnavailable` | Being removed from a guild and Discord having an outage are different things                                           |
-| `RATE_LIMITED`  | not emitted                             | Consumed by the member chunker; the correlated caller receives a rejection, so an event would surface a failure twice  |
+| Gateway        | Client surface                          | Why                                                                                                                   |
+| -------------- | --------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `READY`        | `ready`, once per client                | A twenty-shard bot would otherwise run its startup code twenty times                                                  |
+| `RESUMED`      | `shardResumed`                          | Per shard, and it pairs with the other shard-level signals rather than with the fleet-level `ready`                   |
+| `GUILD_CREATE` | `guildCreate` **or** `guildUnavailable` | A guild arriving during the startup stream, or returning from an outage, is not a join                                |
+| `GUILD_DELETE` | `guildDelete` **or** `guildUnavailable` | Being removed from a guild and Discord having an outage are different things                                          |
+| `RATE_LIMITED` | not emitted                             | Consumed by the member chunker; the correlated caller receives a rejection, so an event would surface a failure twice |
 
 ## What arrives
 
@@ -82,8 +82,9 @@ const client = new Client({
 })
 
 client.on('guildMemberUpdate', (member, changes) => {
-  if (changes?.roles === undefined) return
-  const added = member.roles.filter((role) => !changes.roles!.includes(role))
+  const before = changes?.roles
+  if (before === undefined) return
+  const added = member.roles.filter((role) => !before.includes(role))
   console.log(`${member.userId} gained ${String(added.length)} role(s)`)
 })
 ```
@@ -96,7 +97,7 @@ There is no `oldMember` argument. Producing one needs a clone, and every clone t
 either threw on the first private-field read or landed on a second hidden class — so an update
 reports the previous values of what moved rather than a copy of the whole thing. `VoiceState` is
 the one exception: it is a dozen scalars, `VOICE_STATE_UPDATE` always sends the whole object, and
-the questions that event exists for (*did they move channel*, *did they mute*) are unanswerable
+the questions that event exists for (_did they move channel_, _did they mute_) are unanswerable
 without the old state, so `voiceStateUpdate` carries `(previous, current)`.
 
 Two fields are never reported. A sub-structure patched in place — `Message.author`,
@@ -111,27 +112,40 @@ non-null every time while comparing it deeply would run on the busiest path in t
 
 ### Lifecycle
 
-| Event               | Arguments                                                           |
-| ------------------- | ------------------------------------------------------------------- |
-| `ready`             | `user: ClientUser`                                                   |
-| `shardGuildsReady`  | `shardId: number`, `unresolved: readonly Snowflake[]`                |
-| `error`             | `error: Error`, `context: { event: string; shardId: number }`        |
-| `raw`               | `payload: GatewayDispatchPayload`, `shardId: number`, `replayed: boolean` |
-| `dispatchDropped`   | `payload: GatewayDispatchPayload`, `shardId: number`, `depth: number` |
+| Event              | Arguments                                                                 |
+| ------------------ | ------------------------------------------------------------------------- |
+| `ready`            | `user: ClientUser`                                                        |
+| `shardGuildsReady` | `shardId: number`, `unresolved: readonly Snowflake[]`                     |
+| `shardResumed`     | `shardId: number`                                                         |
+| `shardDisconnect`  | `shardId: number`, `code: number`, `reason: string`                       |
+| `error`            | `error: Error`, `context: { event: string; shardId: number }`             |
+| `raw`              | `payload: GatewayDispatchPayload`, `shardId: number`, `replayed: boolean` |
+| `dispatchDropped`  | `payload: GatewayDispatchPayload`, `shardId: number`, `depth: number`     |
 
 `ready` fires once the **whole fleet** has reached READY, not once per shard. `login()` resolves
 earlier, on the first shard, because a two-hundred shard bot spends over a minute on identify
 pacing alone and a startup line has to come out before that. They answer different questions.
 
+`shardResumed` is the only signal that a **reconnect** happened. `ready` fires once for the fleet's
+first startup and never again, so a bot watching only `ready` sees a reconnect as silence. It is
+also where a consumer finds out it needs to be idempotent: a resume replays the dispatches missed
+while the socket was down. The cache is already correct — handlers are pure functions of
+(cache, data), so applying one twice leaves it where the first application did — but state kept
+outside the cache is not.
+
+`shardDisconnect` fires on every close, including the ones the client immediately recovers from,
+because a resume begins with a socket closing. Treat it as a health signal rather than a failure;
+a terminal close raises `error` as well.
+
 ### Guilds
 
-| Event                | Arguments                                          |
-| -------------------- | -------------------------------------------------- |
-| `guildCreate`        | `guild: Guild`                                     |
-| `guildUpdate`        | `guild: Guild`, `changes: GuildChanges \| null`    |
-| `guildDelete`        | `guildId: Snowflake`                               |
-| `guildUnavailable`   | `guildId: Snowflake`                               |
-| `guildAuditLogEntryCreate` | `entry: AuditLogEntry`                       |
+| Event                      | Arguments                                       |
+| -------------------------- | ----------------------------------------------- |
+| `guildCreate`              | `guild: Guild`                                  |
+| `guildUpdate`              | `guild: Guild`, `changes: GuildChanges \| null` |
+| `guildDelete`              | `guildId: Snowflake`                            |
+| `guildUnavailable`         | `guildId: Snowflake`                            |
+| `guildAuditLogEntryCreate` | `entry: AuditLogEntry`                          |
 
 `guildCreate` fires for every guild during the startup stream as well as on an actual join, and
 the payload is identical either way — so a bot that treats it as "joined a new server" greets
@@ -139,16 +153,16 @@ every guild it is already in on every reconnect.
 
 ### Channels and threads
 
-| Event                 | Arguments                                                                         |
-| --------------------- | --------------------------------------------------------------------------------- |
-| `channelCreate`       | `channel: Channel`                                                                  |
-| `channelUpdate`       | `channel: Channel`, `changes: ChannelChanges \| null`                               |
-| `channelDelete`       | `channel: Channel`                                                                  |
-| `channelPinsUpdate`   | `channelId: Snowflake`, `guildId?: Snowflake`, `lastPinTimestamp: string \| null`   |
-| `threadCreate`        | `thread: ThreadChannel`                                                             |
-| `threadUpdate`        | `thread: ThreadChannel`, `changes: ChannelChanges \| null`                           |
-| `threadDelete`        | `thread: ThreadChannel`                                                             |
-| `threadListSync`      | `guildId: Snowflake`, `threads: ThreadChannel[]`                                     |
+| Event                 | Arguments                                                                               |
+| --------------------- | --------------------------------------------------------------------------------------- |
+| `channelCreate`       | `channel: Channel`                                                                      |
+| `channelUpdate`       | `channel: Channel`, `changes: ChannelChanges \| null`                                   |
+| `channelDelete`       | `channel: Channel`                                                                      |
+| `channelPinsUpdate`   | `channelId: Snowflake`, `guildId?: Snowflake`, `lastPinTimestamp: string \| null`       |
+| `threadCreate`        | `thread: ThreadChannel`                                                                 |
+| `threadUpdate`        | `thread: ThreadChannel`, `changes: ChannelChanges \| null`                              |
+| `threadDelete`        | `thread: ThreadChannel`                                                                 |
+| `threadListSync`      | `guildId: Snowflake`, `threads: ThreadChannel[]`                                        |
 | `threadMembersUpdate` | `thread: ThreadChannel`, `added: readonly Snowflake[]`, `removed: readonly Snowflake[]` |
 
 `ChannelChanges` is one flat record covering every field any channel type can report, because
@@ -157,17 +171,17 @@ typed to the base could not report a rename — `name` lives on `GuildChannel`.
 
 ### Messages and reactions
 
-| Event                        | Arguments                                                                                     |
-| ---------------------------- | --------------------------------------------------------------------------------------------- |
-| `messageCreate`              | `message: Message`                                                                              |
-| `messageUpdate`              | `message: Message`, `changes: MessageChanges \| null`                                            |
-| `messageDelete`              | `messageId: Snowflake`, `channelId: Snowflake`, `guildId?: Snowflake`                            |
-| `messageDeleteBulk`          | `messageIds: readonly Snowflake[]`, `channelId: Snowflake`, `guildId?: Snowflake`                |
-| `messageReactionAdd`         | `emoji: ReactionEmoji`, `messageId`, `channelId`, `userId`, `guildId?`                           |
-| `messageReactionRemove`      | `emoji: ReactionEmoji`, `messageId`, `channelId`, `userId`, `guildId?`                           |
-| `messageReactionRemoveAll`   | `messageId`, `channelId`, `guildId?`                                                             |
-| `messageReactionRemoveEmoji` | `emoji: ReactionEmoji`, `messageId`, `channelId`, `guildId?`                                     |
-| `typingStart`                | `channelId`, `userId`, `guildId?`, `startedTimestamp: number`                                    |
+| Event                        | Arguments                                                                         |
+| ---------------------------- | --------------------------------------------------------------------------------- |
+| `messageCreate`              | `message: Message`                                                                |
+| `messageUpdate`              | `message: Message`, `changes: MessageChanges \| null`                             |
+| `messageDelete`              | `messageId: Snowflake`, `channelId: Snowflake`, `guildId?: Snowflake`             |
+| `messageDeleteBulk`          | `messageIds: readonly Snowflake[]`, `channelId: Snowflake`, `guildId?: Snowflake` |
+| `messageReactionAdd`         | `emoji: ReactionEmoji`, `messageId`, `channelId`, `userId`, `guildId?`            |
+| `messageReactionRemove`      | `emoji: ReactionEmoji`, `messageId`, `channelId`, `userId`, `guildId?`            |
+| `messageReactionRemoveAll`   | `messageId`, `channelId`, `guildId?`                                              |
+| `messageReactionRemoveEmoji` | `emoji: ReactionEmoji`, `messageId`, `channelId`, `guildId?`                      |
+| `typingStart`                | `channelId`, `userId`, `guildId?`, `startedTimestamp: number`                     |
 
 `messageDeleteBulk` fires once for the batch rather than once per message. A moderator clearing a
 hundred messages would otherwise run a hundred listeners, and a bot logging deletions gets rate
@@ -175,16 +189,16 @@ limited by its own audit channel.
 
 ### Members, roles and bans
 
-| Event               | Arguments                                                             |
-| ------------------- | --------------------------------------------------------------------- |
-| `guildMemberAdd`    | `member: GuildMember`                                                  |
-| `guildMemberUpdate` | `member: GuildMember`, `changes: GuildMemberChanges \| null`           |
-| `guildMemberRemove` | `guildId: Snowflake`, `user: User`                                     |
-| `guildBanAdd`       | `guildId: Snowflake`, `user: User`                                     |
-| `guildBanRemove`    | `guildId: Snowflake`, `user: User`                                     |
-| `roleCreate`        | `role: Role`, `guildId: Snowflake`                                     |
-| `roleUpdate`        | `role: Role`, `guildId: Snowflake`, `changes: RoleChanges \| null`     |
-| `roleDelete`        | `roleId: Snowflake`, `guildId: Snowflake`                              |
+| Event               | Arguments                                                          |
+| ------------------- | ------------------------------------------------------------------ |
+| `guildMemberAdd`    | `member: GuildMember`                                              |
+| `guildMemberUpdate` | `member: GuildMember`, `changes: GuildMemberChanges \| null`       |
+| `guildMemberRemove` | `guildId: Snowflake`, `user: User`                                 |
+| `guildBanAdd`       | `guildId: Snowflake`, `user: User`                                 |
+| `guildBanRemove`    | `guildId: Snowflake`, `user: User`                                 |
+| `roleCreate`        | `role: Role`, `guildId: Snowflake`                                 |
+| `roleUpdate`        | `role: Role`, `guildId: Snowflake`, `changes: RoleChanges \| null` |
+| `roleDelete`        | `roleId: Snowflake`, `guildId: Snowflake`                          |
 
 The role events carry their guild separately because a `Role` payload has no `guild_id` and the
 cache is keyed by role ID alone — without it, a listener wanting the guild would have to search
@@ -197,19 +211,19 @@ broken every existing listener for the sake of tidiness.
 
 | Event                 | Arguments                                                         |
 | --------------------- | ----------------------------------------------------------------- |
-| `guildEmojisUpdate`   | `guildId: Snowflake`, `emojis: Emoji[]`, `removed: Emoji[]`        |
-| `guildStickersUpdate` | `guildId: Snowflake`, `stickers: Sticker[]`, `removed: Sticker[]`  |
+| `guildEmojisUpdate`   | `guildId: Snowflake`, `emojis: Emoji[]`, `removed: Emoji[]`       |
+| `guildStickersUpdate` | `guildId: Snowflake`, `stickers: Sticker[]`, `removed: Sticker[]` |
 
 Discord sends the whole set on every change, so the removed list is computed here rather than left
 for a consumer to diff.
 
 ### Presence and voice
 
-| Event              | Arguments                                                                                     |
-| ------------------ | ----------------------------------------------------------------------------------------------- |
-| `presenceUpdate`   | `presence: Presence`, `changes: PresenceChanges \| null`                                          |
-| `voiceStateUpdate` | `guildId`, `userId`, `previous: VoiceState \| undefined`, `current: VoiceState \| undefined`      |
-| `userUpdate`       | `user: ClientUser`, `changes: ClientUserChanges \| null`                                          |
+| Event              | Arguments                                                                                    |
+| ------------------ | -------------------------------------------------------------------------------------------- |
+| `presenceUpdate`   | `presence: Presence`, `changes: PresenceChanges \| null`                                     |
+| `voiceStateUpdate` | `guildId`, `userId`, `previous: VoiceState \| undefined`, `current: VoiceState \| undefined` |
+| `userUpdate`       | `user: ClientUser`, `changes: ClientUserChanges \| null`                                     |
 
 `voiceStateUpdate` puts the IDs first because they are the only arguments always present: voice
 states are off by default, so on most clients a departure has no cached state and the pair alone
@@ -220,23 +234,23 @@ expensive at that rate.
 
 ### Invites, stages, scheduled events and moderation
 
-| Event                            | Arguments                                                              |
-| -------------------------------- | ---------------------------------------------------------------------- |
-| `inviteCreate`                   | `invite: Invite`                                                        |
-| `inviteDelete`                   | `code: string`, `channelId: Snowflake`, `guildId?: Snowflake`           |
-| `stageInstanceCreate`            | `stageInstance: StageInstance`                                          |
-| `stageInstanceUpdate`            | `stageInstance: StageInstance`                                          |
-| `stageInstanceDelete`            | `stageInstance: StageInstance`                                          |
-| `guildScheduledEventCreate`      | `scheduledEvent: GuildScheduledEvent`                                   |
-| `guildScheduledEventUpdate`      | `scheduledEvent: GuildScheduledEvent`                                   |
-| `guildScheduledEventDelete`      | `scheduledEvent: GuildScheduledEvent`                                   |
-| `guildScheduledEventUserAdd`     | `guildScheduledEventId`, `userId`, `guildId`                            |
-| `guildScheduledEventUserRemove`  | `guildScheduledEventId`, `userId`, `guildId`                            |
-| `interactionCreate`              | `interaction: Interaction`                                              |
-| `autoModerationRuleCreate`       | `rule: AutoModerationRule`                                              |
-| `autoModerationRuleUpdate`       | `rule: AutoModerationRule`                                              |
-| `autoModerationRuleDelete`       | `rule: AutoModerationRule`                                              |
-| `autoModerationActionExecution`  | `execution: AutoModerationActionExecution`                              |
+| Event                           | Arguments                                                     |
+| ------------------------------- | ------------------------------------------------------------- |
+| `inviteCreate`                  | `invite: Invite`                                              |
+| `inviteDelete`                  | `code: string`, `channelId: Snowflake`, `guildId?: Snowflake` |
+| `stageInstanceCreate`           | `stageInstance: StageInstance`                                |
+| `stageInstanceUpdate`           | `stageInstance: StageInstance`                                |
+| `stageInstanceDelete`           | `stageInstance: StageInstance`                                |
+| `guildScheduledEventCreate`     | `scheduledEvent: GuildScheduledEvent`                         |
+| `guildScheduledEventUpdate`     | `scheduledEvent: GuildScheduledEvent`                         |
+| `guildScheduledEventDelete`     | `scheduledEvent: GuildScheduledEvent`                         |
+| `guildScheduledEventUserAdd`    | `guildScheduledEventId`, `userId`, `guildId`                  |
+| `guildScheduledEventUserRemove` | `guildScheduledEventId`, `userId`, `guildId`                  |
+| `interactionCreate`             | `interaction: Interaction`                                    |
+| `autoModerationRuleCreate`      | `rule: AutoModerationRule`                                    |
+| `autoModerationRuleUpdate`      | `rule: AutoModerationRule`                                    |
+| `autoModerationRuleDelete`      | `rule: AutoModerationRule`                                    |
+| `autoModerationActionExecution` | `execution: AutoModerationActionExecution`                    |
 
 `inviteDelete` carries a code rather than an `Invite`, because Discord's delete payload is a stub
 and inventing the rest would be worse than saying less.
