@@ -21,6 +21,7 @@ import { ChannelRoutes } from './routes/channels.js'
 import { GatewayRoutes } from './routes/gateway.js'
 import { InteractionRoutes } from './routes/interactions.js'
 import { GuildRoutes } from './routes/guilds.js'
+import { WebhookRoutes } from './routes/webhooks.js'
 import { UserRoutes } from './routes/users.js'
 
 /** HTTP methods the client issues. */
@@ -42,6 +43,23 @@ export interface RESTEvents {
   rateLimited: [info: RateLimitInfo]
   /** A response was received, before any error is thrown for it. */
   response: [request: InternalRequest, status: number]
+}
+
+/**
+ * The error for an authorised request made before a token was set.
+ *
+ * @param path - The route that was attempted, so the message names it.
+ * @returns The error to throw.
+ *
+ * @remarks
+ * Shared so the precondition in `raw()` and the guard inside `#send` cannot drift into two
+ * different messages for one mistake.
+ */
+function missingToken(path: string): Error {
+  return new Error(
+    `Cannot send an authorised request to ${path} before setToken() is called. ` +
+      'Pass `auth: false` for endpoints that do not need a token.',
+  )
 }
 
 /**
@@ -85,6 +103,14 @@ export class REST extends EventEmitter<RESTEvents> {
    * family the rate limiter does not queue — the initial response has a three-second deadline.
    */
   readonly interactions: InteractionRoutes
+  /**
+   * Webhook endpoints.
+   *
+   * @remarks
+   * The `*WithToken` forms and `execute` send no bot token: a webhook's ID and token are a
+   * credential in their own right, so those routes are unauthenticated and must stay that way.
+   */
+  readonly webhooks: WebhookRoutes
 
   /**
    * @param options - Overrides for the client defaults.
@@ -107,6 +133,7 @@ export class REST extends EventEmitter<RESTEvents> {
     this.channels = new ChannelRoutes(this)
     this.interactions = new InteractionRoutes(this)
     this.guilds = new GuildRoutes(this)
+    this.webhooks = new WebhookRoutes(this)
     this.users = new UserRoutes(this)
     this.gateway = new GatewayRoutes(this)
   }
@@ -177,6 +204,12 @@ export class REST extends EventEmitter<RESTEvents> {
    * streaming a body directly.
    */
   async raw(request: InternalRequest): Promise<Response> {
+    // **Before the queue, not inside the send.** A missing token is a configuration mistake,
+    // and no number of retries makes one succeed — but the send closure is what the retry
+    // loop wraps, so throwing there cost four attempts and about five seconds of exponential
+    // backoff to arrive at the same error the first attempt already knew.
+    if (request.auth !== false && this.#token === null) throw missingToken(request.path)
+
     const identity = this.#registry.getIdentity(request.method, request.path)
     // Stable for the life of the route: deliberately not the bucket hash, which changes
     // the moment Discord first reveals it and would strand this handler mid-queue.
@@ -229,12 +262,10 @@ export class REST extends EventEmitter<RESTEvents> {
     }
 
     if (request.auth !== false) {
-      if (this.#token === null) {
-        throw new Error(
-          `Cannot send an authorised request to ${request.path} before setToken() is called. ` +
-            'Pass `auth: false` for endpoints that do not need a token.',
-        )
-      }
+      // Checked again in `raw()` before queueing, and that is where the useful failure comes
+      // from. This one cannot be reached through the public API and exists so `#send` is
+      // correct on its own terms rather than only in the order it happens to be called.
+      if (this.#token === null) throw missingToken(request.path)
       headers.set('Authorization', `${this.#options.authPrefix} ${this.#token}`)
     }
 
