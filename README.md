@@ -3,8 +3,15 @@
 A lightweight, fully-typed Discord library for Node.js.
 
 > **Status: early development.** All four packages are built — typings, REST, gateway and
-> client — and the test suite runs green on Node 22.15, 24 and 25. Not yet published to npm,
-> and the gateway's protocol assumptions have not been checked against a live connection.
+> client — and the test suite runs green on Node 22.15, 24 and 25. Not yet published to npm.
+>
+> The gateway has been exercised against real Discord: transport compression decodes
+> identically across `zlib-stream`, `zstd-stream` and none; a session survives a 90 second gap
+> and is gone by 120; one payload arrives per websocket message across 188 samples; and a
+> connection held open for 45 minutes showed no drift or leak. What remains unverified is the
+> close-semantics group — op 9 with `d: true`, whether 4003 is really resumable, whether
+> Discord sends 1000/1001 to a client, and whether `resume_gateway_url` goes stale. See
+> [issue #7](https://github.com/CustomRL/Vestra/issues/7).
 
 Vestra is in the tradition of [Eris](https://github.com/abalabahaha/eris) and
 [Oceanic](https://github.com/OceanicJS/Oceanic) — close to the wire, low indirection, low

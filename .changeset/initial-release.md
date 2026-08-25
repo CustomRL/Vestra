@@ -17,8 +17,9 @@ Node itself.
   an invalid-request tracker that refuses to send rather than earn a Cloudflare ban.
 - `@vestra/gateway` — sharding, session resumption, identify pacing, and pluggable transport,
   compression, encoding and session-store seams.
-- `@vestra/core` — the client: 50 dispatch handlers, an opt-in per-scope cache, and structures
-  that admit a cache miss rather than asserting.
+- `@vestra/core` — the client: 51 dispatch handlers covering every gateway event that has
+  one, an opt-in per-scope cache, and structures that admit a cache miss rather than
+  asserting.
 - `vestra` — the meta-package.
 
 **`0.1.0` rather than `1.0.0`, deliberately.** The API is in the shape we want and the test

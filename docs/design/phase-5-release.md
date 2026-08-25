@@ -124,14 +124,33 @@ be the dishonest version.
 
 ## 4. What a release needs mechanically
 
-1. A changeset per package (`pnpm changeset`), with the `fixed` group in
-   `.changeset/config.json` keeping `vestra` and `@vestra/*` on one version.
-2. `pnpm check:packaging` — already green.
-3. An npm token with publish rights, and `pnpm release`.
-4. A tag, and release notes that say what §3 says.
+**Confirm the names are claimable first.** `npm view vestra` answers
+`404 Unpublished on 2026-07-25`. The bare name existed on the public registry and was removed;
+npm does not return unpublished names to the pool, and the original publisher can republish
+after 24 hours where others generally cannot. This matters more than it sounds: `changeset
+publish` walks the packages in dependency order, so if `vestra` is unclaimable it publishes the
+four scoped packages and _then_ fails — leaving a released core with no meta-package and no way
+to take the version back. Establish that both `vestra` and the `@vestra` scope are yours, and
+that `npm whoami` answers, before running anything.
 
-Step 3 is the only one that is not reversible and the only one this repository cannot do on its
-own.
+Then, in order:
+
+1. A changeset per release (`pnpm changeset`), with the `fixed` group in
+   `.changeset/config.json` keeping `vestra` and `@vestra/*` on one version.
+2. `pnpm version` — this is `changeset version`, and it is the step that actually rewrites the
+   five `package.json` files and generates the changelogs. It is **not** part of `pnpm release`
+   and was previously documented nowhere; without it `release` would try to publish five
+   packages still at `0.0.0`.
+3. Review the generated changelogs and commit them.
+4. `pnpm check:packaging`, `pnpm typecheck`, `pnpm lint`, `pnpm test` — all green today.
+5. `npm login`, then `pnpm release`.
+6. `git tag v0.1.0`, push the tag, cut a GitHub release whose notes say what §3 says.
+
+Step 5 is the only one that is not reversible and the only one this repository cannot do on its
+own. Everything in the tarball is permanent for that version, which is why the per-package
+`LICENSE` and `README.md` files matter: npm includes them only from the package's own
+directory, and until recently there were none — five blank npm pages and an MIT assertion
+shipped without the terms the licence requires you to distribute.
 
 ---
 

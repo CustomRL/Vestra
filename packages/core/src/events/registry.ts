@@ -53,9 +53,12 @@ import { stageInstanceCreate, stageInstanceDelete, stageInstanceUpdate } from '.
  * handler's own `event` field and the two could then disagree — {@link EventRouter.register}
  * files each handler under its own name for exactly that reason.
  *
- * **Most events are deliberately absent.** Seventy-six exist; a dozen are handled. The rest
- * reach consumers through `raw` and nothing else, which is what makes adding a handler
- * later purely additive rather than a change to an existing event's arguments.
+ * **Every dispatch Discord defines is accounted for.** Seventy-six exist: fifty-one are
+ * handled here and the remaining twenty-five are listed in `events/unhandled.ts`, each with
+ * the reason it has no handler. Those reach consumers through `raw` and nothing else, which
+ * is what makes adding a handler later purely additive rather than a change to an existing
+ * event's arguments. `packages/core/test/event-coverage.test.ts` fails naming any dispatch
+ * that is neither.
  */
 export const handlers: readonly AnyEventHandler[] = [
   ready,
