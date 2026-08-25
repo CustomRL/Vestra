@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict'
-import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { readdirSync, statSync } from 'node:fs'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, it } from 'node:test'
+import ts from 'typescript'
 
 /**
  * A collaborator one package hands to another is actually driven by it.
@@ -16,59 +18,75 @@ import { describe, it } from 'node:test'
  * Unit tests prove a component works. Nothing but reachability proves it is reached, and the
  * failure is silent by construction: the piece that is never called cannot fail.
  *
- * The rule is deliberately narrow, because the broad version does not work. "Every public
- * method is called somewhere in `src`" flags fifteen things that are simply consumer API —
- * `guild.iconUrl()`, `client.setPresence()`, every REST route — and a rule with fifteen
- * standing exceptions is one nobody trusts. Restricted to **classes one package constructs
- * from another**, it flags nothing today and would have flagged `handleRateLimited`: those
- * classes exist precisely to be driven from above, so a method of one that nothing calls is
- * either dead or unwired, and both are worth a failing test.
+ * **Rewritten after an audit found the first version did not work.** It matched method names
+ * as bare substrings of the concatenated sources, so a same-named call on any unrelated
+ * receiver counted as reached — deleting the genuine `tracker.resolve(...)` wiring from
+ * `ShardBridge` left it green, because `Promise.resolve(` contains `.resolve(`. It also
+ * skipped every generic method, since the name had to be followed immediately by `(`, hiding
+ * the whole of `REST.get/post/put/patch/delete`. The original mutation proof used
+ * `handleRateLimited` — a name nothing else in the repository uses — and generalised from
+ * that one case.
+ *
+ * Call sites now resolve through the type checker: a call counts only when the receiver's
+ * type is the collaborator itself.
+ *
+ * **The narrow scope is deliberate and is not the whole story.** Route classes such as
+ * `ChannelRoutes` are constructed by `REST` inside their own package and exist to be called by
+ * *consumers*, so demanding that `src` call them would be wrong. Their coverage belongs to
+ * their own tests.
  */
 
 const repoRoot = fileURLToPath(new URL('../', import.meta.url))
 const skipDirectories = new Set(['node_modules', 'dist', '.turbo', 'coverage'])
 
-/** One source file, with the package that owns it. */
-interface Source {
-  package: string
-  path: string
-  text: string
+/** Collects `.ts` files beneath a directory. */
+function collect(directory: string, into: string[]): void {
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    if (skipDirectories.has(entry.name)) continue
+    const path = join(directory, entry.name)
+    if (entry.isDirectory()) {
+      collect(path, into)
+      continue
+    }
+    if (entry.name.endsWith('.ts')) into.push(path)
+  }
 }
 
-/** Every TypeScript file under a package's `src`. */
-function readSources(): Source[] {
-  const found: Source[] = []
-  const packages = `${repoRoot}packages`
+/** Every published source file, and which package owns it. */
+function sourceFiles(): { path: string; package: string }[] {
+  const found: { path: string; package: string }[] = []
+  const packages = join(repoRoot, 'packages')
 
-  for (const name of readdirSync(packages)) {
-    const root = `${packages}/${name}/src`
+  for (const entry of readdirSync(packages, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue
+    const root = join(packages, entry.name, 'src')
     try {
       if (!statSync(root).isDirectory()) continue
     } catch {
       continue
     }
-    walk(root, name, found)
+    const paths: string[] = []
+    collect(root, paths)
+    for (const path of paths) found.push({ path, package: entry.name })
   }
 
   return found
 }
 
-/** Collects TypeScript files beneath a directory. */
-function walk(directory: string, owner: string, into: Source[]): void {
-  for (const entry of readdirSync(directory, { withFileTypes: true })) {
-    if (skipDirectories.has(entry.name)) continue
-    const path = `${directory}/${entry.name}`
-    if (entry.isDirectory()) {
-      walk(path, owner, into)
-      continue
-    }
-    if (!entry.name.endsWith('.ts')) continue
-    into.push({ package: owner, path, text: readFileSync(path, 'utf8') })
-  }
-}
+const sources = sourceFiles()
 
-const sources = readSources()
-const everything = sources.map((source) => source.text).join('\n')
+const program = ts.createProgram(
+  sources.map((source) => source.path),
+  {
+    target: ts.ScriptTarget.ES2023,
+    module: ts.ModuleKind.NodeNext,
+    moduleResolution: ts.ModuleResolutionKind.NodeNext,
+    strict: true,
+    skipLibCheck: true,
+    noEmit: true,
+  },
+)
+const checker = program.getTypeChecker()
 
 /** A class one package constructs from another. */
 interface Collaborator {
@@ -78,56 +96,140 @@ interface Collaborator {
 }
 
 /**
- * Finds the cross-package collaborators and their public methods.
+ * The class names a type can be, if any.
  *
- * @returns One entry per collaborator.
+ * @param type - The type to inspect.
+ * @returns Every class the type may be at runtime.
  *
  * @remarks
- * Abstract classes are skipped: nothing constructs one directly, so "constructed from another
- * package" cannot be asked about them. `constructor` is skipped for the same reason in
- * reverse — it is reached through `new`, not through a call.
- *
- * Private `#` members and getters are not matched at all, which is the point: a getter has no
- * call syntax to look for, and a private member is not a contract with anybody.
+ * A union has to be walked rather than asked for its symbol. Nearly every collaborator in
+ * this repository is held in an optional field and reached through `?.` — `this.#tracker` is
+ * `GuildReadyTracker | undefined` — so a resolver that only handled the simple case reported
+ * `GuildReadyTracker.resolve` as driven by nothing while the wiring sat two lines away.
  */
-function findCollaborators(): Collaborator[] {
-  const found: Collaborator[] = []
+function classNames(type: ts.Type): string[] {
+  const parts = type.isUnion() ? type.types : [type]
+  const names: string[] = []
 
-  for (const source of sources) {
-    for (const match of source.text.matchAll(/^export (abstract )?class (\w+)/gm)) {
-      if (match[1] !== undefined) continue
-      const name = match[2]
-      if (name === undefined) continue
+  for (const part of parts) {
+    const declaration = part.getSymbol()?.declarations?.[0]
+    if (declaration === undefined || !ts.isClassDeclaration(declaration)) continue
+    const name = declaration.name?.text
+    if (name !== undefined) names.push(name)
+  }
 
-      const constructedElsewhere = sources.some(
-        (other) =>
-          other.package !== source.package &&
-          (other.text.includes(`new ${name}(`) || other.text.includes(`new ${name}<`)),
-      )
-      if (!constructedElsewhere) continue
+  return names
+}
 
-      // The class body runs to the next top-level class in the same file.
-      const after = source.text.slice(match.index + match[0].length)
-      const next = /^export (?:abstract )?class /m.exec(after)
-      const body = next === null ? after : after.slice(0, next.index)
+/**
+ * Every `receiver.method` access in the sources, as `ClassName.methodName`.
+ *
+ * @returns The set of methods actually reached.
+ *
+ * @remarks
+ * Resolved through the checker rather than matched as text, which is the whole correction.
+ * The previous version asked whether the string `.resolve(` appeared anywhere in the
+ * concatenated sources — a question `Promise.resolve(` answers yes to.
+ */
+function reachedMethods(): Set<string> {
+  const reached = new Set<string>()
 
-      const methods = [...body.matchAll(/^ {2}(?:override )?(?:async )?([a-z]\w*)\(/gm)]
-        .map((method) => method[1])
-        .filter((method): method is string => method !== undefined && method !== 'constructor')
+  for (const source of program.getSourceFiles()) {
+    if (source.isDeclarationFile) continue
 
-      found.push({ name, owner: source.package, methods: [...new Set(methods)] })
+    const visit = (node: ts.Node): void => {
+      if (ts.isPropertyAccessExpression(node)) {
+        for (const owner of classNames(checker.getTypeAtLocation(node.expression))) {
+          reached.add(`${owner}.${node.name.text}`)
+        }
+      }
+      ts.forEachChild(node, visit)
     }
+
+    visit(source)
+  }
+
+  return reached
+}
+
+/**
+ * Public instance methods declared on a class, generics included.
+ *
+ * @param declaration - The class to read.
+ * @returns The method names.
+ *
+ * @remarks
+ * Getters and `#private` members are excluded deliberately: a getter has no call syntax to
+ * look for, and a private member is a contract with nobody. `static` is excluded because a
+ * static helper is not part of the driving relationship this checks.
+ */
+function publicMethods(declaration: ts.ClassDeclaration): string[] {
+  const names: string[] = []
+
+  for (const member of declaration.members) {
+    if (!ts.isMethodDeclaration(member)) continue
+    if (!ts.isIdentifier(member.name)) continue
+
+    const hidden = (ts.getModifiers(member) ?? []).some(
+      (modifier) =>
+        modifier.kind === ts.SyntaxKind.PrivateKeyword ||
+        modifier.kind === ts.SyntaxKind.ProtectedKeyword ||
+        modifier.kind === ts.SyntaxKind.StaticKeyword,
+    )
+    if (hidden) continue
+
+    names.push(member.name.text)
+  }
+
+  return [...new Set(names)]
+}
+
+/** Classes one package constructs from another, with their public methods. */
+function findCollaborators(): Collaborator[] {
+  const constructedIn = new Map<string, Set<string>>()
+  const declarations = new Map<string, { owner: string; node: ts.ClassDeclaration }>()
+
+  for (const { path, package: owner } of sources) {
+    const source = program.getSourceFile(path)
+    if (source === undefined) continue
+
+    const visit = (node: ts.Node): void => {
+      if (ts.isClassDeclaration(node) && node.name !== undefined) {
+        const modifiers = ts.getModifiers(node) ?? []
+        const abstract = modifiers.some((one) => one.kind === ts.SyntaxKind.AbstractKeyword)
+        const exported = modifiers.some((one) => one.kind === ts.SyntaxKind.ExportKeyword)
+        if (exported && !abstract) declarations.set(node.name.text, { owner, node })
+      }
+
+      if (ts.isNewExpression(node) && ts.isIdentifier(node.expression)) {
+        const name = node.expression.text
+        const seen = constructedIn.get(name) ?? new Set<string>()
+        seen.add(owner)
+        constructedIn.set(name, seen)
+      }
+
+      ts.forEachChild(node, visit)
+    }
+
+    visit(source)
+  }
+
+  const found: Collaborator[] = []
+  for (const [name, entry] of declarations) {
+    const packages = constructedIn.get(name)
+    if (packages === undefined) continue
+    if (![...packages].some((from) => from !== entry.owner)) continue
+    found.push({ name, owner: entry.owner, methods: publicMethods(entry.node) })
   }
 
   return found
 }
 
 const collaborators = findCollaborators()
+const reached = reachedMethods()
 
 describe('cross-package reachability', () => {
   it('RE1: finds the collaborators to check', () => {
-    // Without this the case below passes on an empty list, which is how a reachability test
-    // stops testing reachability.
     assert.ok(
       collaborators.length >= 3,
       `expected several cross-package collaborators; found ${String(collaborators.length)}`,
@@ -142,11 +244,23 @@ describe('cross-package reachability', () => {
     )
   })
 
+  it('RE1b: extracts generic methods, which the first version silently dropped', () => {
+    // `REST` is constructed by core, so it is a collaborator, and its entire verb surface is
+    // generic. The old extraction required `(` immediately after the name and found only
+    // [setToken, raw, sweep] — five public methods invisible, on the busiest class in the
+    // repository.
+    const rest = collaborators.find((entry) => entry.name === 'REST')
+    assert.ok(rest !== undefined, 'REST is constructed by core and must be a collaborator')
+    for (const verb of ['get', 'post', 'put', 'patch', 'delete']) {
+      assert.ok(rest.methods.includes(verb), `REST.${verb} was not extracted; generics dropped`)
+    }
+  })
+
   it('RE2: drives every method of every collaborator', () => {
     const unreached = collaborators.flatMap((entry) =>
       entry.methods
-        .filter((method) => !everything.includes(`.${method}(`))
-        .map((method) => `${entry.name}.${method}() is called by nothing in packages/*/src`),
+        .filter((method) => !reached.has(`${entry.name}.${method}`))
+        .map((method) => `${entry.name}.${method}() is driven by nothing`),
     )
 
     assert.deepEqual(
