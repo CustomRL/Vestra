@@ -9,7 +9,7 @@ import type {
   Snowflake,
 } from '@vestra/types'
 import { Base } from './Base.js'
-import type { Changes, ChangesDraft } from './Changes.js'
+import { sameIds, sameStrings, type Changes, type ChangesDraft } from './Changes.js'
 import type { CacheCapable, RestCapable } from './capabilities.js'
 import type { Channel } from './channels/Channel.js'
 import type { Guild } from './Guild.js'
@@ -379,9 +379,13 @@ export class Message<Client = unknown> extends Base<Client> {
    *
    * **{@link Message.author} is never reported.** It is patched in place, so the previous
    * author is the same object with new values in it and there is no earlier state left to hand
-   * back. The four array fields are reported whenever the payload carries them rather than
-   * when their contents differ, because a freshly parsed array is never reference-equal to the
-   * one it replaces. {@link Changes} says why that trade is made.
+   * back.
+   *
+   * **`attachments` and `embeds` are reported whenever the payload carries them**, which for a
+   * message is every edit, because their contents can change while their identities do not and
+   * a deep comparison on this path costs more than the answer is worth. Mentions and mention
+   * roles used to behave that way too and no longer do — both have an exact answer that costs
+   * an element walk. {@link Changes} says where the line is.
    */
   patch(data: GatewayMessageUpdateDispatchData): MessageChanges<Client> | null {
     // Lazily allocated, and written with `;(changes ??= {}).field = …` so the allocation and
@@ -419,17 +423,28 @@ export class Message<Client = unknown> extends Base<Client> {
       ;(changes ??= {}).mentionEveryone = this.mentionEveryone
       this.mentionEveryone = data.mention_everyone
     }
-    // No comparison on the four arrays: the incoming value is freshly parsed JSON, so it is
-    // never the object already held, and a `!==` here would be an always-true test dressed up
-    // as a meaningful one.
+    // `MESSAGE_UPDATE` carries the whole message, so all four of these arrive on every edit
+    // and a reference test would report all four as changed every time — which a live run
+    // against Discord duly did, on an edit that only touched the content.
+    //
+    // Two of them have an exact answer that costs an element walk. Mentions mean *who was
+    // mentioned*, so identity is the whole content of the field; mention roles are snowflakes
+    // and nothing else.
     if (data.mentions !== undefined) {
-      ;(changes ??= {}).mentions = this.mentions
+      if (!sameIds(this.mentions, data.mentions)) (changes ??= {}).mentions = this.mentions
       this.mentions = data.mentions.map((user) => new User(user, this.client))
     }
     if (data.mention_roles !== undefined) {
-      ;(changes ??= {}).mentionRoles = this.mentionRoles
+      if (!sameStrings(this.mentionRoles, data.mention_roles)) {
+        ;(changes ??= {}).mentionRoles = this.mentionRoles
+      }
       this.mentionRoles = data.mention_roles
     }
+    // The other two keep the reference comparison, because their contents can change while
+    // their identities do not — an attachment description edited, an embed re-rendered — and
+    // an identity test there would be a silent miss rather than an exact answer. For embeds it
+    // is usually right regardless: an embed resolving server-side is the commonest reason a
+    // message updates at all.
     if (data.attachments !== undefined) {
       ;(changes ??= {}).attachments = this.attachments
       this.attachments = data.attachments

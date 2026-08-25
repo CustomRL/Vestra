@@ -50,11 +50,18 @@
  * Absent means unchanged — never "changed to `undefined`", which is why fields whose previous
  * value cannot be recovered are left out of `Field` entirely rather than reported as absent.
  *
- * **Comparison is `!==`.** Exact for strings, numbers, booleans and snowflakes; reference-only
- * for arrays and objects. A payload is freshly parsed JSON, so an array field reports as
- * changed whenever the payload carries it, even when its contents are identical. Deep equality
- * on a dispatch path costs more than the answer is worth, and the alternative to saying so is
- * letting people find out.
+ * **Comparison is `!==` unless a cheaper exact answer exists.** Scalars compare by value.
+ * A list of snowflakes compares by value through {@link sameStrings}, and a list whose meaning
+ * is its membership compares by identity through {@link sameIds} — both exact, because a
+ * payload is freshly parsed JSON and a reference test would report every such field as changed
+ * on every dispatch that carried it.
+ *
+ * What is left is fields whose **contents** can change while their identities do not:
+ * attachments and embeds. Those keep the reference comparison and are therefore reported
+ * whenever the payload carries them, identical contents included. Deep equality on a dispatch
+ * path costs more than the answer is worth, and the alternative to saying so is letting people
+ * find out — which for embeds is usually right anyway, since an embed resolving server-side is
+ * the commonest reason a message updates at all.
  */
 export type Changes<Structure, Field extends keyof Structure> = {
   readonly [Key in Field]?: Structure[Key]
@@ -111,6 +118,38 @@ export function sameStrings(
   if (before.length !== after.length) return false
   for (let index = 0; index < before.length; index += 1) {
     if (before[index] !== after[index]) return false
+  }
+  return true
+}
+
+/**
+ * Whether two lists of identified objects name the same things in the same order.
+ *
+ * @param before - The list currently held, or `undefined`.
+ * @param after - The list that arrived.
+ * @returns `true` if the identities match.
+ *
+ * @remarks
+ * For a list whose meaning **is** its membership: a message's mentions are who was mentioned,
+ * so a mentioned user whose avatar changed since is not a change to the message. Comparing
+ * identities is therefore exact for what the field means, not a cheaper approximation of
+ * comparing contents.
+ *
+ * That is why it is not used for attachments or embeds. Their contents can change while their
+ * identities do not — an attachment description edited, an embed re-rendered — so an identity
+ * comparison there would be a silent miss rather than an exact answer, and those two keep the
+ * reference comparison {@link Changes} documents.
+ */
+export function sameIds(
+  before: readonly { id: string }[] | undefined,
+  after: readonly { id: string }[] | undefined,
+): boolean {
+  if (before === after) return true
+  if (before === undefined) return after === undefined || after.length === 0
+  if (after === undefined) return before.length === 0
+  if (before.length !== after.length) return false
+  for (let index = 0; index < before.length; index += 1) {
+    if (before[index]?.id !== after[index]?.id) return false
   }
   return true
 }
