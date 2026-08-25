@@ -2,9 +2,7 @@ import type {
   APIChannel,
   APIInvite,
   APIMessage,
-  APIThreadMember,
   APIUser,
-  RESTGetAPIChannelThreadMembersQuery,
   RESTPostAPIChannelInviteJSONBody,
   RESTPostAPIChannelMessageThreadsJSONBody,
   RESTPostAPIChannelThreadsJSONBody,
@@ -13,6 +11,7 @@ import type {
   RESTPatchAPIChannelJSONBody,
   RESTPatchAPIChannelMessageJSONBody,
   RESTPostAPIChannelMessageJSONBody,
+  RESTPutAPIChannelPermissionJSONBody,
   Snowflake,
 } from '@vestra/types'
 import type { REST } from '../REST.js'
@@ -449,84 +448,53 @@ export class ChannelRoutes {
   }
 
   /**
-   * Joins a thread as the current user.
+   * Writes a permission overwrite for a role or a member. Needs `ManageRoles`.
    *
-   * @param threadId - The thread to join.
+   * @param channelId - The channel.
+   * @param overwriteId - The role or user the overwrite applies to.
+   * @param body - What to allow and deny, and which of the two the ID is.
    * @param options - Request options.
    *
    * @remarks
-   * Idempotent: joining a thread already joined succeeds rather than erroring.
-   */
-  async joinThread(threadId: Snowflake, options: RouteOptions = {}): Promise<void> {
-    await this.#rest.put<undefined>(`/channels/${threadId}/thread-members/@me`, options)
-  }
-
-  /**
-   * Leaves a thread as the current user.
+   * **`type` is required and says which namespace the ID is in.** A role ID and a user ID are
+   * both snowflakes, so Discord cannot infer it; omitting it is a 400 and getting it wrong
+   * writes an overwrite for an entity that does not exist in that sense, silently.
    *
-   * @param threadId - The thread to leave.
-   * @param options - Request options.
+   * **A `PUT`, and it replaces the whole overwrite.** A permission in neither bitfield is
+   * *inherited*, which is a third state distinct from allowed and denied — so sending only
+   * `allow` resets every denial on that overwrite to inherited. Read the channel first if the
+   * intent is to change one permission and leave the rest.
    */
-  async leaveThread(threadId: Snowflake, options: RouteOptions = {}): Promise<void> {
-    await this.#rest.delete<undefined>(`/channels/${threadId}/thread-members/@me`, options)
-  }
-
-  /**
-   * Adds someone else to a thread.
-   *
-   * @param threadId - The thread to add them to.
-   * @param userId - Who to add.
-   * @param options - Request options.
-   *
-   * @remarks
-   * Separate from {@link ChannelRoutes.joinThread} rather than an optional user ID, for the
-   * same reason the reaction routes are: joining needs only access to the thread, and adding
-   * somebody else needs to be able to send in it. One method would hide that.
-   */
-  async addThreadMember(
-    threadId: Snowflake,
-    userId: Snowflake,
+  async setPermission(
+    channelId: Snowflake,
+    overwriteId: Snowflake,
+    body: RESTPutAPIChannelPermissionJSONBody,
     options: RouteOptions = {},
   ): Promise<void> {
-    await this.#rest.put<undefined>(`/channels/${threadId}/thread-members/${userId}`, options)
-  }
-
-  /**
-   * Removes someone from a thread. Needs `ManageThreads`, or ownership of a private thread.
-   *
-   * @param threadId - The thread to remove them from.
-   * @param userId - Who to remove.
-   * @param options - Request options.
-   */
-  async removeThreadMember(
-    threadId: Snowflake,
-    userId: Snowflake,
-    options: RouteOptions = {},
-  ): Promise<void> {
-    await this.#rest.delete<undefined>(`/channels/${threadId}/thread-members/${userId}`, options)
-  }
-
-  /**
-   * Lists a thread's members.
-   *
-   * @param threadId - The thread to read.
-   * @param query - Pagination, and whether to include guild members.
-   * @param options - Request options.
-   * @returns Its members.
-   *
-   * @remarks
-   * Needs the `GuildMembers` privileged intent, which is unusual for a REST route and easy to
-   * miss: without it Discord answers `403` rather than returning a shorter list.
-   */
-  async getThreadMembers(
-    threadId: Snowflake,
-    query: RESTGetAPIChannelThreadMembersQuery = {},
-    options: RouteOptions = {},
-  ): Promise<APIThreadMember[]> {
-    return await this.#rest.get<APIThreadMember[]>(`/channels/${threadId}/thread-members`, {
+    await this.#rest.put<undefined>(`/channels/${channelId}/permissions/${overwriteId}`, {
       ...options,
-      query: query as Record<string, string | number | boolean | undefined>,
+      body,
     })
+  }
+
+  /**
+   * Removes a permission overwrite entirely. Needs `ManageRoles`.
+   *
+   * @param channelId - The channel.
+   * @param overwriteId - The role or user whose overwrite to remove.
+   * @param options - Request options.
+   *
+   * @remarks
+   * Not the same as allowing nothing and denying nothing. Removing the overwrite returns the
+   * role or member to whatever the guild and the category say; an empty overwrite keeps a row
+   * that says "inherit", which looks identical in effect and different in the client.
+   */
+  async deletePermission(
+    channelId: Snowflake,
+    overwriteId: Snowflake,
+    options: RouteOptions = {},
+  ): Promise<void> {
+    await this.#rest.delete<undefined>(`/channels/${channelId}/permissions/${overwriteId}`, options)
   }
 
   /**

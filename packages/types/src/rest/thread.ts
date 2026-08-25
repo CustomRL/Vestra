@@ -1,4 +1,4 @@
-import type { Snowflake } from '../globals.js'
+import type { ISO8601Timestamp, Snowflake } from '../globals.js'
 import type { ChannelType } from '../enums/channel.js'
 import type { APIChannel } from '../payloads/channel.js'
 import type { APIThreadMember, ThreadAutoArchiveDuration } from '../payloads/thread.js'
@@ -86,4 +86,52 @@ export interface RESTGetAPIGuildThreadsResult {
   threads: APIChannel[]
   /** The current user's membership of each thread it belongs to. */
   members: APIThreadMember[]
+}
+
+/**
+ * `GET /channels/{channel.id}/threads/archived/public`
+ * `GET /channels/{channel.id}/threads/archived/private`
+ *
+ * @remarks
+ * **`before` is a timestamp, not an ID**, unlike every other `before` in this API. Archived
+ * threads are ordered by when they were archived rather than by when they were created, so a
+ * snowflake would page them in the wrong order — and passing one is accepted and produces a
+ * page from 2015.
+ */
+export interface RESTGetAPIChannelThreadsArchivedQuery {
+  /** Threads archived before this ISO8601 timestamp. */
+  before?: ISO8601Timestamp
+  /** How many to return. */
+  limit?: number
+}
+
+/**
+ * `GET /channels/{channel.id}/users/@me/threads/archived/private`
+ *
+ * @remarks
+ * The one archived listing paginated by ID rather than by timestamp, because it is ordered by
+ * thread ID rather than by archive time. Same shape, different meaning, and the two are easy
+ * to swap.
+ */
+export interface RESTGetAPIChannelJoinedThreadsArchivedQuery {
+  /** Threads with an ID lower than this. */
+  before?: Snowflake
+  /** How many to return. */
+  limit?: number
+}
+
+/**
+ * The result of any archived-thread listing.
+ *
+ * @remarks
+ * `has_more` is the only way to know whether to page again: an empty `threads` array is a
+ * definite end, but a full one says nothing on its own because `limit` is advisory.
+ */
+export interface RESTGetAPIChannelThreadsArchivedResult {
+  /** The threads, ordered by archive time — or by ID, on the joined-private listing. */
+  threads: APIChannel[]
+  /** The current user's membership of each returned thread it belongs to. */
+  members: APIThreadMember[]
+  /** Whether more threads exist past this page. */
+  has_more: boolean
 }

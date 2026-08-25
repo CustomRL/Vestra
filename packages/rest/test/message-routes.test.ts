@@ -158,3 +158,45 @@ describe('message routes', () => {
     }
   })
 })
+
+describe('channel permission overwrites', () => {
+  it('MR7: writes an overwrite with PUT and always sends the type', async () => {
+    // `type` is not optional and cannot be inferred: a role ID and a user ID are both
+    // snowflakes. Omitting it is a 400; getting it wrong writes an overwrite for an entity
+    // that does not exist in that sense, and nothing complains.
+    const mock = await recording()
+    try {
+      await clientFor(mock).channels.setPermission(
+        CHANNEL,
+        '41771983423143936',
+        { allow: '1024', deny: '0', type: 0 },
+        { reason: 'lockdown' },
+      )
+      const request = only(mock)
+
+      assert.equal(request.method, 'PUT')
+      assert.equal(request.url, `/v10/channels/${CHANNEL}/permissions/41771983423143936`)
+      assert.deepEqual(JSON.parse(request.body), { allow: '1024', deny: '0', type: 0 })
+      assert.equal(request.headers['x-audit-log-reason'], 'lockdown')
+    } finally {
+      await mock.close()
+    }
+  })
+
+  it('MR8: deletes an overwrite rather than emptying it', async () => {
+    // Removing the row returns the role or member to what the guild and category say. An
+    // empty overwrite keeps a row meaning "inherit" — identical in effect, different in the
+    // client, and reached by a different request.
+    const mock = await recording()
+    try {
+      await clientFor(mock).channels.deletePermission(CHANNEL, '41771983423143936')
+      const request = only(mock)
+
+      assert.equal(request.method, 'DELETE')
+      assert.equal(request.url, `/v10/channels/${CHANNEL}/permissions/41771983423143936`)
+      assert.equal(request.body, '')
+    } finally {
+      await mock.close()
+    }
+  })
+})

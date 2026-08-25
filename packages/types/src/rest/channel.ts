@@ -1,4 +1,4 @@
-import type { Snowflake } from '../globals.js'
+import type { Permissions, Snowflake } from '../globals.js'
 import type { APIChannel, APIOverwrite } from '../payloads/channel.js'
 import type { APIMessageComponent } from '../payloads/component.js'
 import type { APIEmbed } from '../payloads/embed.js'
@@ -197,3 +197,26 @@ export type RESTGetAPIChannelMessageReactionsResult = APIUser[]
 
 /** A channel's pinned messages, newest first. */
 export type RESTGetAPIChannelPinsResult = APIMessage[]
+
+/**
+ * `PUT /channels/{channel.id}/permissions/{overwrite.id}`
+ *
+ * @remarks
+ * **`type` is required and has no default.** It says whether the ID in the path is a role or a
+ * member, and the two namespaces overlap — a role ID and a user ID are both snowflakes, and
+ * Discord has no way to tell which was meant. Omitting it is a 400; getting it wrong writes a
+ * permission for an entity that does not exist in that sense, silently.
+ *
+ * **`allow` and `deny` replace the overwrite wholesale.** There is no partial update: a
+ * permission mentioned in neither bitfield is inherited, which is a third state distinct from
+ * allowed and denied, and sending only `allow` resets every denial on that overwrite to
+ * inherited.
+ */
+export interface RESTPutAPIChannelPermissionJSONBody {
+  /** Permissions explicitly allowed, as a decimal string. Defaults to none. */
+  allow?: Permissions | null
+  /** Permissions explicitly denied, as a decimal string. Defaults to none. */
+  deny?: Permissions | null
+  /** Whether the ID in the path is a role (`0`) or a member (`1`). */
+  type: 0 | 1
+}
