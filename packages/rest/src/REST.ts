@@ -22,6 +22,7 @@ import { AuditLogRoutes } from './routes/audit-logs.js'
 import { AutoModerationRoutes } from './routes/auto-moderation.js'
 import { EmojiRoutes } from './routes/emojis.js'
 import { StickerRoutes } from './routes/stickers.js'
+import { ThreadRoutes } from './routes/threads.js'
 import { ChannelRoutes } from './routes/channels.js'
 import { GatewayRoutes } from './routes/gateway.js'
 import { InteractionRoutes } from './routes/interactions.js'
@@ -152,6 +153,14 @@ export class REST extends EventEmitter<RESTEvents> {
    */
   readonly stickers: StickerRoutes
   /**
+   * Membership of and access to existing threads.
+   *
+   * @remarks
+   * Starting a thread is on `channels`, because a thread is started from a channel or from a
+   * message. What is here is everything addressed by a thread that already exists.
+   */
+  readonly threads: ThreadRoutes
+  /**
    * The audit log.
    *
    * @remarks
@@ -189,6 +198,7 @@ export class REST extends EventEmitter<RESTEvents> {
     this.commands = new ApplicationCommandRoutes(this)
     this.emojis = new EmojiRoutes(this)
     this.stickers = new StickerRoutes(this)
+    this.threads = new ThreadRoutes(this)
     this.auditLogs = new AuditLogRoutes(this)
     this.autoModeration = new AutoModerationRoutes(this)
     this.users = new UserRoutes(this)

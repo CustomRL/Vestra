@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import { REST } from '@vestra/rest'
-import { json, startMockDiscord, type MockDiscord } from './mock-discord.ts'
+import { json, startMockDiscord, type MockDiscord, type RecordedRequest } from './mock-discord.ts'
 
 /**
  * Invite and thread endpoints.
@@ -34,6 +34,14 @@ async function recording(body: unknown = {}): Promise<MockDiscord> {
 
 function clientFor(mock: MockDiscord): REST {
   return new REST({ api: mock.url, version: '10', timeout: 2_000 }).setToken('t0ken')
+}
+
+/** The one request the mock received. */
+function only(mock: MockDiscord): RecordedRequest {
+  assert.equal(mock.requests.length, 1, 'expected exactly one request')
+  const request = mock.requests[0]
+  assert.ok(request !== undefined)
+  return request
 }
 
 describe('invite routes', () => {
@@ -125,10 +133,10 @@ describe('thread routes', () => {
     const mock = await recording()
     try {
       const rest = clientFor(mock)
-      await rest.channels.joinThread(THREAD)
-      await rest.channels.leaveThread(THREAD)
-      await rest.channels.addThreadMember(THREAD, USER)
-      await rest.channels.removeThreadMember(THREAD, USER)
+      await rest.threads.join(THREAD)
+      await rest.threads.leave(THREAD)
+      await rest.threads.addMember(THREAD, USER)
+      await rest.threads.removeMember(THREAD, USER)
 
       assert.deepEqual(
         mock.requests.map((request) => `${request.method} ${request.url}`),
@@ -148,7 +156,7 @@ describe('thread routes', () => {
     const mock = await recording([])
     try {
       const rest = clientFor(mock)
-      await rest.channels.getThreadMembers(THREAD, { with_member: true, limit: 100 })
+      await rest.threads.getMembers(THREAD, { with_member: true, limit: 100 })
       await rest.guilds.getActiveThreads(GUILD)
 
       const members = mock.requests[0]
@@ -158,6 +166,80 @@ describe('thread routes', () => {
       assert.match(members.url, /[?&]limit=100(&|$)/)
 
       assert.equal(mock.requests[1]?.url, `/v10/guilds/${GUILD}/threads/active`)
+    } finally {
+      await mock.close()
+    }
+  })
+})
+
+describe('archived thread listings', () => {
+  it('TA1: pages the public listing by archive timestamp, not by ID', async () => {
+    // `before` here is an ISO8601 timestamp because the listing is ordered by when each
+    // thread archived, not by when it was created. A snowflake is accepted and silently
+    // produces a page from 2015, which is the failure a type cannot catch: both are strings.
+    const mock = await recording({ threads: [], members: [], has_more: false })
+    try {
+      await clientFor(mock).threads.getPublicArchived(CHANNEL, {
+        before: '2024-06-01T00:00:00.000Z',
+        limit: 25,
+      })
+      const request = only(mock)
+
+      assert.equal(request.method, 'GET')
+      assert.match(request.url, new RegExp(`^/v10/channels/${CHANNEL}/threads/archived/public\\?`))
+      assert.match(request.url, /[?&]before=2024-06-01T00%3A00%3A00\.000Z(&|$)/)
+      assert.match(request.url, /[?&]limit=25(&|$)/)
+    } finally {
+      await mock.close()
+    }
+  })
+
+  it('TA2: keeps the three archived listings on three different paths', async () => {
+    // The joined-private listing is not `/threads/archived/private` with a filter — it is a
+    // different path under `/users/@me`, needs no `ManageThreads`, and pages by ID rather than
+    // by timestamp. Three routes that read alike and behave differently.
+    const mock = await recording({ threads: [], members: [], has_more: false })
+    try {
+      const rest = clientFor(mock)
+      await rest.threads.getPublicArchived(CHANNEL)
+      await rest.threads.getPrivateArchived(CHANNEL)
+      await rest.threads.getJoinedPrivateArchived(CHANNEL)
+
+      assert.deepEqual(
+        mock.requests.map((request) => request.url),
+        [
+          `/v10/channels/${CHANNEL}/threads/archived/public`,
+          `/v10/channels/${CHANNEL}/threads/archived/private`,
+          `/v10/channels/${CHANNEL}/users/@me/threads/archived/private`,
+        ],
+      )
+    } finally {
+      await mock.close()
+    }
+  })
+
+  it('TA3: returns has_more, the only reliable end-of-pages signal', async () => {
+    // `limit` is advisory, so a full page says nothing about whether more exist. A client that
+    // dropped this field would leave callers guessing from a length they cannot trust.
+    const mock = await recording({ threads: [{ id: THREAD }], members: [], has_more: true })
+    try {
+      const page = await clientFor(mock).threads.getPublicArchived(CHANNEL)
+
+      assert.equal(page.has_more, true)
+      assert.equal(page.threads.length, 1)
+    } finally {
+      await mock.close()
+    }
+  })
+
+  it('TA4: reads one membership by user, and a 404 is the membership test', async () => {
+    const mock = await recording({ id: THREAD, user_id: USER })
+    try {
+      await clientFor(mock).threads.getMember(THREAD, USER, { with_member: true })
+      const request = only(mock)
+
+      assert.match(request.url, new RegExp(`^/v10/channels/${THREAD}/thread-members/${USER}\\?`))
+      assert.match(request.url, /[?&]with_member=true(&|$)/)
     } finally {
       await mock.close()
     }

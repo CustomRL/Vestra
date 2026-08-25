@@ -2,9 +2,7 @@ import type {
   APIChannel,
   APIInvite,
   APIMessage,
-  APIThreadMember,
   APIUser,
-  RESTGetAPIChannelThreadMembersQuery,
   RESTPostAPIChannelInviteJSONBody,
   RESTPostAPIChannelMessageThreadsJSONBody,
   RESTPostAPIChannelThreadsJSONBody,
@@ -445,87 +443,6 @@ export class ChannelRoutes {
     return await this.#rest.post<APIChannel>(`/channels/${channelId}/threads`, {
       ...options,
       body,
-    })
-  }
-
-  /**
-   * Joins a thread as the current user.
-   *
-   * @param threadId - The thread to join.
-   * @param options - Request options.
-   *
-   * @remarks
-   * Idempotent: joining a thread already joined succeeds rather than erroring.
-   */
-  async joinThread(threadId: Snowflake, options: RouteOptions = {}): Promise<void> {
-    await this.#rest.put<undefined>(`/channels/${threadId}/thread-members/@me`, options)
-  }
-
-  /**
-   * Leaves a thread as the current user.
-   *
-   * @param threadId - The thread to leave.
-   * @param options - Request options.
-   */
-  async leaveThread(threadId: Snowflake, options: RouteOptions = {}): Promise<void> {
-    await this.#rest.delete<undefined>(`/channels/${threadId}/thread-members/@me`, options)
-  }
-
-  /**
-   * Adds someone else to a thread.
-   *
-   * @param threadId - The thread to add them to.
-   * @param userId - Who to add.
-   * @param options - Request options.
-   *
-   * @remarks
-   * Separate from {@link ChannelRoutes.joinThread} rather than an optional user ID, for the
-   * same reason the reaction routes are: joining needs only access to the thread, and adding
-   * somebody else needs to be able to send in it. One method would hide that.
-   */
-  async addThreadMember(
-    threadId: Snowflake,
-    userId: Snowflake,
-    options: RouteOptions = {},
-  ): Promise<void> {
-    await this.#rest.put<undefined>(`/channels/${threadId}/thread-members/${userId}`, options)
-  }
-
-  /**
-   * Removes someone from a thread. Needs `ManageThreads`, or ownership of a private thread.
-   *
-   * @param threadId - The thread to remove them from.
-   * @param userId - Who to remove.
-   * @param options - Request options.
-   */
-  async removeThreadMember(
-    threadId: Snowflake,
-    userId: Snowflake,
-    options: RouteOptions = {},
-  ): Promise<void> {
-    await this.#rest.delete<undefined>(`/channels/${threadId}/thread-members/${userId}`, options)
-  }
-
-  /**
-   * Lists a thread's members.
-   *
-   * @param threadId - The thread to read.
-   * @param query - Pagination, and whether to include guild members.
-   * @param options - Request options.
-   * @returns Its members.
-   *
-   * @remarks
-   * Needs the `GuildMembers` privileged intent, which is unusual for a REST route and easy to
-   * miss: without it Discord answers `403` rather than returning a shorter list.
-   */
-  async getThreadMembers(
-    threadId: Snowflake,
-    query: RESTGetAPIChannelThreadMembersQuery = {},
-    options: RouteOptions = {},
-  ): Promise<APIThreadMember[]> {
-    return await this.#rest.get<APIThreadMember[]>(`/channels/${threadId}/thread-members`, {
-      ...options,
-      query: query as Record<string, string | number | boolean | undefined>,
     })
   }
 
