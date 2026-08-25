@@ -21,6 +21,7 @@ import { ChannelRoutes } from './routes/channels.js'
 import { GatewayRoutes } from './routes/gateway.js'
 import { InteractionRoutes } from './routes/interactions.js'
 import { GuildRoutes } from './routes/guilds.js'
+import { WebhookRoutes } from './routes/webhooks.js'
 import { UserRoutes } from './routes/users.js'
 
 /** HTTP methods the client issues. */
@@ -85,6 +86,14 @@ export class REST extends EventEmitter<RESTEvents> {
    * family the rate limiter does not queue — the initial response has a three-second deadline.
    */
   readonly interactions: InteractionRoutes
+  /**
+   * Webhook endpoints.
+   *
+   * @remarks
+   * The `*WithToken` forms and `execute` send no bot token: a webhook's ID and token are a
+   * credential in their own right, so those routes are unauthenticated and must stay that way.
+   */
+  readonly webhooks: WebhookRoutes
 
   /**
    * @param options - Overrides for the client defaults.
@@ -107,6 +116,7 @@ export class REST extends EventEmitter<RESTEvents> {
     this.channels = new ChannelRoutes(this)
     this.interactions = new InteractionRoutes(this)
     this.guilds = new GuildRoutes(this)
+    this.webhooks = new WebhookRoutes(this)
     this.users = new UserRoutes(this)
     this.gateway = new GatewayRoutes(this)
   }
