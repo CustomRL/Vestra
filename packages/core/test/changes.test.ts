@@ -157,6 +157,59 @@ describe('message update changes', () => {
     }
   })
 
+  it('CG7: does not report mentions a full payload merely repeated', async () => {
+    // `MESSAGE_UPDATE` carries the whole message, so all four array fields arrive on every
+    // edit. A live run against Discord reported all four as changed on an edit that only
+    // touched the content, which is what this case exists to stop coming back.
+    //
+    // Mentions mean *who was mentioned*, so identity is the whole content of the field, and
+    // mention roles are snowflakes and nothing else. Both have an exact answer.
+    const { client, transport } = await cachingClient()
+    const seen = record(client)
+
+    try {
+      transport.dispatch('MESSAGE_CREATE', created('before'), 10)
+      await tick()
+      transport.dispatch(
+        'MESSAGE_UPDATE',
+        { ...created('after'), mentions: [], mention_roles: [] },
+        11,
+      )
+      await tick()
+
+      const { changes } = only(seen)
+      assert.ok(changes !== null)
+      // `attachments` and `embeds` stay, deliberately: their contents can change while their
+      // identities do not, so a reference test is the honest answer there.
+      assert.deepEqual(Object.keys(changes).sort(), ['attachments', 'content', 'embeds'])
+    } finally {
+      await client.destroy()
+    }
+  })
+
+  it('CG8: reports mentions when the mention list actually moved', async () => {
+    const { client, transport } = await cachingClient()
+    const seen = record(client)
+
+    try {
+      transport.dispatch('MESSAGE_CREATE', created('before'), 10)
+      await tick()
+      transport.dispatch(
+        'MESSAGE_UPDATE',
+        { id: MESSAGE, channel_id: CHANNEL, mentions: [AUTHOR], mention_roles: ['7'] },
+        11,
+      )
+      await tick()
+
+      const { changes } = only(seen)
+      assert.ok(changes !== null)
+      assert.deepEqual(changes.mentions, [], 'the previous mention list was empty')
+      assert.deepEqual(changes.mentionRoles, [])
+    } finally {
+      await client.destroy()
+    }
+  })
+
   it('CG4: reports an array field whenever the payload carries it', async () => {
     // The documented imprecision, pinned so it stays documented. `embeds` here is deep-equal
     // to what is already held and still reports as changed, because a freshly parsed array is
