@@ -1,5 +1,5 @@
 import type { GatewayDispatchPayload, GatewayReadyDispatchData, Snowflake } from '@vestra/types'
-import type { ClientUser } from '../structures/ClientUser.js'
+import type { ClientUser, ClientUserChanges } from '../structures/ClientUser.js'
 import type { AuditLogEntry } from '../structures/AuditLogEntry.js'
 import type {
   AutoModerationActionExecution,
@@ -8,15 +8,15 @@ import type {
 import type { Channel } from '../structures/channels/Channel.js'
 import type { ThreadChannel } from '../structures/channels/ThreadChannel.js'
 import type { Emoji } from '../structures/Emoji.js'
-import type { Guild } from '../structures/Guild.js'
+import type { Guild, GuildChanges } from '../structures/Guild.js'
 import type { GuildScheduledEvent } from '../structures/GuildScheduledEvent.js'
 import type { Interaction } from '../structures/Interaction.js'
-import type { GuildMember } from '../structures/GuildMember.js'
+import type { GuildMember, GuildMemberChanges } from '../structures/GuildMember.js'
 import type { Invite } from '../structures/Invite.js'
 import type { Message, MessageChanges } from '../structures/Message.js'
-import type { Presence } from '../structures/Presence.js'
+import type { Presence, PresenceChanges } from '../structures/Presence.js'
 import type { ReactionEmoji } from '../structures/ReactionEmoji.js'
-import type { Role } from '../structures/Role.js'
+import type { Role, RoleChanges } from '../structures/Role.js'
 import type { StageInstance } from '../structures/StageInstance.js'
 import type { Sticker } from '../structures/Sticker.js'
 import type { User } from '../structures/User.js'
@@ -89,8 +89,15 @@ export interface ClientEvents<Client = unknown> {
    * will greet every guild it is already in on every reconnect.
    */
   guildCreate: [guild: Guild<Client>]
-  /** A guild was updated. */
-  guildUpdate: [guild: Guild<Client>]
+  /**
+   * A guild was updated.
+   *
+   * @remarks
+   * `changes` carries the previous values of whatever moved, and is `null` when the guild was
+   * not cached or when the update changed nothing. Guilds are cached by default, so unlike a
+   * message this is usually populated.
+   */
+  guildUpdate: [guild: Guild<Client>, changes: GuildChanges<Client> | null]
   /** The bot was removed from a guild, or it was deleted. */
   guildDelete: [guildId: Snowflake]
   /**
@@ -333,8 +340,15 @@ export interface ClientEvents<Client = unknown> {
 
   /** A member joined a guild. */
   guildMemberAdd: [member: GuildMember<Client>]
-  /** A member was updated. */
-  guildMemberUpdate: [member: GuildMember<Client>]
+  /**
+   * A member was updated.
+   *
+   * @remarks
+   * `changes.roles` is what this event is almost always listened to for — the previous role
+   * list, which is the only way to tell which role was added or taken away. `null` when the
+   * member was not cached, which the default policy makes the usual case.
+   */
+  guildMemberUpdate: [member: GuildMember<Client>, changes: GuildMemberChanges<Client> | null]
   /** A member left or was removed. */
   guildMemberRemove: [guildId: Snowflake, user: User<Client>]
 
@@ -364,8 +378,15 @@ export interface ClientEvents<Client = unknown> {
 
   /** A role was created. */
   roleCreate: [role: Role<Client>, guildId: Snowflake]
-  /** A role was updated. */
-  roleUpdate: [role: Role<Client>, guildId: Snowflake]
+  /**
+   * A role was updated.
+   *
+   * @remarks
+   * `changes.permissions` is the previous bitfield, which is the only way to say which
+   * permission was granted or revoked. Roles are cached by default, so this is populated
+   * unless the scope was turned off.
+   */
+  roleUpdate: [role: Role<Client>, guildId: Snowflake, changes: RoleChanges<Client> | null]
   /** A role was deleted. */
   roleDelete: [roleId: Snowflake, guildId: Snowflake]
 
@@ -376,8 +397,12 @@ export interface ClientEvents<Client = unknown> {
    * The highest-volume event Discord sends. A listener here runs for every status change of
    * every member of every guild the bot is in, so anything expensive in it is expensive at
    * that rate.
+   *
+   * `changes` reports the status and the per-platform status, and deliberately not the
+   * activities — see {@link PresenceChangeField} for why comparing them on this path is not
+   * worth its cost. It is `null` on the very common dispatch where only an activity moved.
    */
-  presenceUpdate: [presence: Presence<Client>]
+  presenceUpdate: [presence: Presence<Client>, changes: PresenceChanges<Client> | null]
 
   /**
    * Somebody joined, left or changed their voice state.
@@ -436,8 +461,14 @@ export interface ClientEvents<Client = unknown> {
    */
   stageInstanceDelete: [stageInstance: StageInstance<Client>]
 
-  /** The current user was updated. */
-  userUpdate: [user: ClientUser<Client>]
+  /**
+   * The current user was updated.
+   *
+   * @remarks
+   * `changes` is `null` when the identity was replaced rather than patched, which happens only
+   * when the dispatch arrives before READY or carries a different account's ID.
+   */
+  userUpdate: [user: ClientUser<Client>, changes: ClientUserChanges<Client> | null]
 
   /**
    * Every dispatch, before anything is done with it.

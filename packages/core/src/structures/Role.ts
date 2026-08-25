@@ -1,5 +1,6 @@
 import type { APIRole, APIRoleColors, Snowflake } from '@vestra/types'
 import { Base } from './Base.js'
+import type { Changes, ChangesDraft } from './Changes.js'
 import { roleIconUrl, type ImageOptions } from './cdn.js'
 import { snowflakeDate, snowflakeTimestamp } from './snowflake.js'
 
@@ -40,6 +41,38 @@ function toRoleColors(colors: APIRoleColors): RoleColors {
  * than not offering it. `docs/design/phase-4-core.md` §4.17 calls this the curated-field-set
  * position; this is one of the cuts.
  */
+/**
+ * The fields a {@link Role.patch} can report as changed.
+ *
+ * @remarks
+ * Everything the payload carries. `GUILD_ROLE_UPDATE` sends a whole role, so unlike a message
+ * every field is present on every dispatch and the comparison is what decides, not presence.
+ */
+export type RoleChangeField =
+  | 'name'
+  | 'color'
+  | 'colors'
+  | 'hoist'
+  | 'icon'
+  | 'unicodeEmoji'
+  | 'position'
+  | 'permissions'
+  | 'managed'
+  | 'mentionable'
+  | 'flags'
+
+/**
+ * What a role edit displaced.
+ *
+ * @typeParam Client - The client type the role is bound to.
+ *
+ * @remarks
+ * The third argument to `roleUpdate`, and `null` when the role was not cached or when the
+ * update changed nothing. Roles are cached by default, so unlike a message this is usually
+ * populated. See {@link Changes}.
+ */
+export type RoleChanges<Client = unknown> = Changes<Role<Client>, RoleChangeField>
+
 export class Role<Client = unknown> extends Base<Client> {
   /** The role's ID. */
   declare readonly id: Snowflake
@@ -136,22 +169,53 @@ export class Role<Client = unknown> extends Base<Client> {
   }
 
   /**
-   * Applies a newer payload in place.
+   * Applies a newer payload in place, reporting what it displaced.
    *
    * @param data - The payload to apply.
+   * @returns The previous values of the fields that actually changed, or `null` if none did.
+   *
+   * @remarks
+   * The record answers the question this event exists for — *which permission changed* — which
+   * was unanswerable before, because the patch overwrote the old bitfield and returned nothing.
    */
-  patch(data: APIRole): void {
+  patch(data: APIRole): RoleChanges<Client> | null {
+    // Record conditionally, assign unconditionally. The payload is absolute, so the assignment
+    // is the same either way and only the record needs the comparison — two lines a field
+    // rather than the four a partial payload like `Message.patch` needs.
+    let changes: ChangesDraft<Role<Client>, RoleChangeField> | null = null
+
+    if (data.name !== this.name) (changes ??= {}).name = this.name
     this.name = data.name
+    if (data.color !== this.color) (changes ??= {}).color = this.color
     this.color = data.color
+    // Compared by its three components rather than by reference: `toRoleColors` builds a new
+    // object every dispatch, so a reference test would report a colour change every time.
+    if (
+      data.colors.primary_color !== this.colors.primaryColor ||
+      data.colors.secondary_color !== this.colors.secondaryColor ||
+      data.colors.tertiary_color !== this.colors.tertiaryColor
+    ) {
+      ;(changes ??= {}).colors = this.colors
+    }
     this.colors = toRoleColors(data.colors)
+    if (data.hoist !== this.hoist) (changes ??= {}).hoist = this.hoist
     this.hoist = data.hoist
+    if (data.icon !== this.icon) (changes ??= {}).icon = this.icon
     this.icon = data.icon
+    if (data.unicode_emoji !== this.unicodeEmoji) (changes ??= {}).unicodeEmoji = this.unicodeEmoji
     this.unicodeEmoji = data.unicode_emoji
+    if (data.position !== this.position) (changes ??= {}).position = this.position
     this.position = data.position
+    if (data.permissions !== this.permissions) (changes ??= {}).permissions = this.permissions
     this.permissions = data.permissions
+    if (data.managed !== this.managed) (changes ??= {}).managed = this.managed
     this.managed = data.managed
+    if (data.mentionable !== this.mentionable) (changes ??= {}).mentionable = this.mentionable
     this.mentionable = data.mentionable
+    if (data.flags !== this.flags) (changes ??= {}).flags = this.flags
     this.flags = data.flags
+
+    return changes
   }
 
   /** The role's icon, or `undefined` if it has none. */

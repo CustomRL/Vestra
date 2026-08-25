@@ -60,10 +60,10 @@ export const userUpdate = defineHandler('USER_UPDATE', (client, data) => {
   if (current?.id !== data.id) {
     const user = new ClientUser(data, client)
     client.user = user
-    client.emit('userUpdate', user)
+    client.emit('userUpdate', user, null)
     return
   }
 
-  current.patch(data)
-  client.emit('userUpdate', current)
+  const changes = current.patch(data)
+  client.emit('userUpdate', current, changes)
 })

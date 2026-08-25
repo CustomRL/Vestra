@@ -11,6 +11,7 @@ import type {
   VerificationLevel,
 } from '@vestra/types'
 import { Base } from './Base.js'
+import { sameStrings, type Changes, type ChangesDraft } from './Changes.js'
 import {
   guildBannerUrl,
   guildDiscoverySplashUrl,
@@ -58,6 +59,55 @@ import { snowflakeDate, snowflakeTimestamp } from './snowflake.js'
  * empty array regardless would read as "this guild has no roles", which is a worse answer
  * than making the caller ask the cache.
  */
+/**
+ * The fields a {@link Guild.patch} can report as changed.
+ *
+ * @remarks
+ * Every field the structure mirrors. `GUILD_UPDATE` sends a whole guild, so the comparison
+ * decides rather than the presence — except for the last three, which only `GUILD_CREATE`
+ * carries and which an update therefore says nothing about either way.
+ */
+export type GuildChangeField =
+  | 'name'
+  | 'icon'
+  | 'splash'
+  | 'discoverySplash'
+  | 'ownerId'
+  | 'afkChannelId'
+  | 'afkTimeout'
+  | 'verificationLevel'
+  | 'defaultMessageNotifications'
+  | 'explicitContentFilter'
+  | 'mfaLevel'
+  | 'features'
+  | 'applicationId'
+  | 'systemChannelId'
+  | 'systemChannelFlags'
+  | 'rulesChannelId'
+  | 'publicUpdatesChannelId'
+  | 'vanityUrlCode'
+  | 'description'
+  | 'banner'
+  | 'premiumTier'
+  | 'premiumSubscriptionCount'
+  | 'preferredLocale'
+  | 'nsfwLevel'
+  | 'joinedTimestamp'
+  | 'large'
+  | 'memberCount'
+
+/**
+ * What a guild edit displaced.
+ *
+ * @typeParam Client - The client type the guild is bound to.
+ *
+ * @remarks
+ * The second argument to `guildUpdate`, and `null` when the guild was not cached or when the
+ * update changed nothing. Guilds are cached by default, so this is usually populated. See
+ * {@link Changes}.
+ */
+export type GuildChanges<Client = unknown> = Changes<Guild<Client>, GuildChangeField>
+
 export class Guild<Client = unknown> extends Base<Client> {
   /** The guild's ID. */
   declare readonly id: Snowflake
@@ -273,37 +323,93 @@ export class Guild<Client = unknown> extends Base<Client> {
    * only `GUILD_CREATE` sends are left alone rather than blanked, because an update saying
    * nothing about them is not an update clearing them.
    */
-  patch(data: APIGuildLike): void {
+  patch(data: APIGuildLike): GuildChanges<Client> | null {
+    // Record conditionally, assign unconditionally, for the twenty-four fields GUILD_UPDATE
+    // always carries. The three below them are guarded on both, because they arrive only on
+    // GUILD_CREATE and an absent one is not a cleared one.
+    let changes: ChangesDraft<Guild<Client>, GuildChangeField> | null = null
+
+    if (data.name !== this.name) (changes ??= {}).name = this.name
     this.name = data.name
+    if (data.icon !== this.icon) (changes ??= {}).icon = this.icon
     this.icon = data.icon
+    if (data.splash !== this.splash) (changes ??= {}).splash = this.splash
     this.splash = data.splash
+    if (data.discovery_splash !== this.discoverySplash)
+      (changes ??= {}).discoverySplash = this.discoverySplash
     this.discoverySplash = data.discovery_splash
+    if (data.owner_id !== this.ownerId) (changes ??= {}).ownerId = this.ownerId
     this.ownerId = data.owner_id
+    if (data.afk_channel_id !== this.afkChannelId) (changes ??= {}).afkChannelId = this.afkChannelId
     this.afkChannelId = data.afk_channel_id
+    if (data.afk_timeout !== this.afkTimeout) (changes ??= {}).afkTimeout = this.afkTimeout
     this.afkTimeout = data.afk_timeout
+    if (data.verification_level !== this.verificationLevel)
+      (changes ??= {}).verificationLevel = this.verificationLevel
     this.verificationLevel = data.verification_level
+    if (data.default_message_notifications !== this.defaultMessageNotifications)
+      (changes ??= {}).defaultMessageNotifications = this.defaultMessageNotifications
     this.defaultMessageNotifications = data.default_message_notifications
+    if (data.explicit_content_filter !== this.explicitContentFilter)
+      (changes ??= {}).explicitContentFilter = this.explicitContentFilter
     this.explicitContentFilter = data.explicit_content_filter
+    if (data.mfa_level !== this.mfaLevel) (changes ??= {}).mfaLevel = this.mfaLevel
     this.mfaLevel = data.mfa_level
+    // Compared by value: the payload array is freshly parsed on every dispatch, so a
+    // reference test would report a feature change on every guild update.
+    if (!sameStrings(this.features, data.features)) {
+      ;(changes ??= {}).features = this.features
+    }
     this.features = data.features
+    if (data.application_id !== this.applicationId)
+      (changes ??= {}).applicationId = this.applicationId
     this.applicationId = data.application_id
+    if (data.system_channel_id !== this.systemChannelId)
+      (changes ??= {}).systemChannelId = this.systemChannelId
     this.systemChannelId = data.system_channel_id
+    if (data.system_channel_flags !== this.systemChannelFlags)
+      (changes ??= {}).systemChannelFlags = this.systemChannelFlags
     this.systemChannelFlags = data.system_channel_flags
+    if (data.rules_channel_id !== this.rulesChannelId)
+      (changes ??= {}).rulesChannelId = this.rulesChannelId
     this.rulesChannelId = data.rules_channel_id
+    if (data.public_updates_channel_id !== this.publicUpdatesChannelId)
+      (changes ??= {}).publicUpdatesChannelId = this.publicUpdatesChannelId
     this.publicUpdatesChannelId = data.public_updates_channel_id
+    if (data.vanity_url_code !== this.vanityUrlCode)
+      (changes ??= {}).vanityUrlCode = this.vanityUrlCode
     this.vanityUrlCode = data.vanity_url_code
+    if (data.description !== this.description) (changes ??= {}).description = this.description
     this.description = data.description
+    if (data.banner !== this.banner) (changes ??= {}).banner = this.banner
     this.banner = data.banner
+    if (data.premium_tier !== this.premiumTier) (changes ??= {}).premiumTier = this.premiumTier
     this.premiumTier = data.premium_tier
+    if (data.premium_subscription_count !== this.premiumSubscriptionCount)
+      (changes ??= {}).premiumSubscriptionCount = this.premiumSubscriptionCount
     this.premiumSubscriptionCount = data.premium_subscription_count
+    if (data.preferred_locale !== this.preferredLocale)
+      (changes ??= {}).preferredLocale = this.preferredLocale
     this.preferredLocale = data.preferred_locale
+    if (data.nsfw_level !== this.nsfwLevel) (changes ??= {}).nsfwLevel = this.nsfwLevel
     this.nsfwLevel = data.nsfw_level
 
     // Left alone rather than blanked when absent: only GUILD_CREATE sends these, so an
     // update saying nothing about them is not an update clearing them.
-    if (data.joined_at !== undefined) this.joinedTimestamp = data.joined_at
-    if (data.large !== undefined) this.large = data.large
-    if (data.member_count !== undefined) this.memberCount = data.member_count
+    if (data.joined_at !== undefined && data.joined_at !== this.joinedTimestamp) {
+      ;(changes ??= {}).joinedTimestamp = this.joinedTimestamp
+      this.joinedTimestamp = data.joined_at
+    }
+    if (data.large !== undefined && data.large !== this.large) {
+      ;(changes ??= {}).large = this.large
+      this.large = data.large
+    }
+    if (data.member_count !== undefined && data.member_count !== this.memberCount) {
+      ;(changes ??= {}).memberCount = this.memberCount
+      this.memberCount = data.member_count
+    }
+
+    return changes
   }
 }
 
