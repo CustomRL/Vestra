@@ -70,6 +70,16 @@ export class Client extends EventEmitter<ClientEvents<EventContext>> {
   readonly #readyShards = new Set<number>()
   /** Callers awaiting {@link Client.whenReady}, so `destroy()` can fail them rather than hang. */
   readonly #readyWaiters = new Set<(error: Error) => void>()
+  /**
+   * Callers awaiting the **first** shard, which is what `login()` resolves on.
+   *
+   * @remarks
+   * Separate from the `ready` event because the two answer different questions and now fire at
+   * different times. `login()` resolved by listening for `ready`, so the moment `ready` became
+   * fleet-wide — which is what it always claimed to be — `login()` would have become fleet-wide
+   * with it, and a two-hundred shard bot could not print a startup line for a minute.
+   */
+  readonly #firstReadyWaiters = new Set<(user: ClientUser<EventContext>) => void>()
   #announcedReady = false
   #destroyed = false
 
@@ -487,7 +497,9 @@ export class Client extends EventEmitter<ClientEvents<EventContext>> {
         },
         onResumed: () => undefined,
         onDisconnect: () => undefined,
-        onGuildsReady: () => undefined,
+        onGuildsReady: (shardId, unresolved) => {
+          this.emit('shardGuildsReady', shardId, unresolved)
+        },
         onError: (error, shardId) => {
           this.#onShardError(error, shardId)
         },
@@ -516,7 +528,16 @@ export class Client extends EventEmitter<ClientEvents<EventContext>> {
     const user = this.#context.user
     if (user === undefined) return
 
+    // The first shard settles `login()`, whatever the rest of the fleet is doing.
+    for (const resolve of [...this.#firstReadyWaiters]) resolve(user)
+    this.#firstReadyWaiters.clear()
+
+    // **`ready` waits for the whole fleet**, which is what its own documentation and §5.4
+    // always said and what `whenReady()` already did. It fired here on the first shard, which
+    // is indistinguishable from correct on the single-shard bot almost everybody runs and
+    // meant a larger fleet ran its `ready` handler with most shards still identifying.
     if (this.#announcedReady) return
+    if (!this.#allShardsReady()) return
     this.#announcedReady = true
 
     this.emit('ready', user)
@@ -570,13 +591,15 @@ export class Client extends EventEmitter<ClientEvents<EventContext>> {
       }
 
       detach = (): void => {
-        this.off('ready', onReady)
+        this.#firstReadyWaiters.delete(onReady)
         this.off('error', onError)
         this.#readyWaiters.delete(fail)
       }
 
       this.#readyWaiters.add(fail)
-      this.once('ready', onReady)
+      // The first-shard signal, not the `ready` event. `ready` waits for the whole fleet, and
+      // `login()` deliberately does not — see its own remarks.
+      this.#firstReadyWaiters.add(onReady)
       this.on('error', onError)
     })
 

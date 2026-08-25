@@ -2174,8 +2174,23 @@ references, and it is bounded rather than wholesale.
 
 ### 5.4 Where `ready` fits
 
-`ready` fires when **every owned shard has reached READY and settled its guild stream**. It fires
-once per client lifetime. It carries the bot's own user, which is guaranteed present at that
+`ready` fires when **every owned shard has reached READY**. It fires once per client lifetime.
+
+**The guild-stream clause is dropped, and this section used to carry it.** Waiting for the
+stream to settle would put `GuildReadyTracker`'s idle timeout in front of every startup — a
+fifteen-second floor on a large fleet, and longer whenever Discord streams slowly. `ClientEvents`
+took the other position ("**not** the same thing as every guild having arrived"), so the two
+documents disagreed; the event surface's reading is the better one and is now the only one.
+What the tracker computes is published as `shardGuildsReady` instead, which had been referenced
+in `Client`'s own TSDoc for a phase without existing.
+
+**The implementation fired this on the first shard.** §7 **RD1** pins the corrected behaviour at
+two shards, which is the smallest fleet where any arrangement of the code is distinguishable —
+at one shard "first shard ready" and "fleet ready" are the same moment, which is why nothing
+caught it. `login()` had to be decoupled at the same time: it resolved by listening for `ready`,
+so making `ready` fleet-wide would have made `login()` fleet-wide with it, contradicting its own
+remarks about a two-hundred shard bot needing to print a startup line before identify pacing
+finishes. It carries the bot's own user, which is guaranteed present at that
 moment even though `client.user` is `ClientUser | undefined` everywhere else — handing the
 listener a non-optional value at the one moment it is certain is worth the extra parameter.
 

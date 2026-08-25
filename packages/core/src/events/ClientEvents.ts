@@ -41,14 +41,44 @@ import type { VoiceState } from '../structures/VoiceState.js'
  */
 export interface ClientEvents<Client = unknown> {
   /**
-   * The client is connected and its identity is known.
+   * Every owned shard has reached READY, and the client's identity is known.
    *
    * @remarks
-   * Fired once per client, not once per shard, and **not** the same thing as every guild
-   * having arrived — the guild stream is still draining when this fires. An event for that
-   * belongs with the readiness tracker.
+   * Fired **once per client**, not once per shard, and only when the whole fleet is up. It
+   * fired on the *first* shard until this was corrected — which is invisible on the
+   * single-shard bot almost everybody runs, and meant a larger fleet started work in a `ready`
+   * handler while most of its shards were still identifying and most of its guilds were not
+   * yet cached.
+   *
+   * **Not the same thing as every guild having arrived.** The guild stream is still draining
+   * when this fires; {@link ClientEvents.shardGuildsReady} is the event for that. Waiting for
+   * it here would put the tracker's idle timeout in front of every startup.
+   *
+   * **Not the same thing as `login()` resolving, either, and deliberately.** `login()` answers
+   * "can I talk to Discord" and resolves on the first shard, because a two-hundred shard bot
+   * spends over a minute on identify pacing alone and a startup log has to come out before
+   * that. This answers "is the fleet up".
+   *
+   * One consequence worth stating: because the underlying counter is one-shot, a shard that
+   * reaches READY, dies and re-identifies before the fleet completes does not re-count. So
+   * this means *every owned shard has reached READY at least once*, not *every shard is
+   * connected now*.
    */
   ready: [user: ClientUser<Client>]
+
+  /**
+   * A shard finished streaming the guilds it was told to expect.
+   *
+   * @remarks
+   * The completion signal from the gateway's `GuildReadyTracker`, which was computed and then
+   * discarded: the client wired the bridge's hook to a no-op while {@link ClientEvents.ready}'s
+   * documentation pointed at an event that did not exist.
+   *
+   * `unresolved` carries the guilds READY promised and `GUILD_CREATE` never delivered before
+   * the stream went idle. It is normally empty. A non-empty list means those guilds are
+   * unavailable — an outage on Discord's side — rather than that anything here went wrong.
+   */
+  shardGuildsReady: [shardId: number, unresolved: readonly Snowflake[]]
 
   /**
    * A guild became available, or the bot joined one.
