@@ -71,6 +71,25 @@ describe('shard lifecycle events', () => {
     }
   })
 
+  it('SL4: stays quiet on a deliberate shutdown, which is not a drop', async () => {
+    // The distinction the event turns on, and the one the first version of the testing bot's
+    // `lifecycle-check` got wrong: it drove the close through `destroy()` and reported the
+    // event missing. It was not missing — a shutdown moves the shard to its closing state
+    // before the socket is touched, so the close that follows is suppressed on purpose. A bot
+    // logging disconnects should not log its own shutdown as an incident.
+    const { client } = await scriptedClient({ intents: [GatewayIntentBits.Guilds] })
+
+    const closed: number[] = []
+    client.on('shardDisconnect', (shardId) => {
+      closed.push(shardId)
+    })
+
+    await client.destroy()
+    await tick()
+
+    assert.deepEqual(closed, [], 'destroy reported itself as a disconnect')
+  })
+
   it('SL3: names the shard, so a fleet can tell which one moved', async () => {
     // Two shards, because at one shard every arrangement of this passes — including one that
     // hard-codes zero.
