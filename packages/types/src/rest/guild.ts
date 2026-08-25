@@ -1,4 +1,6 @@
 import type { ISO8601Timestamp, Permissions, Snowflake } from '../globals.js'
+import type { ChannelType } from '../enums/channel.js'
+import type { APIChannel, APIOverwrite } from '../payloads/channel.js'
 import type { APIBan, APIGuild } from '../payloads/guild.js'
 import type { APIGuildMember } from '../payloads/member.js'
 import type { APIRole } from '../payloads/role.js'
@@ -124,3 +126,44 @@ export type RESTPatchAPIGuildRoleResult = APIRole
 
 /** The result of `GET /guilds/{guild.id}/roles`. */
 export type RESTGetAPIGuildRolesResult = APIRole[]
+
+/**
+ * `POST /guilds/{guild.id}/channels`
+ *
+ * @remarks
+ * `name` and nothing else is required; Discord defaults `type` to a text channel. `position`
+ * is advisory — creating a channel renumbers its siblings, so the value that comes back is
+ * the one to believe.
+ */
+export interface RESTPostAPIGuildChannelJSONBody {
+  /** The channel's name, 1 to 100 characters. */
+  name: string
+  /** What kind of channel to create. Defaults to a guild text channel. */
+  type?: ChannelType
+  /** The channel topic, 0 to 1024 characters. */
+  topic?: string | null
+  /** Bitrate in bits per second, for a voice channel. */
+  bitrate?: number
+  /** How many users may join a voice channel, or `0` for no limit. */
+  user_limit?: number
+  /** Seconds a member must wait between messages, 0 to 21600. */
+  rate_limit_per_user?: number
+  /** Sorting position among its siblings. */
+  position?: number
+  /** Explicit permission overwrites. */
+  permission_overwrites?: APIOverwrite[]
+  /** The category to place it under. */
+  parent_id?: Snowflake | null
+  /** Whether the channel is age-restricted. */
+  nsfw?: boolean
+  /** The voice region, or `null` to let Discord choose. */
+  rtc_region?: string | null
+  /** The default auto-archive duration for threads, in minutes. */
+  default_auto_archive_duration?: number
+}
+
+/** The result of `POST /guilds/{guild.id}/channels`. */
+export type RESTPostAPIGuildChannelResult = APIChannel
+
+/** The result of `GET /guilds/{guild.id}/channels`. */
+export type RESTGetAPIGuildChannelsResult = APIChannel[]

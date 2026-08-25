@@ -1,6 +1,8 @@
 import type {
   APIChannel,
   APIMessage,
+  APIUser,
+  RESTGetAPIChannelMessageReactionsQuery,
   RESTGetAPIChannelMessagesQuery,
   RESTPatchAPIChannelJSONBody,
   RESTPatchAPIChannelMessageJSONBody,
@@ -211,6 +213,164 @@ export class ChannelRoutes {
       `/channels/${channelId}/messages/${messageId}/reactions/${encodeURIComponent(emoji)}/@me`,
       options,
     )
+  }
+
+  /**
+   * Removes the current user's reaction.
+   *
+   * @param channelId - The channel the message is in.
+   * @param messageId - The message to unreact to.
+   * @param emoji - A unicode emoji, or `name:id` for a custom one.
+   * @param options - Request options.
+   *
+   * @remarks
+   * Separate from {@link ChannelRoutes.removeUserReaction} because they need different
+   * permissions: taking back your own reaction needs none, and removing somebody else's needs
+   * `ManageMessages`. One method taking an optional user ID would hide that.
+   */
+  async removeOwnReaction(
+    channelId: Snowflake,
+    messageId: Snowflake,
+    emoji: string,
+    options: RouteOptions = {},
+  ): Promise<void> {
+    await this.#rest.delete<undefined>(
+      `/channels/${channelId}/messages/${messageId}/reactions/${encodeURIComponent(emoji)}/@me`,
+      options,
+    )
+  }
+
+  /**
+   * Removes another user's reaction. Needs `ManageMessages`.
+   *
+   * @param channelId - The channel the message is in.
+   * @param messageId - The message to unreact to.
+   * @param emoji - A unicode emoji, or `name:id` for a custom one.
+   * @param userId - Whose reaction to remove.
+   * @param options - Request options.
+   */
+  async removeUserReaction(
+    channelId: Snowflake,
+    messageId: Snowflake,
+    emoji: string,
+    userId: Snowflake,
+    options: RouteOptions = {},
+  ): Promise<void> {
+    await this.#rest.delete<undefined>(
+      `/channels/${channelId}/messages/${messageId}/reactions/` +
+        `${encodeURIComponent(emoji)}/${userId}`,
+      options,
+    )
+  }
+
+  /**
+   * Fetches who reacted with one emoji.
+   *
+   * @param channelId - The channel the message is in.
+   * @param messageId - The message to read.
+   * @param emoji - A unicode emoji, or `name:id` for a custom one.
+   * @param query - Pagination.
+   * @param options - Request options.
+   * @returns The users who reacted.
+   *
+   * @remarks
+   * Capped at 100 per call and paginated by user ID, so a busy reaction needs several: pass
+   * the last ID returned as `after` until fewer than `limit` come back.
+   */
+  async getReactions(
+    channelId: Snowflake,
+    messageId: Snowflake,
+    emoji: string,
+    query: RESTGetAPIChannelMessageReactionsQuery = {},
+    options: RouteOptions = {},
+  ): Promise<APIUser[]> {
+    return await this.#rest.get<APIUser[]>(
+      `/channels/${channelId}/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`,
+      { ...options, query: query as Record<string, string | number | boolean | undefined> },
+    )
+  }
+
+  /**
+   * Removes every reaction from a message. Needs `ManageMessages`.
+   *
+   * @param channelId - The channel the message is in.
+   * @param messageId - The message to clear.
+   * @param options - Request options.
+   */
+  async removeAllReactions(
+    channelId: Snowflake,
+    messageId: Snowflake,
+    options: RouteOptions = {},
+  ): Promise<void> {
+    await this.#rest.delete<undefined>(
+      `/channels/${channelId}/messages/${messageId}/reactions`,
+      options,
+    )
+  }
+
+  /**
+   * Removes every reaction of one emoji. Needs `ManageMessages`.
+   *
+   * @param channelId - The channel the message is in.
+   * @param messageId - The message to clear.
+   * @param emoji - A unicode emoji, or `name:id` for a custom one.
+   * @param options - Request options.
+   */
+  async removeEmojiReactions(
+    channelId: Snowflake,
+    messageId: Snowflake,
+    emoji: string,
+    options: RouteOptions = {},
+  ): Promise<void> {
+    await this.#rest.delete<undefined>(
+      `/channels/${channelId}/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`,
+      options,
+    )
+  }
+
+  /**
+   * Fetches a channel's pinned messages, newest first.
+   *
+   * @param channelId - The channel to read.
+   * @param options - Request options.
+   * @returns The pinned messages.
+   */
+  async getPinnedMessages(channelId: Snowflake, options: RouteOptions = {}): Promise<APIMessage[]> {
+    return await this.#rest.get<APIMessage[]>(`/channels/${channelId}/pins`, options)
+  }
+
+  /**
+   * Pins a message. Needs `ManageMessages`.
+   *
+   * @param channelId - The channel the message is in.
+   * @param messageId - The message to pin.
+   * @param options - Request options.
+   *
+   * @remarks
+   * A channel holds at most 50 pins and Discord answers the 51st with `30003`, which arrives
+   * as a `DiscordAPIError` rather than as a silent no-op.
+   */
+  async pinMessage(
+    channelId: Snowflake,
+    messageId: Snowflake,
+    options: RouteOptions = {},
+  ): Promise<void> {
+    await this.#rest.put<undefined>(`/channels/${channelId}/pins/${messageId}`, options)
+  }
+
+  /**
+   * Unpins a message. Needs `ManageMessages`.
+   *
+   * @param channelId - The channel the message is in.
+   * @param messageId - The message to unpin.
+   * @param options - Request options.
+   */
+  async unpinMessage(
+    channelId: Snowflake,
+    messageId: Snowflake,
+    options: RouteOptions = {},
+  ): Promise<void> {
+    await this.#rest.delete<undefined>(`/channels/${channelId}/pins/${messageId}`, options)
   }
 
   /**
