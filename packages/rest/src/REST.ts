@@ -46,6 +46,23 @@ export interface RESTEvents {
 }
 
 /**
+ * The error for an authorised request made before a token was set.
+ *
+ * @param path - The route that was attempted, so the message names it.
+ * @returns The error to throw.
+ *
+ * @remarks
+ * Shared so the precondition in `raw()` and the guard inside `#send` cannot drift into two
+ * different messages for one mistake.
+ */
+function missingToken(path: string): Error {
+  return new Error(
+    `Cannot send an authorised request to ${path} before setToken() is called. ` +
+      'Pass `auth: false` for endpoints that do not need a token.',
+  )
+}
+
+/**
  * A Discord REST client.
  *
  * @remarks
@@ -187,6 +204,12 @@ export class REST extends EventEmitter<RESTEvents> {
    * streaming a body directly.
    */
   async raw(request: InternalRequest): Promise<Response> {
+    // **Before the queue, not inside the send.** A missing token is a configuration mistake,
+    // and no number of retries makes one succeed — but the send closure is what the retry
+    // loop wraps, so throwing there cost four attempts and about five seconds of exponential
+    // backoff to arrive at the same error the first attempt already knew.
+    if (request.auth !== false && this.#token === null) throw missingToken(request.path)
+
     const identity = this.#registry.getIdentity(request.method, request.path)
     // Stable for the life of the route: deliberately not the bucket hash, which changes
     // the moment Discord first reveals it and would strand this handler mid-queue.
@@ -239,12 +262,10 @@ export class REST extends EventEmitter<RESTEvents> {
     }
 
     if (request.auth !== false) {
-      if (this.#token === null) {
-        throw new Error(
-          `Cannot send an authorised request to ${request.path} before setToken() is called. ` +
-            'Pass `auth: false` for endpoints that do not need a token.',
-        )
-      }
+      // Checked again in `raw()` before queueing, and that is where the useful failure comes
+      // from. This one cannot be reached through the public API and exists so `#send` is
+      // correct on its own terms rather than only in the order it happens to be called.
+      if (this.#token === null) throw missingToken(request.path)
       headers.set('Authorization', `${this.#options.authPrefix} ${this.#token}`)
     }
 
