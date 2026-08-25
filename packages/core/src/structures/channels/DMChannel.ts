@@ -3,6 +3,7 @@ import { User } from '../User.js'
 import type { RestCapable } from '../capabilities.js'
 import { Message } from '../Message.js'
 import { Channel, type TextBased } from './Channel.js'
+import type { ChannelChanges, ChannelChangesDraft } from './ChannelChanges.js'
 
 /**
  * A direct message between two users.
@@ -71,11 +72,18 @@ export class DMChannel<Client = unknown> extends Channel<Client> implements Text
    *
    * @param data - The payload to apply.
    */
-  override patch(data: APIDMChannel): void {
-    super.patch(data)
+  override patch(data: APIDMChannel): ChannelChanges<Client> | null {
+    let changes: ChannelChangesDraft<Client> | null = super.patch(data)
 
+    if (data.last_message_id !== this.lastMessageId) {
+      ;(changes ??= {}).lastMessageId = this.lastMessageId
+    }
     this.lastMessageId = data.last_message_id
+    // Not reported. The list is rebuilt into fresh `User` structures on every dispatch, and
+    // who is in a DM does not change - see {@link ChannelChanges}.
     this.recipients = toRecipients(data, this.client)
+
+    return changes
   }
 }
 

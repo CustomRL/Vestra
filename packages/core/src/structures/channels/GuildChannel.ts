@@ -1,5 +1,6 @@
 import type { APIGuildChannelBase, APIOverwrite, ChannelType, Snowflake } from '@vestra/types'
 import { Channel } from './Channel.js'
+import type { ChannelChanges, ChannelChangesDraft } from './ChannelChanges.js'
 
 /**
  * A permission overwrite, mirrored rather than held by reference.
@@ -75,18 +76,64 @@ export abstract class GuildChannel<Client = unknown> extends Channel<Client> {
    *
    * @param data - The payload to apply.
    */
-  override patch(data: APIGuildChannelBase<ChannelType>): void {
-    super.patch(data)
+  override patch(data: APIGuildChannelBase<ChannelType>): ChannelChanges<Client> | null {
+    let changes: ChannelChangesDraft<Client> | null = super.patch(data)
 
+    if (data.name !== this.name) (changes ??= {}).name = this.name
     this.name = data.name
+    if (data.position !== this.position) (changes ??= {}).position = this.position
     this.position = data.position
+    // Compared by value: `toOverwrites` builds a fresh array of fresh objects on every
+    // dispatch, so a reference test would report a permission change every time. "The channel
+    // permissions moved" is worth the element walk — it is the one thing a moderation bot
+    // watches this event for — and a channel's overwrite list is short.
+    if (!sameOverwrites(this.permissionOverwrites, data.permission_overwrites)) {
+      ;(changes ??= {}).permissionOverwrites = this.permissionOverwrites
+    }
     this.permissionOverwrites = toOverwrites(data.permission_overwrites)
+    if (data.parent_id !== this.parentId) (changes ??= {}).parentId = this.parentId
     this.parentId = data.parent_id
+    if (data.nsfw !== this.nsfw) (changes ??= {}).nsfw = this.nsfw
     this.nsfw = data.nsfw
+
+    return changes
   }
 }
 
 /** Copies the overwrites out of the payload so nothing aliases it. */
+/**
+ * Whether a payload's overwrites match the ones already held, field for field.
+ *
+ * @param before - The overwrites currently held.
+ * @param after - The overwrites that arrived, in their payload form.
+ * @returns `true` if nothing moved.
+ *
+ * @remarks
+ * Compared before conversion, so nothing is allocated to answer the question. `toOverwrites`
+ * builds a fresh array of fresh objects on every dispatch, so a reference test would report a
+ * permission change on every channel update and leave the record non-null forever.
+ *
+ * Order-sensitive, like {@link sameStrings}, and for the same reason: Discord sends the list in
+ * a stable order, and the failure mode is a spurious report rather than a wrong previous value.
+ */
+function sameOverwrites(
+  before: readonly PermissionOverwrite[],
+  after: readonly APIOverwrite[] | undefined,
+): boolean {
+  if (after === undefined) return before.length === 0
+  if (before.length !== after.length) return false
+  for (let index = 0; index < before.length; index += 1) {
+    const held = before[index]
+    const arrived = after[index]
+    if (held === undefined || arrived === undefined) return false
+    if (held.id !== arrived.id) return false
+    if (held.type !== arrived.type) return false
+    if (held.allow !== arrived.allow) return false
+    if (held.deny !== arrived.deny) return false
+  }
+  return true
+}
+
 function toOverwrites(raw: APIOverwrite[] | undefined): PermissionOverwrite[] {
   if (raw === undefined) return []
 

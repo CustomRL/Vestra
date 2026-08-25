@@ -1,5 +1,6 @@
 import type { APIVoiceChannelBase, ChannelType, Snowflake, VideoQualityMode } from '@vestra/types'
 import { GuildTextBasedChannel } from './GuildTextBasedChannel.js'
+import type { ChannelChanges, ChannelChangesDraft } from './ChannelChanges.js'
 
 /**
  * A voice channel within a guild.
@@ -38,12 +39,20 @@ export class VoiceChannel<Client = unknown> extends GuildTextBasedChannel<Client
    *
    * @param data - The payload to apply.
    */
-  override patch(data: APIVoiceChannelBase<ChannelType>): void {
-    super.patch(data)
+  override patch(data: APIVoiceChannelBase<ChannelType>): ChannelChanges<Client> | null {
+    let changes: ChannelChangesDraft<Client> | null = super.patch(data)
 
+    if (data.bitrate !== this.bitrate) (changes ??= {}).bitrate = this.bitrate
     this.bitrate = data.bitrate
+    if (data.user_limit !== this.userLimit) (changes ??= {}).userLimit = this.userLimit
     this.userLimit = data.user_limit
+    if (data.rtc_region !== this.rtcRegion) (changes ??= {}).rtcRegion = this.rtcRegion
     this.rtcRegion = data.rtc_region
+    if (data.video_quality_mode !== this.videoQualityMode) {
+      ;(changes ??= {}).videoQualityMode = this.videoQualityMode
+    }
     this.videoQualityMode = data.video_quality_mode
+
+    return changes
   }
 }

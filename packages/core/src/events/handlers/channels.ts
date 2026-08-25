@@ -40,7 +40,7 @@ export const channelUpdate = defineHandler('CHANNEL_UPDATE', (client, data) => {
   const cached = findChannel(client, data.id)
   if (cached === undefined) {
     const channel = cacheChannel(client, data)
-    if (channel !== undefined) client.emit('channelUpdate', channel)
+    if (channel !== undefined) client.emit('channelUpdate', channel, null)
     return
   }
 
@@ -52,13 +52,15 @@ export const channelUpdate = defineHandler('CHANNEL_UPDATE', (client, data) => {
   if (cached.type !== data.type) {
     evictChannel(client.cache, data.id)
     const rebuilt = cacheChannel(client, data)
-    if (rebuilt !== undefined) client.emit('channelUpdate', rebuilt)
+    // A rebuild reports nothing. The old object described a channel of a different type, so
+    // its field values are not the previous state of this one.
+    if (rebuilt !== undefined) client.emit('channelUpdate', rebuilt, null)
     return
   }
 
-  cached.patch(data)
+  const changes = cached.patch(data)
   // Back through whichever store holds it, so the scope's filter, ttl and max see the write.
-  client.emit('channelUpdate', recache(client, cached))
+  client.emit('channelUpdate', recache(client, cached), changes)
 })
 
 /** A channel or thread was deleted. */
@@ -87,12 +89,12 @@ export const threadUpdate = defineHandler('THREAD_UPDATE', (client, data) => {
   if (cached === undefined) {
     const channel = createChannel(data, client)
     if (channel?.isThread() !== true) return
-    client.emit('threadUpdate', client.cache.threads.add(channel))
+    client.emit('threadUpdate', client.cache.threads.add(channel), null)
     return
   }
 
-  cached.patch(data)
-  client.emit('threadUpdate', client.cache.threads.add(cached))
+  const changes = cached.patch(data)
+  client.emit('threadUpdate', client.cache.threads.add(cached), changes)
 })
 
 /**

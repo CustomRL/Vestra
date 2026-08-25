@@ -11,6 +11,7 @@
 export { AnnouncementChannel } from './AnnouncementChannel.js'
 export { CategoryChannel } from './CategoryChannel.js'
 export { Channel, type TextBased } from './Channel.js'
+export type { ChannelChanges, ChannelChangesDraft } from './ChannelChanges.js'
 export { createChannel } from './createChannel.js'
 export { DMChannel } from './DMChannel.js'
 export { ForumChannel } from './ForumChannel.js'

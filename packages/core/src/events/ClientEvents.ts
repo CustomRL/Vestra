@@ -6,6 +6,7 @@ import type {
   AutoModerationRule,
 } from '../structures/AutoModerationRule.js'
 import type { Channel } from '../structures/channels/Channel.js'
+import type { ChannelChanges } from '../structures/channels/ChannelChanges.js'
 import type { ThreadChannel } from '../structures/channels/ThreadChannel.js'
 import type { Emoji } from '../structures/Emoji.js'
 import type { Guild, GuildChanges } from '../structures/Guild.js'
@@ -113,7 +114,7 @@ export interface ClientEvents<Client = unknown> {
   /** A channel was created. */
   channelCreate: [channel: Channel<Client>]
   /** A channel was updated. */
-  channelUpdate: [channel: Channel<Client>]
+  channelUpdate: [channel: Channel<Client>, changes: ChannelChanges<Client> | null]
   /**
    * A channel was deleted.
    *
@@ -128,7 +129,7 @@ export interface ClientEvents<Client = unknown> {
   /** A thread was created, or the bot gained access to one. */
   threadCreate: [thread: ThreadChannel<Client>]
   /** A thread was updated. */
-  threadUpdate: [thread: ThreadChannel<Client>]
+  threadUpdate: [thread: ThreadChannel<Client>, changes: ChannelChanges<Client> | null]
   /** A thread was deleted, or the bot lost access to it. */
   threadDelete: [thread: ThreadChannel<Client>]
   /**

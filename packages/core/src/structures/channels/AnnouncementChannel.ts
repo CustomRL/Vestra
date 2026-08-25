@@ -1,5 +1,6 @@
 import type { APIAnnouncementChannel, Snowflake, ThreadAutoArchiveDuration } from '@vestra/types'
 import { GuildTextBasedChannel } from './GuildTextBasedChannel.js'
+import type { ChannelChanges, ChannelChangesDraft } from './ChannelChanges.js'
 
 /**
  * A channel other guilds can follow and crosspost from.
@@ -29,9 +30,14 @@ export class AnnouncementChannel<Client = unknown> extends GuildTextBasedChannel
    *
    * @param data - The payload to apply.
    */
-  override patch(data: APIAnnouncementChannel): void {
-    super.patch(data)
+  override patch(data: APIAnnouncementChannel): ChannelChanges<Client> | null {
+    let changes: ChannelChangesDraft<Client> | null = super.patch(data)
 
+    if (data.default_auto_archive_duration !== this.defaultAutoArchiveDuration) {
+      ;(changes ??= {}).defaultAutoArchiveDuration = this.defaultAutoArchiveDuration
+    }
     this.defaultAutoArchiveDuration = data.default_auto_archive_duration
+
+    return changes
   }
 }

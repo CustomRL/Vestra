@@ -1,6 +1,7 @@
 import type { APIGroupDMChannel, Snowflake } from '@vestra/types'
 import { User } from '../User.js'
 import { Channel, type TextBased } from './Channel.js'
+import type { ChannelChanges, ChannelChangesDraft } from './ChannelChanges.js'
 
 /**
  * A direct message between several users.
@@ -48,16 +49,29 @@ export class GroupDMChannel<Client = unknown> extends Channel<Client> implements
    *
    * @param data - The payload to apply.
    */
-  override patch(data: APIGroupDMChannel): void {
-    super.patch(data)
+  override patch(data: APIGroupDMChannel): ChannelChanges<Client> | null {
+    let changes: ChannelChangesDraft<Client> | null = super.patch(data)
 
+    if (data.name !== this.name) (changes ??= {}).name = this.name
     this.name = data.name
+    if (data.icon !== this.icon) (changes ??= {}).icon = this.icon
     this.icon = data.icon
+    if (data.owner_id !== this.ownerId) (changes ??= {}).ownerId = this.ownerId
     this.ownerId = data.owner_id
+    if (data.application_id !== this.applicationId) {
+      ;(changes ??= {}).applicationId = this.applicationId
+    }
     this.applicationId = data.application_id
+    if (data.managed !== this.managed) (changes ??= {}).managed = this.managed
     this.managed = data.managed
+    if (data.last_message_id !== this.lastMessageId) {
+      ;(changes ??= {}).lastMessageId = this.lastMessageId
+    }
     this.lastMessageId = data.last_message_id
+    // Not reported, for the reason `DMChannel.patch` gives.
     this.recipients = toRecipients(data, this.client)
+
+    return changes
   }
 }
 

@@ -1,5 +1,6 @@
 import { ChannelType, type APIChannelBase, type Snowflake } from '@vestra/types'
 import { Base } from '../Base.js'
+import type { ChannelChanges, ChannelChangesDraft } from './ChannelChanges.js'
 import { snowflakeDate, snowflakeTimestamp } from '../snowflake.js'
 import type { DMChannel } from './DMChannel.js'
 import type { GroupDMChannel } from './GroupDMChannel.js'
@@ -124,8 +125,13 @@ export abstract class Channel<Client = unknown> extends Base<Client> {
    *
    * @param data - The payload to apply.
    */
-  patch(data: APIChannelBase<ChannelType>): void {
+  patch(data: APIChannelBase<ChannelType>): ChannelChanges<Client> | null {
+    let changes: ChannelChangesDraft<Client> | null = null
+
+    if (data.flags !== this.flags) (changes ??= {}).flags = this.flags
     this.flags = data.flags
+
+    return changes
   }
 }
 

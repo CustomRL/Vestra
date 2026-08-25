@@ -5,7 +5,9 @@ import type {
   Snowflake,
   ThreadAutoArchiveDuration,
 } from '@vestra/types'
+import { sameStrings } from '../Changes.js'
 import { GuildTextBasedChannel } from './GuildTextBasedChannel.js'
+import type { ChannelChanges, ChannelChangesDraft } from './ChannelChanges.js'
 
 /**
  * A thread within a text, announcement, forum or media channel.
@@ -84,15 +86,53 @@ export class ThreadChannel<Client = unknown> extends GuildTextBasedChannel<Clien
    *
    * @param data - The payload to apply.
    */
-  override patch(data: APIThreadChannel): void {
-    super.patch(data)
+  override patch(data: APIThreadChannel): ChannelChanges<Client> | null {
+    let changes: ChannelChangesDraft<Client> | null = super.patch(data)
 
+    if (data.owner_id !== this.ownerId) (changes ??= {}).ownerId = this.ownerId
     this.ownerId = data.owner_id
+    // Read across `#applyMetadata` rather than through it. The metadata fields have one
+    // assignment site shared with the constructor, and threading a record through it would
+    // make every thread built allocate one and throw it away.
+    const wasArchived = this.archived
+    const wasAutoArchiveDuration = this.autoArchiveDuration
+    const wasArchiveTimestamp = this.archiveTimestamp
+    const wasLocked = this.locked
+    const wasInvitable = this.invitable
+    const wasCreateTimestamp = this.createTimestamp
     this.#applyMetadata(data.thread_metadata)
+    if (this.archived !== wasArchived) (changes ??= {}).archived = wasArchived
+    if (this.autoArchiveDuration !== wasAutoArchiveDuration) {
+      ;(changes ??= {}).autoArchiveDuration = wasAutoArchiveDuration
+    }
+    if (this.archiveTimestamp !== wasArchiveTimestamp) {
+      ;(changes ??= {}).archiveTimestamp = wasArchiveTimestamp
+    }
+    if (this.locked !== wasLocked) (changes ??= {}).locked = wasLocked
+    if (this.invitable !== wasInvitable) (changes ??= {}).invitable = wasInvitable
+    if (this.createTimestamp !== wasCreateTimestamp) {
+      ;(changes ??= {}).createTimestamp = wasCreateTimestamp
+    }
+    if (data.message_count !== this.messageCount) {
+      ;(changes ??= {}).messageCount = this.messageCount
+    }
     this.messageCount = data.message_count
+    if (data.member_count !== this.memberCount) {
+      ;(changes ??= {}).memberCount = this.memberCount
+    }
     this.memberCount = data.member_count
+    if (data.total_message_sent !== this.totalMessageSent) {
+      ;(changes ??= {}).totalMessageSent = this.totalMessageSent
+    }
     this.totalMessageSent = data.total_message_sent
+    // Compared by value: the list is copied out of the payload on every dispatch, and which
+    // tags a forum post carries is exactly what a listener on this event wants to know.
+    if (!sameStrings(this.appliedTags, data.applied_tags)) {
+      ;(changes ??= {}).appliedTags = this.appliedTags
+    }
     this.appliedTags = data.applied_tags === undefined ? [] : [...data.applied_tags]
+
+    return changes
   }
 
   /**

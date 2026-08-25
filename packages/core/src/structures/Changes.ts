@@ -103,7 +103,11 @@ export function sameStrings(
   after: readonly string[] | undefined,
 ): boolean {
   if (before === after) return true
-  if (before === undefined || after === undefined) return false
+  // Absent counts as empty, because that is what the structures make of it: a payload with no
+  // `applied_tags` produces `[]`, and reporting `[] -> undefined` as a change would put a
+  // spurious record on every thread update that did not mention its tags.
+  if (before === undefined) return after === undefined || after.length === 0
+  if (after === undefined) return before.length === 0
   if (before.length !== after.length) return false
   for (let index = 0; index < before.length; index += 1) {
     if (before[index] !== after[index]) return false

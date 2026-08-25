@@ -8,6 +8,7 @@ import type {
   ThreadAutoArchiveDuration,
 } from '@vestra/types'
 import { GuildChannel } from './GuildChannel.js'
+import type { ChannelChanges, ChannelChangesDraft } from './ChannelChanges.js'
 
 /**
  * A channel whose contents are threads rather than messages.
@@ -71,16 +72,44 @@ export abstract class ThreadOnlyChannel<Client = unknown> extends GuildChannel<C
    *
    * @param data - The payload to apply.
    */
-  override patch(data: APIThreadOnlyChannelBase<ChannelType>): void {
-    super.patch(data)
+  override patch(data: APIThreadOnlyChannelBase<ChannelType>): ChannelChanges<Client> | null {
+    let changes: ChannelChangesDraft<Client> | null = super.patch(data)
 
+    if (data.topic !== this.topic) (changes ??= {}).topic = this.topic
     this.topic = data.topic
+    if (data.rate_limit_per_user !== this.rateLimitPerUser) {
+      ;(changes ??= {}).rateLimitPerUser = this.rateLimitPerUser
+    }
     this.rateLimitPerUser = data.rate_limit_per_user
+    if (data.last_message_id !== this.lastThreadId) {
+      ;(changes ??= {}).lastThreadId = this.lastThreadId
+    }
     this.lastThreadId = data.last_message_id
+    if (data.default_auto_archive_duration !== this.defaultAutoArchiveDuration) {
+      ;(changes ??= {}).defaultAutoArchiveDuration = this.defaultAutoArchiveDuration
+    }
     this.defaultAutoArchiveDuration = data.default_auto_archive_duration
+    // Not reported. A tag list is objects rather than IDs, so telling a renamed tag from an
+    // unchanged one means comparing definitions by value, and `ChannelChanges` says why that
+    // is not worth its cost here.
     this.availableTags = data.available_tags === undefined ? [] : [...data.available_tags]
+    // Compared by its two components: the payload object is freshly parsed on every dispatch.
+    if (
+      data.default_reaction_emoji?.emoji_id !== this.defaultReactionEmoji?.emoji_id ||
+      data.default_reaction_emoji?.emoji_name !== this.defaultReactionEmoji?.emoji_name
+    ) {
+      ;(changes ??= {}).defaultReactionEmoji = this.defaultReactionEmoji
+    }
     this.defaultReactionEmoji = data.default_reaction_emoji
+    if (data.default_thread_rate_limit_per_user !== this.defaultThreadRateLimitPerUser) {
+      ;(changes ??= {}).defaultThreadRateLimitPerUser = this.defaultThreadRateLimitPerUser
+    }
     this.defaultThreadRateLimitPerUser = data.default_thread_rate_limit_per_user
+    if (data.default_sort_order !== this.defaultSortOrder) {
+      ;(changes ??= {}).defaultSortOrder = this.defaultSortOrder
+    }
     this.defaultSortOrder = data.default_sort_order
+
+    return changes
   }
 }
