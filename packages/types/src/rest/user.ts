@@ -1,6 +1,7 @@
 import type { Snowflake } from '../globals.js'
 import type { APIChannel } from '../payloads/channel.js'
 import type { APIGuildPartial } from '../payloads/guild.js'
+import type { APIGuildMember } from '../payloads/member.js'
 import type { APIConnection, APIUser } from '../payloads/user.js'
 
 /** The result of `GET /users/@me`. */
@@ -58,3 +59,6 @@ export type RESTPostAPICurrentUserCreateDMChannelResult = APIChannel
 
 /** The result of `GET /users/@me/connections`. */
 export type RESTGetAPICurrentUserConnectionsResult = APIConnection[]
+
+/** The result of `GET /users/@me/guilds/{guild.id}/member`. */
+export type RESTGetAPICurrentUserGuildMemberResult = APIGuildMember

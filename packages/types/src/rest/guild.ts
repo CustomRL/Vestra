@@ -6,6 +6,7 @@ import type {
   VerificationLevel,
 } from '../enums/guild.js'
 import type { APIChannel, APIOverwrite } from '../payloads/channel.js'
+import type { APIIntegration } from '../payloads/integration.js'
 import type {
   APIBan,
   APIGuild,
@@ -430,3 +431,13 @@ export interface RESTPatchAPIGuildChannelPositionsEntry {
 
 /** `PATCH /guilds/{guild.id}/channels` */
 export type RESTPatchAPIGuildChannelPositionsJSONBody = RESTPatchAPIGuildChannelPositionsEntry[]
+
+/**
+ * The result of `GET /guilds/{guild.id}/integrations`.
+ *
+ * @remarks
+ * **Partial integrations.** Discord omits `user` and the OAuth-only fields here, and returns
+ * at most fifty — a guild with more has no way to list the rest, which is a limit of the route
+ * rather than of the type.
+ */
+export type RESTGetAPIGuildIntegrationsResult = APIIntegration[]
