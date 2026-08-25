@@ -1,7 +1,13 @@
 import type {
   APIChannel,
+  APIInvite,
   APIMessage,
+  APIThreadMember,
   APIUser,
+  RESTGetAPIChannelThreadMembersQuery,
+  RESTPostAPIChannelInviteJSONBody,
+  RESTPostAPIChannelMessageThreadsJSONBody,
+  RESTPostAPIChannelThreadsJSONBody,
   RESTGetAPIChannelMessageReactionsQuery,
   RESTGetAPIChannelMessagesQuery,
   RESTPatchAPIChannelJSONBody,
@@ -371,6 +377,170 @@ export class ChannelRoutes {
     options: RouteOptions = {},
   ): Promise<void> {
     await this.#rest.delete<undefined>(`/channels/${channelId}/pins/${messageId}`, options)
+  }
+
+  /**
+   * Lists a channel's invites. Needs `ManageChannels`.
+   *
+   * @param channelId - The channel to read.
+   * @param options - Request options.
+   * @returns Its invites.
+   */
+  async getInvites(channelId: Snowflake, options: RouteOptions = {}): Promise<APIInvite[]> {
+    return await this.#rest.get<APIInvite[]>(`/channels/${channelId}/invites`, options)
+  }
+
+  /**
+   * Creates an invite to a channel. Needs `CreateInstantInvite`.
+   *
+   * @param channelId - The channel to invite to.
+   * @param body - How long it lives and how many may use it.
+   * @param options - Request options.
+   * @returns The invite.
+   *
+   * @remarks
+   * **Discord's defaults are probably not the ones you want.** `max_age` defaults to a day
+   * rather than never, and `unique` defaults to `false` — which returns an *equivalent
+   * existing* invite instead of making a new one. A bot handing a fresh link to each user
+   * needs `unique: true` or it will hand out the same code every time and be unable to tell
+   * who joined through which.
+   */
+  async createInvite(
+    channelId: Snowflake,
+    body: RESTPostAPIChannelInviteJSONBody = {},
+    options: RouteOptions = {},
+  ): Promise<APIInvite> {
+    return await this.#rest.post<APIInvite>(`/channels/${channelId}/invites`, { ...options, body })
+  }
+
+  /**
+   * Starts a thread from a message.
+   *
+   * @param channelId - The channel the message is in.
+   * @param messageId - The message to anchor the thread to.
+   * @param body - The thread's name and settings.
+   * @param options - Request options.
+   * @returns The new thread.
+   *
+   * @remarks
+   * The thread **shares the message's ID**, so a message can anchor at most one — a second
+   * call answers `160004`. The thread is public: visibility follows the message, and there is
+   * no `type` to choose, which is the opposite of {@link ChannelRoutes.startThread}.
+   */
+  async startThreadFromMessage(
+    channelId: Snowflake,
+    messageId: Snowflake,
+    body: RESTPostAPIChannelMessageThreadsJSONBody,
+    options: RouteOptions = {},
+  ): Promise<APIChannel> {
+    return await this.#rest.post<APIChannel>(
+      `/channels/${channelId}/messages/${messageId}/threads`,
+      { ...options, body },
+    )
+  }
+
+  /**
+   * Starts a thread that is not attached to a message.
+   *
+   * @param channelId - The channel to start it in.
+   * @param body - The thread's name, type and settings.
+   * @param options - Request options.
+   * @returns The new thread.
+   *
+   * @remarks
+   * **`type` defaults to a private thread**, which is the opposite of what starting one from
+   * a message gives you. Naming it explicitly is worth the keystrokes.
+   */
+  async startThread(
+    channelId: Snowflake,
+    body: RESTPostAPIChannelThreadsJSONBody,
+    options: RouteOptions = {},
+  ): Promise<APIChannel> {
+    return await this.#rest.post<APIChannel>(`/channels/${channelId}/threads`, {
+      ...options,
+      body,
+    })
+  }
+
+  /**
+   * Joins a thread as the current user.
+   *
+   * @param threadId - The thread to join.
+   * @param options - Request options.
+   *
+   * @remarks
+   * Idempotent: joining a thread already joined succeeds rather than erroring.
+   */
+  async joinThread(threadId: Snowflake, options: RouteOptions = {}): Promise<void> {
+    await this.#rest.put<undefined>(`/channels/${threadId}/thread-members/@me`, options)
+  }
+
+  /**
+   * Leaves a thread as the current user.
+   *
+   * @param threadId - The thread to leave.
+   * @param options - Request options.
+   */
+  async leaveThread(threadId: Snowflake, options: RouteOptions = {}): Promise<void> {
+    await this.#rest.delete<undefined>(`/channels/${threadId}/thread-members/@me`, options)
+  }
+
+  /**
+   * Adds someone else to a thread.
+   *
+   * @param threadId - The thread to add them to.
+   * @param userId - Who to add.
+   * @param options - Request options.
+   *
+   * @remarks
+   * Separate from {@link ChannelRoutes.joinThread} rather than an optional user ID, for the
+   * same reason the reaction routes are: joining needs only access to the thread, and adding
+   * somebody else needs to be able to send in it. One method would hide that.
+   */
+  async addThreadMember(
+    threadId: Snowflake,
+    userId: Snowflake,
+    options: RouteOptions = {},
+  ): Promise<void> {
+    await this.#rest.put<undefined>(`/channels/${threadId}/thread-members/${userId}`, options)
+  }
+
+  /**
+   * Removes someone from a thread. Needs `ManageThreads`, or ownership of a private thread.
+   *
+   * @param threadId - The thread to remove them from.
+   * @param userId - Who to remove.
+   * @param options - Request options.
+   */
+  async removeThreadMember(
+    threadId: Snowflake,
+    userId: Snowflake,
+    options: RouteOptions = {},
+  ): Promise<void> {
+    await this.#rest.delete<undefined>(`/channels/${threadId}/thread-members/${userId}`, options)
+  }
+
+  /**
+   * Lists a thread's members.
+   *
+   * @param threadId - The thread to read.
+   * @param query - Pagination, and whether to include guild members.
+   * @param options - Request options.
+   * @returns Its members.
+   *
+   * @remarks
+   * Needs the `GuildMembers` privileged intent, which is unusual for a REST route and easy to
+   * miss: without it Discord answers `403` rather than returning a shorter list.
+   */
+  async getThreadMembers(
+    threadId: Snowflake,
+    query: RESTGetAPIChannelThreadMembersQuery = {},
+    options: RouteOptions = {},
+  ): Promise<APIThreadMember[]> {
+    return await this.#rest.get<APIThreadMember[]>(`/channels/${threadId}/thread-members`, {
+      ...options,
+      query: query as Record<string, string | number | boolean | undefined>,
+    })
   }
 
   /**

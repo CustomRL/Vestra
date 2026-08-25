@@ -24,19 +24,22 @@ Verified by reading the repository and running it on 2026-08-24, not recalled.
 | Versions             | every package at `0.0.0`; nothing published                                                                                                |
 | Live verification    | the client connects, seeds its cache, resumes with the cache intact, replies to a message, and round-trips a reaction against real Discord |
 
-**REST is the thinnest layer**, and it is worth naming precisely rather than calling it done:
+**REST was the thinnest layer** and is less thin than when this was written:
 
-| Namespace      | Routes                                                                                                                                    |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `channels`     | get, edit, delete, getMessages, getMessage, createMessage, editMessage, deleteMessage, bulkDeleteMessages, addReaction, triggerTyping     |
-| `guilds`       | get, getMember, getMembers, editMember, removeMember, createBan, removeBan, getBan, getRoles, createRole, addMemberRole, removeMemberRole |
-| `users`        | getCurrent, get, editCurrent, createDM                                                                                                    |
-| `interactions` | reply, getReply, editReply, deleteReply, followUp, getFollowUp, editFollowUp, deleteFollowUp                                              |
-| `gateway`      | get, getBot                                                                                                                               |
+| Namespace      | Routes                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `channels`     | get, edit, delete, getMessages, getMessage, createMessage, editMessage, deleteMessage, bulkDeleteMessages, triggerTyping; addReaction, removeOwnReaction, removeUserReaction, getReactions, removeAllReactions, removeEmojiReactions; getPinnedMessages, pinMessage, unpinMessage; getInvites, createInvite; startThread, startThreadFromMessage, joinThread, leaveThread, addThreadMember, removeThreadMember, getThreadMembers |
+| `guilds`       | get, getMember, getMembers, editMember, removeMember, createBan, removeBan, getBan, getRoles, createRole, editRole, deleteRole, addMemberRole, removeMemberRole, getChannels, createChannel, getInvites, getActiveThreads                                                                                                                                                                                                        |
+| `webhooks`     | create, getForChannel, getForGuild, get, getWithToken, edit, editWithToken, delete, deleteWithToken, execute                                                                                                                                                                                                                                                                                                                     |
+| `invites`      | get, delete                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `users`        | getCurrent, get, editCurrent, createDM                                                                                                                                                                                                                                                                                                                                                                                           |
+| `interactions` | reply, getReply, editReply, deleteReply, followUp, getFollowUp, editFollowUp, deleteFollowUp                                                                                                                                                                                                                                                                                                                                     |
+| `gateway`      | get, getBot                                                                                                                                                                                                                                                                                                                                                                                                                      |
 
-There are **no webhook, invite, thread, pin, emoji, sticker, scheduled-event or
-application-command routes**, and no channel creation. A bot that only reads the gateway and
-replies is fully served; a bot that manages a guild is not.
+Still missing: **emoji, sticker, scheduled-event, application-command and audit-log routes**,
+guild editing, and the archived-thread listings. A bot that reads the gateway, replies,
+manages channels, roles, invites, threads and webhooks is served; one that registers slash
+commands or manages emoji is not.
 
 ---
 
@@ -82,9 +85,13 @@ nothing that the payload does not already give.
 ### Not cut, and not built either
 
 The REST gap in §0 is different in kind. Those routes are additive too, but their absence is
-what a user hits first: there is no way to create a channel, edit a webhook, or delete a role.
-Nothing about the library's shape depends on them, so they do not block a major — they block
-being _useful_, which is a different and more urgent problem.
+what a user hits first. Nothing about the library's shape depends on them, so they do not
+block a major — they block being _useful_, which is a different and more urgent problem.
+
+Thirty-one routes have landed since this was written, which closed the worst of it: creating
+a channel, editing and deleting roles, pinning, the full reaction set, invites, threads and
+webhooks. What remains is narrower and more specialised — application commands above all,
+without which a slash-command bot cannot register anything.
 
 **This is the strongest argument for shipping 0.x first.** Adding fifteen REST routes to a 0.x
 is a Tuesday. Discovering after 1.0 that one of them needed a different signature is a major.
@@ -180,7 +187,7 @@ nothing and buys the right to be wrong once.
 The concrete gate for 1.0, then, is not a feature list:
 
 - the REST surface covers what a guild-managing bot needs, because that is where signature
-  churn will happen
+  churn will happen. Mostly there; application commands are the conspicuous hole
 - at least one bot that is not this one has run on it
 - a soak of hours rather than minutes, with a reconnect observed in the wild
 - #7's remaining items answered or explicitly accepted as permanent unknowns

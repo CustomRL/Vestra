@@ -21,6 +21,7 @@ import { ChannelRoutes } from './routes/channels.js'
 import { GatewayRoutes } from './routes/gateway.js'
 import { InteractionRoutes } from './routes/interactions.js'
 import { GuildRoutes } from './routes/guilds.js'
+import { InviteRoutes } from './routes/invites.js'
 import { WebhookRoutes } from './routes/webhooks.js'
 import { UserRoutes } from './routes/users.js'
 
@@ -111,6 +112,14 @@ export class REST extends EventEmitter<RESTEvents> {
    * credential in their own right, so those routes are unauthenticated and must stay that way.
    */
   readonly webhooks: WebhookRoutes
+  /**
+   * Invite endpoints addressed by code.
+   *
+   * @remarks
+   * Creating and listing invites belongs to the channel and guild that own them, so those are
+   * on `channels` and `guilds`; only the two routes keyed by the code alone are here.
+   */
+  readonly invites: InviteRoutes
 
   /**
    * @param options - Overrides for the client defaults.
@@ -134,6 +143,7 @@ export class REST extends EventEmitter<RESTEvents> {
     this.interactions = new InteractionRoutes(this)
     this.guilds = new GuildRoutes(this)
     this.webhooks = new WebhookRoutes(this)
+    this.invites = new InviteRoutes(this)
     this.users = new UserRoutes(this)
     this.gateway = new GatewayRoutes(this)
   }
