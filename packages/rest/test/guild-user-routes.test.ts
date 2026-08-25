@@ -52,8 +52,8 @@ describe('member routes', () => {
     const mock = await recording({})
     try {
       const rest = clientFor(mock)
-      await rest.guilds.getMember(GUILD, USER)
-      await rest.guilds.getMembers(GUILD, { limit: 1000, after: USER })
+      await rest.members.get(GUILD, USER)
+      await rest.members.getAll(GUILD, { limit: 1000, after: USER })
 
       assert.equal(at(mock, 0).method, 'GET')
       assert.equal(at(mock, 0).url, `/v10/guilds/${GUILD}/members/${USER}`)
@@ -73,7 +73,7 @@ describe('member routes', () => {
     // the same route as `communication_disabled_until`.
     const mock = await recording({})
     try {
-      await clientFor(mock).guilds.editMember(GUILD, USER, { nick: 'renamed' })
+      await clientFor(mock).members.edit(GUILD, USER, { nick: 'renamed' })
       const request = only(mock)
 
       assert.equal(request.method, 'PATCH')
@@ -88,8 +88,8 @@ describe('member routes', () => {
     const mock = await recording()
     try {
       const rest = clientFor(mock)
-      await rest.guilds.addMemberRole(GUILD, USER, ROLE)
-      await rest.guilds.removeMemberRole(GUILD, USER, ROLE)
+      await rest.members.addRole(GUILD, USER, ROLE)
+      await rest.members.removeRole(GUILD, USER, ROLE)
 
       assert.deepEqual(
         mock.requests.map((request) => `${request.method} ${request.url}`),
@@ -111,7 +111,7 @@ describe('ban routes', () => {
     // nothing is deleted; misread as days it deletes far more than intended.
     const mock = await recording()
     try {
-      await clientFor(mock).guilds.createBan(
+      await clientFor(mock).bans.create(
         GUILD,
         USER,
         { delete_message_seconds: 604_800 },
@@ -133,8 +133,8 @@ describe('ban routes', () => {
     const mock = await recording({})
     try {
       const rest = clientFor(mock)
-      await rest.guilds.getBan(GUILD, USER)
-      await rest.guilds.removeBan(GUILD, USER)
+      await rest.bans.get(GUILD, USER)
+      await rest.bans.remove(GUILD, USER)
 
       assert.deepEqual(
         mock.requests.map((request) => `${request.method} ${request.url}`),
@@ -151,8 +151,8 @@ describe('role and user routes', () => {
     const mock = await recording([])
     try {
       const rest = clientFor(mock)
-      await rest.guilds.getRoles(GUILD)
-      await rest.guilds.createRole(GUILD, { name: 'moderator' })
+      await rest.roles.getAll(GUILD)
+      await rest.roles.create(GUILD, { name: 'moderator' })
 
       assert.deepEqual(
         mock.requests.map((request) => `${request.method} ${request.url}`),
@@ -213,6 +213,117 @@ describe('role and user routes', () => {
       assert.deepEqual(
         mock.requests.map((request) => `${request.method} ${request.url}`),
         ['GET /v10/gateway', 'GET /v10/gateway/bot'],
+      )
+    } finally {
+      await mock.close()
+    }
+  })
+})
+
+describe('the routes the split made room for', () => {
+  it('GU10: searches members by prefix through the query, needing no intent', async () => {
+    // The practical way to turn a name into a member: unlike the full listing this needs no
+    // privileged intent. It is a prefix match, so the query has to reach Discord intact —
+    // in a body it is ignored and the route answers with one arbitrary member.
+    const mock = await recording([])
+    try {
+      await clientFor(mock).members.search(GUILD, { query: 'nel', limit: 10 })
+      const request = only(mock)
+
+      assert.equal(request.method, 'GET')
+      assert.match(request.url, new RegExp(`^/v10/guilds/${GUILD}/members/search\\?`))
+      assert.match(request.url, /[?&]query=nel(&|$)/)
+      assert.match(request.url, /[?&]limit=10(&|$)/)
+      assert.equal(request.body, '')
+    } finally {
+      await mock.close()
+    }
+  })
+
+  it('GU11: renames the bot through @me, which is a different permission', async () => {
+    // `ChangeNickname` rather than `ManageNicknames`. One segment apart, and a bot that had to
+    // hold the moderator permission to rename itself would be over-privileged everywhere.
+    const mock = await recording({})
+    try {
+      await clientFor(mock).members.editCurrent(GUILD, { nick: 'the bot' })
+      const request = only(mock)
+
+      assert.equal(request.method, 'PATCH')
+      assert.equal(request.url, `/v10/guilds/${GUILD}/members/@me`)
+      assert.deepEqual(JSON.parse(request.body), { nick: 'the bot' })
+    } finally {
+      await mock.close()
+    }
+  })
+
+  it('GU12: pages the ban list, which is unbounded', async () => {
+    const mock = await recording([])
+    try {
+      await clientFor(mock).bans.getAll(GUILD, { limit: 1000, after: USER })
+      const request = only(mock)
+
+      assert.match(request.url, new RegExp(`^/v10/guilds/${GUILD}/bans\\?`))
+      assert.match(request.url, /[?&]limit=1000(&|$)/)
+      assert.match(request.url, new RegExp(`[?&]after=${USER}(&|$)`))
+    } finally {
+      await mock.close()
+    }
+  })
+
+  it('GU13: returns both halves of a bulk ban, because partial success is normal', async () => {
+    // An already-banned user, or one above the bot in the hierarchy, lands in `failed_users`
+    // while the rest go through — and only a request where every ban fails throws. A caller
+    // checking for an exception and nothing else would report success for a request that
+    // banned nobody.
+    const mock = await recording({ banned_users: [USER], failed_users: ['2'] })
+    try {
+      const result = await clientFor(mock).bans.createBulk(GUILD, {
+        user_ids: [USER, '2'],
+        delete_message_seconds: 3600,
+      })
+      const request = only(mock)
+
+      assert.equal(request.method, 'POST')
+      assert.equal(request.url, `/v10/guilds/${GUILD}/bulk-ban`)
+      assert.deepEqual(result.banned_users, [USER])
+      assert.deepEqual(result.failed_users, ['2'])
+    } finally {
+      await mock.close()
+    }
+  })
+
+  it('GU14: moves roles with one PATCH on the collection', async () => {
+    // Not one request per role. Positions are contiguous, so moving one renumbers others, and
+    // a sequence of single edits passes through orderings nobody asked for.
+    const mock = await recording([])
+    try {
+      await clientFor(mock).roles.setPositions(GUILD, [
+        { id: ROLE, position: 3 },
+        { id: '2', position: 2 },
+      ])
+      const request = only(mock)
+
+      assert.equal(request.method, 'PATCH')
+      assert.equal(request.url, `/v10/guilds/${GUILD}/roles`)
+      assert.deepEqual(JSON.parse(request.body), [
+        { id: ROLE, position: 3 },
+        { id: '2', position: 2 },
+      ])
+    } finally {
+      await mock.close()
+    }
+  })
+
+  it('GU15: fetches one role by path, beside the listing', async () => {
+    const mock = await recording({})
+    try {
+      const rest = clientFor(mock)
+      await rest.roles.get(GUILD, ROLE)
+      await rest.roles.getAll(GUILD)
+
+      assert.deepEqual(
+        mock.requests.map((request) => request.url),
+        [`/v10/guilds/${GUILD}/roles/${ROLE}`, `/v10/guilds/${GUILD}/roles`],
       )
     } finally {
       await mock.close()

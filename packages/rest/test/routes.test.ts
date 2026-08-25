@@ -169,7 +169,7 @@ describe('role and channel routes', () => {
     // permissions on a rename, which is the failure `patch` semantics exist to avoid.
     const mock = await recording({ id: ROLE })
     try {
-      await clientFor(mock).guilds.editRole(GUILD, ROLE, { name: 'renamed' })
+      await clientFor(mock).roles.edit(GUILD, ROLE, { name: 'renamed' })
       const request = only(mock)
 
       assert.equal(request.method, 'PATCH')
@@ -183,7 +183,7 @@ describe('role and channel routes', () => {
   it('RT8: deletes a role without a body', async () => {
     const mock = await recording()
     try {
-      await clientFor(mock).guilds.deleteRole(GUILD, ROLE, { reason: 'tidying up' })
+      await clientFor(mock).roles.delete(GUILD, ROLE, { reason: 'tidying up' })
       const request = only(mock)
 
       assert.equal(request.method, 'DELETE')
