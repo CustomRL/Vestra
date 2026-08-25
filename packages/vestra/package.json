@@ -4,6 +4,15 @@
   "description": "A lightweight, fully-typed Discord library for Node.js",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CustomRL/Vestra.git",
+    "directory": "packages/vestra"
+  },
+  "homepage": "https://github.com/CustomRL/Vestra#readme",
+  "bugs": {
+    "url": "https://github.com/CustomRL/Vestra/issues"
+  },
   "engines": {
     "node": ">=22.15.0"
   },

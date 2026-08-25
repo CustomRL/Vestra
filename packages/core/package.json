@@ -4,6 +4,15 @@
   "description": "Vestra client: structures, pluggable cache and typed events",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CustomRL/Vestra.git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://github.com/CustomRL/Vestra#readme",
+  "bugs": {
+    "url": "https://github.com/CustomRL/Vestra/issues"
+  },
   "engines": {
     "node": ">=22.15.0"
   },

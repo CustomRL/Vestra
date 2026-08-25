@@ -4,6 +4,15 @@
   "description": "Discord REST client with bucket-accurate rate limiting",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CustomRL/Vestra.git",
+    "directory": "packages/rest"
+  },
+  "homepage": "https://github.com/CustomRL/Vestra#readme",
+  "bugs": {
+    "url": "https://github.com/CustomRL/Vestra/issues"
+  },
   "engines": {
     "node": ">=22.15.0"
   },

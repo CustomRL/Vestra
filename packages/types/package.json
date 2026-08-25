@@ -4,6 +4,15 @@
   "description": "Zero-dependency TypeScript typings for the Discord API",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CustomRL/Vestra.git",
+    "directory": "packages/types"
+  },
+  "homepage": "https://github.com/CustomRL/Vestra#readme",
+  "bugs": {
+    "url": "https://github.com/CustomRL/Vestra/issues"
+  },
   "engines": {
     "node": ">=22.15.0"
   },

@@ -2,6 +2,14 @@
   "name": "vestra-monorepo",
   "version": "0.0.0",
   "private": true,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CustomRL/Vestra.git"
+  },
+  "homepage": "https://github.com/CustomRL/Vestra#readme",
+  "bugs": {
+    "url": "https://github.com/CustomRL/Vestra/issues"
+  },
   "type": "module",
   "description": "A lightweight, fully-typed Discord library for Node.js",
   "packageManager": "pnpm@11.17.0",
@@ -22,6 +30,7 @@
     "check:drift": "node --experimental-strip-types scripts/check-api-drift.ts",
     "bench": "node --experimental-strip-types --expose-gc --allow-natives-syntax",
     "changeset": "changeset",
+    "version": "changeset version",
     "release": "turbo run build && changeset publish"
   },
   "devDependencies": {
