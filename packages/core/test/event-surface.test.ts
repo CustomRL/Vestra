@@ -63,7 +63,7 @@ const SURFACE: Readonly<Record<string, number>> = {
   messageReactionRemove: 5,
   messageReactionRemoveAll: 3,
   messageReactionRemoveEmoji: 4,
-  messageUpdate: 1,
+  messageUpdate: 2,
   presenceUpdate: 1,
   raw: 3,
   ready: 1,

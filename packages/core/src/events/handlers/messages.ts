@@ -27,6 +27,10 @@ export const messageCreate = defineHandler('MESSAGE_CREATE', (client, data) => {
  * is not. Under the default configuration messages are not cached at all, so the second
  * path is the usual one — which is why {@link Message} is built to survive a payload that
  * carries only `id` and `channel_id`.
+ *
+ * **`changes` is `null` on the uncached path, never a fabricated previous message.** There
+ * was no earlier state to displace: the library is seeing this message for the first time,
+ * and the only honest answer to "what did it used to say" is that it does not know.
  */
 export const messageUpdate = defineHandler('MESSAGE_UPDATE', (client, data) => {
   // Guarded because `MESSAGE_UPDATE` is a partial: an embed resolving server-side produces
@@ -34,13 +38,13 @@ export const messageUpdate = defineHandler('MESSAGE_UPDATE', (client, data) => {
   if (data.author !== undefined) upsertUser(client, data.author)
   const cached = client.cache.messages.get(data.id)
   if (cached === undefined) {
-    client.emit('messageUpdate', client.cache.messages.add(new Message(data, client)))
+    client.emit('messageUpdate', client.cache.messages.add(new Message(data, client)), null)
     return
   }
 
-  cached.patch(data)
+  const changes = cached.patch(data)
   // Through the store, so the scope's filter, ttl and max see the write. An edit is a write.
-  client.emit('messageUpdate', client.cache.messages.add(cached))
+  client.emit('messageUpdate', client.cache.messages.add(cached), changes)
 })
 
 /**

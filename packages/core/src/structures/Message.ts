@@ -9,6 +9,7 @@ import type {
   Snowflake,
 } from '@vestra/types'
 import { Base } from './Base.js'
+import type { Changes, ChangesDraft } from './Changes.js'
 import type { CacheCapable, RestCapable } from './capabilities.js'
 import type { Channel } from './channels/Channel.js'
 import type { Guild } from './Guild.js'
@@ -33,6 +34,46 @@ export interface CompleteMessage<Client = unknown> extends Message<Client> {
   readonly editedTimestamp: ISO8601Timestamp | null
   readonly type: MessageType
 }
+
+/**
+ * The fields a {@link Message.patch} can report as changed.
+ *
+ * @remarks
+ * A list rather than `keyof Message`, so the record cannot offer a key it will never fill.
+ * `id`, `channelId` and `member` are absent because `MESSAGE_UPDATE` never revises them;
+ * `author` because it is patched in place, leaving no previous object to hand back; the
+ * getters because they are derived and have no stored previous value to report.
+ *
+ * `packages/core/test/changes.test.ts` reads this union and the body of `patch` and fails if
+ * they stop agreeing, so a field added to one and not the other cannot ship.
+ */
+export type MessageChangeField =
+  | 'guildId'
+  | 'content'
+  | 'sentTimestamp'
+  | 'editedTimestamp'
+  | 'tts'
+  | 'mentionEveryone'
+  | 'mentions'
+  | 'mentionRoles'
+  | 'attachments'
+  | 'embeds'
+  | 'pinned'
+  | 'webhookId'
+  | 'type'
+  | 'flags'
+
+/**
+ * What a message edit displaced.
+ *
+ * @typeParam Client - The client type the message is bound to.
+ *
+ * @remarks
+ * The second argument to `messageUpdate`, and `null` when the message was not cached or when
+ * the update changed nothing this library tracks. See {@link Changes} for why an update
+ * reports this rather than a copy of the old message.
+ */
+export type MessageChanges<Client = unknown> = Changes<Message<Client>, MessageChangeField>
 
 /**
  * A message.
@@ -318,9 +359,10 @@ export class Message<Client = unknown> extends Base<Client> {
   }
 
   /**
-   * Applies a partial payload in place.
+   * Applies a partial payload in place, reporting what it displaced.
    *
    * @param data - The fields that changed.
+   * @returns The previous values of the fields that actually changed, or `null` if none did.
    *
    * @remarks
    * **Assigns only what arrived**, which is the opposite of the constructor and the reason
@@ -330,9 +372,26 @@ export class Message<Client = unknown> extends Base<Client> {
    *
    * The shape is safe either way: the constructor already created every property, so a
    * conditional assignment here cannot add one.
+   *
+   * **The record is allocated on the first real change and not before.** An update that
+   * carries nothing new — an embed resolving server-side, a dispatch replayed after a resume
+   * — returns `null` having allocated nothing at all.
+   *
+   * **{@link Message.author} is never reported.** It is patched in place, so the previous
+   * author is the same object with new values in it and there is no earlier state left to hand
+   * back. The four array fields are reported whenever the payload carries them rather than
+   * when their contents differ, because a freshly parsed array is never reference-equal to the
+   * one it replaces. {@link Changes} says why that trade is made.
    */
-  patch(data: GatewayMessageUpdateDispatchData): void {
-    if (data.guild_id !== undefined) this.guildId = data.guild_id
+  patch(data: GatewayMessageUpdateDispatchData): MessageChanges<Client> | null {
+    // Lazily allocated, and written with `;(changes ??= {}).field = …` so the allocation and
+    // the record are one statement. Anything shorter would be a keyed store on a hot path.
+    let changes: ChangesDraft<Message<Client>, MessageChangeField> | null = null
+
+    if (data.guild_id !== undefined && data.guild_id !== this.guildId) {
+      ;(changes ??= {}).guildId = this.guildId
+      this.guildId = data.guild_id
+    }
     if (data.author !== undefined) {
       if (this.author === undefined) {
         this.author = new User(data.author, this.client)
@@ -340,21 +399,63 @@ export class Message<Client = unknown> extends Base<Client> {
         this.author.patch(data.author)
       }
     }
-    if (data.content !== undefined) this.content = data.content
-    if (data.timestamp !== undefined) this.sentTimestamp = data.timestamp
-    if (data.edited_timestamp !== undefined) this.editedTimestamp = data.edited_timestamp
-    if (data.tts !== undefined) this.tts = data.tts
-    if (data.mention_everyone !== undefined) this.mentionEveryone = data.mention_everyone
+    if (data.content !== undefined && data.content !== this.content) {
+      ;(changes ??= {}).content = this.content
+      this.content = data.content
+    }
+    if (data.timestamp !== undefined && data.timestamp !== this.sentTimestamp) {
+      ;(changes ??= {}).sentTimestamp = this.sentTimestamp
+      this.sentTimestamp = data.timestamp
+    }
+    if (data.edited_timestamp !== undefined && data.edited_timestamp !== this.editedTimestamp) {
+      ;(changes ??= {}).editedTimestamp = this.editedTimestamp
+      this.editedTimestamp = data.edited_timestamp
+    }
+    if (data.tts !== undefined && data.tts !== this.tts) {
+      ;(changes ??= {}).tts = this.tts
+      this.tts = data.tts
+    }
+    if (data.mention_everyone !== undefined && data.mention_everyone !== this.mentionEveryone) {
+      ;(changes ??= {}).mentionEveryone = this.mentionEveryone
+      this.mentionEveryone = data.mention_everyone
+    }
+    // No comparison on the four arrays: the incoming value is freshly parsed JSON, so it is
+    // never the object already held, and a `!==` here would be an always-true test dressed up
+    // as a meaningful one.
     if (data.mentions !== undefined) {
+      ;(changes ??= {}).mentions = this.mentions
       this.mentions = data.mentions.map((user) => new User(user, this.client))
     }
-    if (data.mention_roles !== undefined) this.mentionRoles = data.mention_roles
-    if (data.attachments !== undefined) this.attachments = data.attachments
-    if (data.embeds !== undefined) this.embeds = data.embeds
-    if (data.pinned !== undefined) this.pinned = data.pinned
-    if (data.webhook_id !== undefined) this.webhookId = data.webhook_id
-    if (data.type !== undefined) this.type = data.type
-    if (data.flags !== undefined) this.flags = data.flags
+    if (data.mention_roles !== undefined) {
+      ;(changes ??= {}).mentionRoles = this.mentionRoles
+      this.mentionRoles = data.mention_roles
+    }
+    if (data.attachments !== undefined) {
+      ;(changes ??= {}).attachments = this.attachments
+      this.attachments = data.attachments
+    }
+    if (data.embeds !== undefined) {
+      ;(changes ??= {}).embeds = this.embeds
+      this.embeds = data.embeds
+    }
+    if (data.pinned !== undefined && data.pinned !== this.pinned) {
+      ;(changes ??= {}).pinned = this.pinned
+      this.pinned = data.pinned
+    }
+    if (data.webhook_id !== undefined && data.webhook_id !== this.webhookId) {
+      ;(changes ??= {}).webhookId = this.webhookId
+      this.webhookId = data.webhook_id
+    }
+    if (data.type !== undefined && data.type !== this.type) {
+      ;(changes ??= {}).type = this.type
+      this.type = data.type
+    }
+    if (data.flags !== undefined && data.flags !== this.flags) {
+      ;(changes ??= {}).flags = this.flags
+      this.flags = data.flags
+    }
+
+    return changes
   }
 
   /**

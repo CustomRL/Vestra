@@ -26,6 +26,7 @@ export {
   type AutoModerationTriggerMetadata,
 } from './AutoModerationRule.js'
 export type { CacheCapable, RestCapable } from './capabilities.js'
+export type { Changes, ChangesDraft } from './Changes.js'
 export {
   defaultAvatarUrl,
   guildBannerUrl,
@@ -55,7 +56,12 @@ export {
 export { Invite } from './Invite.js'
 export { Presence, type ClientStatus } from './Presence.js'
 export { messageLink, parseMessageLink, type MessageLinkTarget } from './links.js'
-export { Message, type CompleteMessage } from './Message.js'
+export {
+  Message,
+  type CompleteMessage,
+  type MessageChanges,
+  type MessageChangeField,
+} from './Message.js'
 export { ReactionEmoji } from './ReactionEmoji.js'
 export { Role, type RoleColors } from './Role.js'
 export { StageInstance } from './StageInstance.js'
