@@ -167,3 +167,83 @@ export type RESTPostAPIGuildChannelResult = APIChannel
 
 /** The result of `GET /guilds/{guild.id}/channels`. */
 export type RESTGetAPIGuildChannelsResult = APIChannel[]
+
+/**
+ * `GET /guilds/{guild.id}/members/search`
+ *
+ * @remarks
+ * A prefix search on username and nickname, capped at 1000 results and **not** requiring the
+ * `GuildMembers` intent — which is what makes it the practical way to resolve a name to a
+ * member without fetching the guild. It is a prefix match, not a fuzzy one: `nel` finds
+ * `nelly` and nothing finds `elly`.
+ */
+export interface RESTGetAPIGuildMembersSearchQuery {
+  /** The username or nickname prefix to match. */
+  query: string
+  /** How many to return, 1 to 1000. Defaults to 1. */
+  limit?: number
+}
+
+/** The result of `GET /guilds/{guild.id}/members/search`. */
+export type RESTGetAPIGuildMembersSearchResult = APIGuildMember[]
+
+/**
+ * `PATCH /guilds/{guild.id}/members/@me`
+ *
+ * @remarks
+ * The bot's own membership, and the only way to set its own nickname — the general member
+ * edit needs `ManageNicknames`, which a bot renaming itself should not have to hold.
+ */
+export interface RESTPatchAPICurrentGuildMemberJSONBody {
+  /** The nickname to show, or `null` to clear it. */
+  nick?: string | null
+}
+
+/** The result of `PATCH /guilds/{guild.id}/members/@me`. */
+export type RESTPatchAPICurrentGuildMemberResult = APIGuildMember
+
+/**
+ * `POST /guilds/{guild.id}/bulk-ban`
+ *
+ * @remarks
+ * **Partial success is the normal outcome**, which is why the result names both halves rather
+ * than throwing. A user already banned, or one the bot cannot ban because of role hierarchy,
+ * lands in `failed_users` while the rest go through; only a request where *every* ban fails
+ * answers an error.
+ *
+ * Needs both `BanMembers` and `ManageGuild`, unlike the single ban.
+ */
+export interface RESTPostAPIGuildBulkBanJSONBody {
+  /** The users to ban, at most 200. */
+  user_ids: Snowflake[]
+  /** How much of their recent history to delete, in seconds. At most 604800. */
+  delete_message_seconds?: number
+}
+
+/** The result of `POST /guilds/{guild.id}/bulk-ban`. */
+export interface RESTPostAPIGuildBulkBanResult {
+  /** The users who were banned. */
+  banned_users: Snowflake[]
+  /** The users who were not, for any reason. */
+  failed_users: Snowflake[]
+}
+
+/**
+ * One entry of `PATCH /guilds/{guild.id}/roles`.
+ *
+ * @remarks
+ * Positions are guild-wide and contiguous, so moving one role renumbers others. Sending only
+ * the roles that move is correct and is what the route is for; Discord works out the rest.
+ */
+export interface RESTPatchAPIGuildRolePositionsEntry {
+  /** The role to move. */
+  id: Snowflake
+  /** Its new position, or `null` to leave it where it is. */
+  position?: number | null
+}
+
+/** `PATCH /guilds/{guild.id}/roles` */
+export type RESTPatchAPIGuildRolePositionsJSONBody = RESTPatchAPIGuildRolePositionsEntry[]
+
+/** The result of `PATCH /guilds/{guild.id}/roles`, which is every role in its new order. */
+export type RESTPatchAPIGuildRolePositionsResult = APIRole[]

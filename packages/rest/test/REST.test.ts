@@ -68,7 +68,7 @@ describe('REST request building', () => {
       response.writeHead(204).end()
     })
     try {
-      await clientFor(mock).guilds.removeMember('1', '2', { reason: 'spam — repeated' })
+      await clientFor(mock).members.remove('1', '2', { reason: 'spam — repeated' })
       assert.equal(
         mock.requests[0]?.headers['x-audit-log-reason'],
         encodeURIComponent('spam — repeated'),

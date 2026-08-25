@@ -19,6 +19,9 @@ import {
 } from './ratelimit/SequentialHandler.js'
 import { ApplicationCommandRoutes } from './routes/application-commands.js'
 import { AuditLogRoutes } from './routes/audit-logs.js'
+import { BanRoutes } from './routes/bans.js'
+import { MemberRoutes } from './routes/members.js'
+import { RoleRoutes } from './routes/roles.js'
 import { AutoModerationRoutes } from './routes/auto-moderation.js'
 import { EmojiRoutes } from './routes/emojis.js'
 import { ScheduledEventRoutes } from './routes/scheduled-events.js'
@@ -98,8 +101,14 @@ export class REST extends EventEmitter<RESTEvents> {
 
   /** Channel and message endpoints. */
   readonly channels: ChannelRoutes
-  /** Guild, member, ban and role endpoints. */
+  /** The guild itself, and the channels and invites it owns. */
   readonly guilds: GuildRoutes
+  /** Guild member endpoints. */
+  readonly members: MemberRoutes
+  /** Ban endpoints. */
+  readonly bans: BanRoutes
+  /** Guild role endpoints. */
+  readonly roles: RoleRoutes
   /** User endpoints. */
   readonly users: UserRoutes
   /** Gateway bootstrap endpoints. */
@@ -205,6 +214,9 @@ export class REST extends EventEmitter<RESTEvents> {
     this.channels = new ChannelRoutes(this)
     this.interactions = new InteractionRoutes(this)
     this.guilds = new GuildRoutes(this)
+    this.members = new MemberRoutes(this)
+    this.bans = new BanRoutes(this)
+    this.roles = new RoleRoutes(this)
     this.webhooks = new WebhookRoutes(this)
     this.invites = new InviteRoutes(this)
     this.commands = new ApplicationCommandRoutes(this)

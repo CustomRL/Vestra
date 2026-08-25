@@ -277,7 +277,7 @@ export class Guild<Client = unknown> extends Base<Client> {
    * An empty array means "nothing cached", which under `roles: false` is every guild. That is
    * ADR 4 rather than caution, and it is why this is not called `getRoles`: it reads the cache
    * and never fetches, so a caller who needs the authoritative list uses
-   * `client.rest.guilds.getRoles(guild.id)`.
+   * `client.rest.roles.getAll(guild.id)`.
    */
   roles<C extends CacheCapable>(this: Guild<C>): Role[] {
     return this.client.cache.roles.group(this.id)
