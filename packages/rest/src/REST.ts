@@ -17,6 +17,7 @@ import {
   type HandlerContext,
   type RateLimitInfo,
 } from './ratelimit/SequentialHandler.js'
+import { ApplicationCommandRoutes } from './routes/application-commands.js'
 import { ChannelRoutes } from './routes/channels.js'
 import { GatewayRoutes } from './routes/gateway.js'
 import { InteractionRoutes } from './routes/interactions.js'
@@ -120,6 +121,15 @@ export class REST extends EventEmitter<RESTEvents> {
    * on `channels` and `guilds`; only the two routes keyed by the code alone are here.
    */
   readonly invites: InviteRoutes
+  /**
+   * Application command registration.
+   *
+   * @remarks
+   * Global and guild forms are separate methods because the difference is not a parameter: a
+   * guild command is live immediately and a global one takes up to an hour, so the choice is
+   * a deployment decision rather than an argument.
+   */
+  readonly commands: ApplicationCommandRoutes
 
   /**
    * @param options - Overrides for the client defaults.
@@ -144,6 +154,7 @@ export class REST extends EventEmitter<RESTEvents> {
     this.guilds = new GuildRoutes(this)
     this.webhooks = new WebhookRoutes(this)
     this.invites = new InviteRoutes(this)
+    this.commands = new ApplicationCommandRoutes(this)
     this.users = new UserRoutes(this)
     this.gateway = new GatewayRoutes(this)
   }

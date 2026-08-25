@@ -24,7 +24,7 @@ Node itself.
 **`0.1.0` rather than `1.0.0`, deliberately.** The API is in the shape we want and the test
 suite is thorough, but nobody outside this repository has used it: every line of evidence comes
 from one test bot in two guilds, driven by its author. The REST surface is also incomplete — there are no
-emoji, sticker, scheduled-event, application-command or audit-log routes — and the first real
+emoji, sticker, scheduled-event or audit-log routes — and the first real
 user will want signatures that do not exist yet, which is exactly when signatures get revised. `docs/design/phase-5-release.md`
 records the reasoning and the concrete gate for a 1.0.
 
