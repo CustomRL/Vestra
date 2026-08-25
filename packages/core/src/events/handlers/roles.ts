@@ -36,12 +36,13 @@ export const roleUpdate = defineHandler('GUILD_ROLE_UPDATE', (client, data) => {
       'roleUpdate',
       client.cache.roles.add(new Role(data.role, data.guild_id, client)),
       data.guild_id,
+      null,
     )
     return
   }
 
-  cached.patch(data.role)
-  client.emit('roleUpdate', client.cache.roles.add(cached), data.guild_id)
+  const changes = cached.patch(data.role)
+  client.emit('roleUpdate', client.cache.roles.add(cached), data.guild_id, changes)
 })
 
 /**

@@ -1,5 +1,6 @@
 import type { APIUser, PremiumType, Snowflake } from '@vestra/types'
 import { Base } from './Base.js'
+import type { Changes, ChangesDraft } from './Changes.js'
 import { defaultAvatarUrl, userAvatarUrl, userBannerUrl, type ImageOptions } from './cdn.js'
 import { snowflakeDate, snowflakeTimestamp } from './snowflake.js'
 
@@ -21,6 +22,36 @@ import { snowflakeDate, snowflakeTimestamp } from './snowflake.js'
  *
  * See CONTRIBUTING.md's hot-path rules and `docs/design/phase-4-core.md` §4.15.
  */
+/**
+ * The fields a {@link User.patch} can report as changed.
+ *
+ * @remarks
+ * `USER_UPDATE` sends a whole user, so every field is present on every dispatch and the
+ * comparison decides rather than the presence. `id` is absent because it identifies the user
+ * rather than describing them, and a payload revising it would be a different user.
+ */
+export type UserChangeField =
+  | 'username'
+  | 'discriminator'
+  | 'globalName'
+  | 'avatar'
+  | 'bot'
+  | 'system'
+  | 'banner'
+  | 'accentColor'
+  | 'publicFlags'
+  | 'premiumType'
+
+/**
+ * What a user edit displaced.
+ *
+ * @typeParam Client - The client type the user is bound to.
+ *
+ * @remarks
+ * The second argument to `userUpdate`. See {@link Changes}.
+ */
+export type UserChanges<Client = unknown> = Changes<User<Client>, UserChangeField>
+
 export class User<Client = unknown> extends Base<Client> {
   /** The user's ID. */
   declare readonly id: Snowflake
@@ -104,17 +135,35 @@ export class User<Client = unknown> extends Base<Client> {
    * through a patch — a differently ordered patch would silently create a second hidden
    * class for exactly the objects that get updated most.
    */
-  patch(data: APIUser): void {
+  patch(data: APIUser): UserChanges<Client> | null {
+    // Record conditionally, assign unconditionally: the payload is absolute, so only the
+    // record needs the comparison.
+    let changes: ChangesDraft<User<Client>, UserChangeField> | null = null
+
+    if (data.username !== this.username) (changes ??= {}).username = this.username
     this.username = data.username
+    if (data.discriminator !== this.discriminator) {
+      ;(changes ??= {}).discriminator = this.discriminator
+    }
     this.discriminator = data.discriminator
+    if (data.global_name !== this.globalName) (changes ??= {}).globalName = this.globalName
     this.globalName = data.global_name
+    if (data.avatar !== this.avatar) (changes ??= {}).avatar = this.avatar
     this.avatar = data.avatar
+    if (data.bot !== this.bot) (changes ??= {}).bot = this.bot
     this.bot = data.bot
+    if (data.system !== this.system) (changes ??= {}).system = this.system
     this.system = data.system
+    if (data.banner !== this.banner) (changes ??= {}).banner = this.banner
     this.banner = data.banner
+    if (data.accent_color !== this.accentColor) (changes ??= {}).accentColor = this.accentColor
     this.accentColor = data.accent_color
+    if (data.public_flags !== this.publicFlags) (changes ??= {}).publicFlags = this.publicFlags
     this.publicFlags = data.public_flags
+    if (data.premium_type !== this.premiumType) (changes ??= {}).premiumType = this.premiumType
     this.premiumType = data.premium_type
+
+    return changes
   }
 
   /**

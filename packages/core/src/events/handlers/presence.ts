@@ -29,14 +29,14 @@ import { defineHandler } from '../EventHandler.js'
 export const presenceUpdate = defineHandler('PRESENCE_UPDATE', (client, data) => {
   const cached = client.cache.presences.get(guildUserKey(data.guild_id, data.user.id))
   if (cached === undefined) {
-    client.emit('presenceUpdate', client.cache.presences.add(new Presence(data, client)))
+    client.emit('presenceUpdate', client.cache.presences.add(new Presence(data, client)), null)
     return
   }
 
-  cached.patch(data)
+  const changes = cached.patch(data)
   // Re-applied through the store, not just mutated: a patch that bypasses `set` skips the
   // scope's `filter`, leaves its `ttl` measured from the original write, and leaves its
   // write-recency at the original insertion. `CacheStore.set` names this exact case — a
   // presence filtered on `status !== 'offline'` must evict when somebody goes offline.
-  client.emit('presenceUpdate', client.cache.presences.add(cached))
+  client.emit('presenceUpdate', client.cache.presences.add(cached), changes)
 })

@@ -7,6 +7,7 @@ import type {
 } from '@vestra/types'
 import { Activity } from './Activity.js'
 import { Base } from './Base.js'
+import type { Changes, ChangesDraft } from './Changes.js'
 
 /** Which status somebody is showing on each platform they have a session on. */
 export interface ClientStatus {
@@ -39,6 +40,34 @@ export interface ClientStatus {
  * which would then overwrite a complete cached user. Only the ID is kept; the handler upserts
  * nothing.
  */
+/**
+ * The fields a {@link Presence.patch} can report as changed.
+ *
+ * @remarks
+ * **{@link Presence.activities} is deliberately absent, and this is the one exclusion made on
+ * cost rather than on principle.** `PRESENCE_UPDATE` is the highest-volume dispatch a bot
+ * receives by a wide margin, and the field is rebuilt into fresh {@link Activity} structures
+ * on every one of them — so a reference comparison would report it as changed every time and
+ * leave the record non-null forever, while a comparison deep enough to be true would run on
+ * the busiest path in the library. Either answer is worse than saying nothing.
+ *
+ * What is left is what people actually diff: the status going from `online` to `offline`, and
+ * which platform it happened on. A consumer who needs the previous activities has to keep
+ * their own copy — which they would do anyway for a field that changes this often.
+ */
+export type PresenceChangeField = 'status' | 'clientStatus'
+
+/**
+ * What a presence update displaced.
+ *
+ * @typeParam Client - The client type the presence is bound to.
+ *
+ * @remarks
+ * The second argument to `presenceUpdate`, and `null` on the very common dispatch where only
+ * the activities moved. See {@link Changes}.
+ */
+export type PresenceChanges<Client = unknown> = Changes<Presence<Client>, PresenceChangeField>
+
 export class Presence<Client = unknown> extends Base<Client> {
   /** The guild this presence applies to. */
   declare readonly guildId: Snowflake
@@ -92,16 +121,33 @@ export class Presence<Client = unknown> extends Base<Client> {
    * Applies a newer payload in place.
    *
    * @param data - The payload to apply.
+   * @returns The previous status and client status, if either moved, or `null` if neither did.
    *
    * @remarks
    * `PRESENCE_UPDATE` sends the whole presence rather than a delta, so this assigns
    * unconditionally. The activities are rebuilt rather than patched: they have no identity to
-   * match old against new by, so there is nothing to patch in place.
+   * match old against new by, so there is nothing to patch in place — and for the same reason
+   * they are not reported, which {@link PresenceChangeField} explains.
    */
-  patch(data: APIPresenceUpdate): void {
+  patch(data: APIPresenceUpdate): PresenceChanges<Client> | null {
+    let changes: ChangesDraft<Presence<Client>, PresenceChangeField> | null = null
+
+    if (data.status !== this.status) (changes ??= {}).status = this.status
     this.status = data.status
     this.activities = toActivities(data.activities)
+    // Compared by its four components rather than by reference, for the same reason
+    // `Role.colors` is: `toClientStatus` builds a new object on every dispatch.
+    if (
+      data.client_status.desktop !== this.clientStatus.desktop ||
+      data.client_status.mobile !== this.clientStatus.mobile ||
+      data.client_status.web !== this.clientStatus.web ||
+      data.client_status.vr !== this.clientStatus.vr
+    ) {
+      ;(changes ??= {}).clientStatus = this.clientStatus
+    }
     this.clientStatus = toClientStatus(data.client_status)
+
+    return changes
   }
 }
 

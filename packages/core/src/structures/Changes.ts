@@ -18,6 +18,13 @@
  * `undefined` most of the time — under the default cache policy the structure was usually
  * never held, so there is nothing to have cloned.
  *
+ * **Two payload shapes, two ways of writing the same thing.** An absolute payload — a whole
+ * guild, role, user or presence — assigns every field on every dispatch, so only the record
+ * needs a comparison and each field is two lines: `if (data.x !== this.x) (changes ??= {}).x =
+ * this.x` then the assignment. A partial payload — a message, a member — assigns only what
+ * arrived, so both the assignment and the record sit inside the same guard. Which shape a
+ * `patch` uses follows from the dispatch, not from taste.
+ *
  * **What it costs.** `scripts/bench/message-patch.ts` puts a recording patch beside the
  * assign-only one it replaced, on identical state: **13ns** per content edit — the shape a
  * real `MESSAGE_UPDATE` has — and **17ns** for an update that changes nothing. The worst case,
@@ -67,6 +74,41 @@ export type Changes<Structure, Field extends keyof Structure> = {
  */
 export type ChangesDraft<Structure, Field extends keyof Structure> = {
   -readonly [Key in Field]?: Structure[Key]
+}
+
+/**
+ * Whether two lists of strings hold the same values in the same order.
+ *
+ * @param before - The list currently held, or `undefined`.
+ * @param after - The list that arrived.
+ * @returns `true` if nothing moved.
+ *
+ * @remarks
+ * For the two array fields worth comparing by value rather than by reference: a guild's
+ * `features` and a member's `roles`. Both arrive on an absolute patch, so a reference
+ * comparison would report them as changed on every single dispatch and leave the record
+ * non-null forever — which would make `changes === null` useless as a "did anything happen"
+ * test on exactly the two events where the question is loudest, *did they get the role* and
+ * *did the guild gain a feature*.
+ *
+ * Both are short — a member has a handful of roles, a guild thirty features at the outside —
+ * so an element walk is affordable where a deep comparison of `embeds` is not.
+ *
+ * **Order-sensitive**, deliberately. Discord sends both in a stable order, and the
+ * alternative is a membership test that is quadratic in a list that can hold 250 role IDs.
+ * The failure mode is a spurious report, never a wrong previous value.
+ */
+export function sameStrings(
+  before: readonly string[] | undefined,
+  after: readonly string[] | undefined,
+): boolean {
+  if (before === after) return true
+  if (before === undefined || after === undefined) return false
+  if (before.length !== after.length) return false
+  for (let index = 0; index < before.length; index += 1) {
+    if (before[index] !== after[index]) return false
+  }
+  return true
 }
 
 /*

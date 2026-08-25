@@ -7,8 +7,8 @@
  */
 
 export { Base } from './Base.js'
-export { ClientUser } from './ClientUser.js'
-export { Guild, type APIGuildLike } from './Guild.js'
+export { ClientUser, type ClientUserChanges, type ClientUserChangeField } from './ClientUser.js'
+export { Guild, type APIGuildLike, type GuildChanges, type GuildChangeField } from './Guild.js'
 export {
   Activity,
   type ActivityAssets,
@@ -44,7 +44,7 @@ export {
 } from './cdn.js'
 export * from './channels/index.js'
 export { createEmoji, Emoji } from './Emoji.js'
-export { GuildMember } from './GuildMember.js'
+export { GuildMember, type GuildMemberChanges, type GuildMemberChangeField } from './GuildMember.js'
 export { GuildScheduledEvent } from './GuildScheduledEvent.js'
 export {
   Interaction,
@@ -54,7 +54,12 @@ export {
   type ModalSubmitInteraction,
 } from './Interaction.js'
 export { Invite } from './Invite.js'
-export { Presence, type ClientStatus } from './Presence.js'
+export {
+  Presence,
+  type ClientStatus,
+  type PresenceChanges,
+  type PresenceChangeField,
+} from './Presence.js'
 export { messageLink, parseMessageLink, type MessageLinkTarget } from './links.js'
 export {
   Message,
@@ -63,9 +68,9 @@ export {
   type MessageChangeField,
 } from './Message.js'
 export { ReactionEmoji } from './ReactionEmoji.js'
-export { Role, type RoleColors } from './Role.js'
+export { Role, type RoleColors, type RoleChanges, type RoleChangeField } from './Role.js'
 export { StageInstance } from './StageInstance.js'
 export { Sticker } from './Sticker.js'
-export { User } from './User.js'
+export { User, type UserChanges, type UserChangeField } from './User.js'
 export { VoiceState } from './VoiceState.js'
 export { snowflakeDate, snowflakeTimestamp } from './snowflake.js'

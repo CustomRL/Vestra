@@ -12,6 +12,7 @@ import {
   type PermissionsBitField,
 } from '../permissions/index.js'
 import { Base } from './Base.js'
+import { sameStrings, type Changes, type ChangesDraft } from './Changes.js'
 import { memberAvatarUrl, memberBannerUrl, type ImageOptions } from './cdn.js'
 import type { CacheCapable } from './capabilities.js'
 import type { PermissionOverwrite } from './channels/GuildChannel.js'
@@ -50,6 +51,43 @@ import { User } from './User.js'
  * never read, and parsing every one on construction would pay for all of them to serve the
  * few. The getters allocate on access and say so.
  */
+/**
+ * The fields a {@link GuildMember.patch} can report as changed.
+ *
+ * @remarks
+ * {@link GuildMember.user} is absent for the reason {@link MessageChangeField} gives about
+ * `Message.author`: it is patched in place, so the object a record would hand back is the same
+ * object with the new values already in it.
+ */
+export type GuildMemberChangeField =
+  | 'nick'
+  | 'avatar'
+  | 'banner'
+  | 'roles'
+  | 'joinedTimestamp'
+  | 'premiumSinceTimestamp'
+  | 'deaf'
+  | 'mute'
+  | 'flags'
+  | 'pending'
+  | 'permissions'
+  | 'communicationDisabledUntilTimestamp'
+
+/**
+ * What a member update displaced.
+ *
+ * @typeParam Client - The client type the member is bound to.
+ *
+ * @remarks
+ * The second argument to `guildMemberUpdate`, and the answer to the question that event is
+ * almost always asked for — *which role did they get*, from `changes.roles`. See
+ * {@link Changes}.
+ */
+export type GuildMemberChanges<Client = unknown> = Changes<
+  GuildMember<Client>,
+  GuildMemberChangeField
+>
+
 export class GuildMember<Client = unknown> extends Base<Client> {
   /**
    * The guild this membership is in.
@@ -309,7 +347,11 @@ export class GuildMember<Client = unknown> extends Base<Client> {
    * A member whose user arrives again is patched rather than replaced, so a consumer
    * holding `member.user` keeps a live object.
    */
-  patch(data: APIGuildMember | GatewayGuildMemberUpdateDispatchData): void {
+  patch(
+    data: APIGuildMember | GatewayGuildMemberUpdateDispatchData,
+  ): GuildMemberChanges<Client> | null {
+    let changes: ChangesDraft<GuildMember<Client>, GuildMemberChangeField> | null = null
+
     if (data.user !== undefined) {
       if (this.user === undefined) {
         this.user = new User(data.user, this.client)
@@ -317,22 +359,64 @@ export class GuildMember<Client = unknown> extends Base<Client> {
         this.user.patch(data.user)
       }
     }
-    if (data.nick !== undefined) this.nick = data.nick
-    if (data.avatar !== undefined) this.avatar = data.avatar
-    if (data.banner !== undefined) this.banner = data.banner
+    if (data.nick !== undefined && data.nick !== this.nick) {
+      ;(changes ??= {}).nick = this.nick
+      this.nick = data.nick
+    }
+    if (data.avatar !== undefined && data.avatar !== this.avatar) {
+      ;(changes ??= {}).avatar = this.avatar
+      this.avatar = data.avatar
+    }
+    if (data.banner !== undefined && data.banner !== this.banner) {
+      ;(changes ??= {}).banner = this.banner
+      this.banner = data.banner
+    }
     // Unconditional: `roles` is required on both the full payload and the update, so a
     // presence check here would be dead code the compiler can prove never branches.
+    //
+    // Compared by value rather than by reference, because it is required: a reference test
+    // would report a role change on every member update and leave the record non-null
+    // forever, which would answer *did they get the role* with "always".
+    if (!sameStrings(this.roles, data.roles)) (changes ??= {}).roles = this.roles
     this.roles = data.roles
-    if (data.joined_at !== undefined) this.joinedTimestamp = data.joined_at
-    if (data.premium_since !== undefined) this.premiumSinceTimestamp = data.premium_since
-    if (data.deaf !== undefined) this.deaf = data.deaf
-    if (data.mute !== undefined) this.mute = data.mute
-    if (data.flags !== undefined) this.flags = data.flags
-    if (data.pending !== undefined) this.pending = data.pending
-    if (data.permissions !== undefined) this.permissions = data.permissions
-    if (data.communication_disabled_until !== undefined) {
+    if (data.joined_at !== undefined && data.joined_at !== this.joinedTimestamp) {
+      ;(changes ??= {}).joinedTimestamp = this.joinedTimestamp
+      this.joinedTimestamp = data.joined_at
+    }
+    if (data.premium_since !== undefined && data.premium_since !== this.premiumSinceTimestamp) {
+      ;(changes ??= {}).premiumSinceTimestamp = this.premiumSinceTimestamp
+      this.premiumSinceTimestamp = data.premium_since
+    }
+    if (data.deaf !== undefined && data.deaf !== this.deaf) {
+      ;(changes ??= {}).deaf = this.deaf
+      this.deaf = data.deaf
+    }
+    if (data.mute !== undefined && data.mute !== this.mute) {
+      ;(changes ??= {}).mute = this.mute
+      this.mute = data.mute
+    }
+    if (data.flags !== undefined && data.flags !== this.flags) {
+      ;(changes ??= {}).flags = this.flags
+      this.flags = data.flags
+    }
+    if (data.pending !== undefined && data.pending !== this.pending) {
+      ;(changes ??= {}).pending = this.pending
+      this.pending = data.pending
+    }
+    if (data.permissions !== undefined && data.permissions !== this.permissions) {
+      ;(changes ??= {}).permissions = this.permissions
+      this.permissions = data.permissions
+    }
+    if (
+      data.communication_disabled_until !== undefined &&
+      data.communication_disabled_until !== this.communicationDisabledUntilTimestamp
+    ) {
+      ;(changes ??= {}).communicationDisabledUntilTimestamp =
+        this.communicationDisabledUntilTimestamp
       this.communicationDisabledUntilTimestamp = data.communication_disabled_until
     }
+
+    return changes
   }
 
   /**

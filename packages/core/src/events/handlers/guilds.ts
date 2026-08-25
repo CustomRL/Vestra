@@ -175,12 +175,12 @@ export const guildCreate = defineHandler('GUILD_CREATE', (client, data) => {
 export const guildUpdate = defineHandler('GUILD_UPDATE', (client, data) => {
   const cached = client.cache.guilds.get(data.id)
   if (cached === undefined) {
-    client.emit('guildUpdate', client.cache.guilds.add(new Guild(data, client)))
+    client.emit('guildUpdate', client.cache.guilds.add(new Guild(data, client)), null)
     return
   }
 
-  cached.patch(data)
-  client.emit('guildUpdate', client.cache.guilds.add(cached))
+  const changes = cached.patch(data)
+  client.emit('guildUpdate', client.cache.guilds.add(cached), changes)
 })
 
 /**
