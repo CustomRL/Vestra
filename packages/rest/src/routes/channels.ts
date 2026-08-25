@@ -11,6 +11,7 @@ import type {
   RESTPatchAPIChannelJSONBody,
   RESTPatchAPIChannelMessageJSONBody,
   RESTPostAPIChannelMessageJSONBody,
+  RESTPutAPIChannelPermissionJSONBody,
   Snowflake,
 } from '@vestra/types'
 import type { REST } from '../REST.js'
@@ -444,6 +445,56 @@ export class ChannelRoutes {
       ...options,
       body,
     })
+  }
+
+  /**
+   * Writes a permission overwrite for a role or a member. Needs `ManageRoles`.
+   *
+   * @param channelId - The channel.
+   * @param overwriteId - The role or user the overwrite applies to.
+   * @param body - What to allow and deny, and which of the two the ID is.
+   * @param options - Request options.
+   *
+   * @remarks
+   * **`type` is required and says which namespace the ID is in.** A role ID and a user ID are
+   * both snowflakes, so Discord cannot infer it; omitting it is a 400 and getting it wrong
+   * writes an overwrite for an entity that does not exist in that sense, silently.
+   *
+   * **A `PUT`, and it replaces the whole overwrite.** A permission in neither bitfield is
+   * *inherited*, which is a third state distinct from allowed and denied — so sending only
+   * `allow` resets every denial on that overwrite to inherited. Read the channel first if the
+   * intent is to change one permission and leave the rest.
+   */
+  async setPermission(
+    channelId: Snowflake,
+    overwriteId: Snowflake,
+    body: RESTPutAPIChannelPermissionJSONBody,
+    options: RouteOptions = {},
+  ): Promise<void> {
+    await this.#rest.put<undefined>(`/channels/${channelId}/permissions/${overwriteId}`, {
+      ...options,
+      body,
+    })
+  }
+
+  /**
+   * Removes a permission overwrite entirely. Needs `ManageRoles`.
+   *
+   * @param channelId - The channel.
+   * @param overwriteId - The role or user whose overwrite to remove.
+   * @param options - Request options.
+   *
+   * @remarks
+   * Not the same as allowing nothing and denying nothing. Removing the overwrite returns the
+   * role or member to whatever the guild and the category say; an empty overwrite keeps a row
+   * that says "inherit", which looks identical in effect and different in the client.
+   */
+  async deletePermission(
+    channelId: Snowflake,
+    overwriteId: Snowflake,
+    options: RouteOptions = {},
+  ): Promise<void> {
+    await this.#rest.delete<undefined>(`/channels/${channelId}/permissions/${overwriteId}`, options)
   }
 
   /**
