@@ -18,6 +18,8 @@ import {
   type RateLimitInfo,
 } from './ratelimit/SequentialHandler.js'
 import { ApplicationCommandRoutes } from './routes/application-commands.js'
+import { AuditLogRoutes } from './routes/audit-logs.js'
+import { AutoModerationRoutes } from './routes/auto-moderation.js'
 import { EmojiRoutes } from './routes/emojis.js'
 import { StickerRoutes } from './routes/stickers.js'
 import { ChannelRoutes } from './routes/channels.js'
@@ -149,6 +151,17 @@ export class REST extends EventEmitter<RESTEvents> {
    * than a `payload_json` object, which is why `RequestData` has a `fields` member at all.
    */
   readonly stickers: StickerRoutes
+  /**
+   * The audit log.
+   *
+   * @remarks
+   * Its own namespace rather than a guild method, because what it returns is a page of
+   * entries plus every entity those entries name — and the side lists are the reason the
+   * route is usable at all.
+   */
+  readonly auditLogs: AuditLogRoutes
+  /** Auto-moderation rule endpoints. */
+  readonly autoModeration: AutoModerationRoutes
 
   /**
    * @param options - Overrides for the client defaults.
@@ -176,6 +189,8 @@ export class REST extends EventEmitter<RESTEvents> {
     this.commands = new ApplicationCommandRoutes(this)
     this.emojis = new EmojiRoutes(this)
     this.stickers = new StickerRoutes(this)
+    this.auditLogs = new AuditLogRoutes(this)
+    this.autoModeration = new AutoModerationRoutes(this)
     this.users = new UserRoutes(this)
     this.gateway = new GatewayRoutes(this)
   }
