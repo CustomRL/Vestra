@@ -82,6 +82,34 @@ export interface ClientEvents<Client = unknown> {
   shardGuildsReady: [shardId: number, unresolved: readonly Snowflake[]]
 
   /**
+   * A shard resumed an existing session rather than starting a new one.
+   *
+   * @remarks
+   * **The one signal that a reconnect happened at all.** `ready` fires once for the fleet's
+   * first startup and never again, so without this a bot cannot tell a healthy connection from
+   * one that has dropped and recovered forty times.
+   *
+   * A resume replays the dispatches missed while the socket was down, and those arrive with
+   * `replayed` set on {@link ClientEvents.raw}. The cache is already correct — handlers are
+   * pure functions of (cache, data), so applying a dispatch twice leaves it where the first
+   * application did — but a consumer keeping its own state outside the cache has to be
+   * idempotent, and this is where it finds out that it needs to be.
+   */
+  shardResumed: [shardId: number]
+  /**
+   * A shard's socket closed.
+   *
+   * @remarks
+   * Fires on every close, including the ones the client immediately recovers from — a resume
+   * begins with a socket closing. It is a health signal rather than a failure: `code` and
+   * `reason` are Discord's, and the shard reconnects on its own unless the code is terminal,
+   * in which case `error` fires as well.
+   *
+   * Also fires on {@link Client.destroy}, because that closes the socket like anything else.
+   */
+  shardDisconnect: [shardId: number, code: number, reason: string]
+
+  /**
    * A guild became available, or the bot joined one.
    *
    * @remarks

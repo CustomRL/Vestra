@@ -71,6 +71,8 @@ const SURFACE: Readonly<Record<string, number>> = {
   roleDelete: 2,
   roleUpdate: 3,
   shardGuildsReady: 2,
+  shardResumed: 1,
+  shardDisconnect: 3,
   stageInstanceCreate: 1,
   stageInstanceDelete: 1,
   stageInstanceUpdate: 1,
