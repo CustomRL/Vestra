@@ -18,6 +18,7 @@ import {
   type RateLimitInfo,
 } from './ratelimit/SequentialHandler.js'
 import { ApplicationCommandRoutes } from './routes/application-commands.js'
+import { ApplicationRoutes } from './routes/applications.js'
 import { AuditLogRoutes } from './routes/audit-logs.js'
 import { BanRoutes } from './routes/bans.js'
 import { MemberRoutes } from './routes/members.js'
@@ -149,6 +150,15 @@ export class REST extends EventEmitter<RESTEvents> {
    */
   readonly commands: ApplicationCommandRoutes
   /**
+   * The application itself.
+   *
+   * @remarks
+   * Separate from `commands`, which registers what the application can be asked to do. This is
+   * its profile, install configuration and approvals — and READY carries only `{ id, flags }`,
+   * so almost none of it has been on a dispatch.
+   */
+  readonly applications: ApplicationRoutes
+  /**
    * Emoji endpoints, for guilds and for the application itself.
    *
    * @remarks
@@ -239,6 +249,7 @@ export class REST extends EventEmitter<RESTEvents> {
     this.webhooks = new WebhookRoutes(this)
     this.invites = new InviteRoutes(this)
     this.commands = new ApplicationCommandRoutes(this)
+    this.applications = new ApplicationRoutes(this)
     this.emojis = new EmojiRoutes(this)
     this.stickers = new StickerRoutes(this)
     this.polls = new PollRoutes(this)

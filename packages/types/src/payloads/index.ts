@@ -7,6 +7,7 @@
  * here would make these types a translation layer rather than a description.
  */
 
+export * from './application.js'
 export * from './application-command.js'
 export * from './attachment.js'
 export * from './audit-log.js'
