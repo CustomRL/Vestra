@@ -4,6 +4,7 @@ import type { APIMessageComponent } from '../payloads/component.js'
 import type { APIEmbed } from '../payloads/embed.js'
 import type { APIAttachment } from '../payloads/attachment.js'
 import type { APIMessage, APIMessageReference } from '../payloads/message.js'
+import type { APIUser } from '../payloads/user.js'
 
 /**
  * Controls which mentions in a message actually ping.
@@ -176,3 +177,23 @@ export type RESTPatchAPIChannelResult = APIChannel
 
 /** The result of `DELETE /channels/{channel.id}`. */
 export type RESTDeleteAPIChannelResult = APIChannel
+
+/**
+ * Who reacted with a given emoji.
+ *
+ * @remarks
+ * Paginated by user ID and capped at 100 per call, so a message with a busy reaction needs
+ * several: pass the last ID returned as `after` until fewer than `limit` come back.
+ */
+export interface RESTGetAPIChannelMessageReactionsQuery {
+  /** Return users after this ID. */
+  after?: Snowflake
+  /** How many to return, 1 to 100. Defaults to 25. */
+  limit?: number
+}
+
+/** Who reacted. */
+export type RESTGetAPIChannelMessageReactionsResult = APIUser[]
+
+/** A channel's pinned messages, newest first. */
+export type RESTGetAPIChannelPinsResult = APIMessage[]

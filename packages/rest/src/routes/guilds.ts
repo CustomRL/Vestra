@@ -1,10 +1,13 @@
 import type {
   APIBan,
+  APIChannel,
   APIGuild,
   APIGuildMember,
   APIRole,
   RESTGetAPIGuildMembersQuery,
   RESTPatchAPIGuildMemberJSONBody,
+  RESTPatchAPIGuildRoleJSONBody,
+  RESTPostAPIGuildChannelJSONBody,
   RESTPostAPIGuildRoleJSONBody,
   RESTPutAPIGuildBanJSONBody,
   Snowflake,
@@ -221,5 +224,85 @@ export class GuildRoutes {
       `/guilds/${guildId}/members/${userId}/roles/${roleId}`,
       options,
     )
+  }
+
+  /**
+   * Modifies a role.
+   *
+   * @param guildId - The guild the role is in.
+   * @param roleId - The role to modify.
+   * @param body - The fields to change.
+   * @param options - Request options.
+   * @returns The updated role.
+   *
+   * @remarks
+   * A partial update: fields left out are unchanged. `position` is not settable here — roles
+   * are reordered through `PATCH /guilds/{id}/roles` as a batch, because moving one role
+   * renumbers the others and Discord will not do that one call at a time.
+   */
+  async editRole(
+    guildId: Snowflake,
+    roleId: Snowflake,
+    body: RESTPatchAPIGuildRoleJSONBody,
+    options: RouteOptions = {},
+  ): Promise<APIRole> {
+    return await this.#rest.patch<APIRole>(`/guilds/${guildId}/roles/${roleId}`, {
+      ...options,
+      body,
+    })
+  }
+
+  /**
+   * Deletes a role.
+   *
+   * @param guildId - The guild the role is in.
+   * @param roleId - The role to delete.
+   * @param options - Request options.
+   *
+   * @remarks
+   * Irreversible, and it takes the role off every member who had it. The guild's `@everyone`
+   * role cannot be deleted; Discord answers that with `50028`.
+   */
+  async deleteRole(
+    guildId: Snowflake,
+    roleId: Snowflake,
+    options: RouteOptions = {},
+  ): Promise<void> {
+    await this.#rest.delete<undefined>(`/guilds/${guildId}/roles/${roleId}`, options)
+  }
+
+  /**
+   * Fetches a guild's channels.
+   *
+   * @param guildId - The guild to read.
+   * @param options - Request options.
+   * @returns Every channel, excluding threads.
+   *
+   * @remarks
+   * Threads are not included — Discord serves those from
+   * `GET /guilds/{id}/threads/active`, which is a different shape and a different permission.
+   */
+  async getChannels(guildId: Snowflake, options: RouteOptions = {}): Promise<APIChannel[]> {
+    return await this.#rest.get<APIChannel[]>(`/guilds/${guildId}/channels`, options)
+  }
+
+  /**
+   * Creates a channel. Needs `ManageChannels`.
+   *
+   * @param guildId - The guild to create it in.
+   * @param body - What to create.
+   * @param options - Request options.
+   * @returns The new channel.
+   *
+   * @remarks
+   * `position` is advisory: creating a channel renumbers its siblings, so the position that
+   * comes back is the one to believe rather than the one that was asked for.
+   */
+  async createChannel(
+    guildId: Snowflake,
+    body: RESTPostAPIGuildChannelJSONBody,
+    options: RouteOptions = {},
+  ): Promise<APIChannel> {
+    return await this.#rest.post<APIChannel>(`/guilds/${guildId}/channels`, { ...options, body })
   }
 }
