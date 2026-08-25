@@ -41,8 +41,15 @@ function toPosix(value: string): string {
 /** The repository root, with forward slashes. */
 const repoRoot = toPosix(fileURLToPath(new URL('../', import.meta.url)))
 
-/** Prose files whose TypeScript blocks are claims about the shipped API. */
-const SOURCES = ['README.md']
+/**
+ * Prose files whose TypeScript blocks are claims about the shipped API.
+ *
+ * @remarks
+ * `docs/events.md` is here because it is a reference rather than a narrative: every block in it
+ * is a listener somebody will copy, and a reference whose examples do not compile is worse than
+ * no reference — it is wrong with authority.
+ */
+const SOURCES = ['README.md', 'docs/events.md']
 
 /** One fenced block, with enough context to name it when it fails. */
 interface Snippet {
