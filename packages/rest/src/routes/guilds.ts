@@ -3,12 +3,14 @@ import type {
   APIChannel,
   APIGuild,
   APIGuildMember,
+  APIInvite,
   APIRole,
   RESTGetAPIGuildMembersQuery,
   RESTPatchAPIGuildMemberJSONBody,
   RESTPatchAPIGuildRoleJSONBody,
   RESTPostAPIGuildChannelJSONBody,
   RESTPostAPIGuildRoleJSONBody,
+  RESTGetAPIGuildThreadsResult,
   RESTPutAPIGuildBanJSONBody,
   Snowflake,
 } from '@vestra/types'
@@ -304,5 +306,38 @@ export class GuildRoutes {
     options: RouteOptions = {},
   ): Promise<APIChannel> {
     return await this.#rest.post<APIChannel>(`/guilds/${guildId}/channels`, { ...options, body })
+  }
+
+  /**
+   * Lists a guild's invites. Needs `ManageGuild`.
+   *
+   * @param guildId - The guild to read.
+   * @param options - Request options.
+   * @returns Every invite in the guild, across all its channels.
+   */
+  async getInvites(guildId: Snowflake, options: RouteOptions = {}): Promise<APIInvite[]> {
+    return await this.#rest.get<APIInvite[]>(`/guilds/${guildId}/invites`, options)
+  }
+
+  /**
+   * Lists a guild's active threads.
+   *
+   * @param guildId - The guild to read.
+   * @param options - Request options.
+   * @returns The threads, and the current user's membership of each one it belongs to.
+   *
+   * @remarks
+   * `members` carries only the **current user's** memberships — one entry per thread it is
+   * in, not every member of every thread, which would be unbounded. Archived threads are not
+   * included; those are paginated per channel.
+   */
+  async getActiveThreads(
+    guildId: Snowflake,
+    options: RouteOptions = {},
+  ): Promise<RESTGetAPIGuildThreadsResult> {
+    return await this.#rest.get<RESTGetAPIGuildThreadsResult>(
+      `/guilds/${guildId}/threads/active`,
+      options,
+    )
   }
 }

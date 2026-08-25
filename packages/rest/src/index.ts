@@ -37,5 +37,6 @@ export { ChannelRoutes, type MessageOptions, type RouteOptions } from './routes/
 export { GatewayRoutes } from './routes/gateway.js'
 export { GuildRoutes } from './routes/guilds.js'
 export { InteractionRoutes } from './routes/interactions.js'
+export { InviteRoutes } from './routes/invites.js'
 export { UserRoutes } from './routes/users.js'
 export { WebhookRoutes } from './routes/webhooks.js'
