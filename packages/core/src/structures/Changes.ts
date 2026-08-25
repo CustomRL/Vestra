@@ -20,8 +20,8 @@
  *
  * **Two payload shapes, two ways of writing the same thing.** An absolute payload — a whole
  * guild, role, user or presence — assigns every field on every dispatch, so only the record
- * needs a comparison and each field is two lines: `if (data.x !== this.x) (changes ??= {}).x =
- * this.x` then the assignment. A partial payload — a message, a member — assigns only what
+ * needs a comparison — so each field is two lines, a guarded record followed by an
+ * unconditional assignment. A partial payload — a message, a member — assigns only what
  * arrived, so both the assignment and the record sit inside the same guard. Which shape a
  * `patch` uses follows from the dispatch, not from taste.
  *
