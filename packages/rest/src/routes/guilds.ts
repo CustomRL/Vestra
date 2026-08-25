@@ -5,6 +5,13 @@ import type {
   APIGuildWelcomeScreen,
   APIInvite,
   RESTGetAPIGuildIntegrationsResult,
+  RESTGetAPIGuildOnboardingResult,
+  RESTGetAPIGuildWidgetResult,
+  RESTGetAPIGuildWidgetSettingsResult,
+  RESTPatchAPIGuildWidgetSettingsJSONBody,
+  RESTPatchAPIGuildWidgetSettingsResult,
+  RESTPutAPIGuildOnboardingJSONBody,
+  RESTPutAPIGuildOnboardingResult,
   RESTGetAPIGuildPruneCountQuery,
   RESTGetAPIGuildPruneCountResult,
   RESTGetAPIGuildVanityURLResult,
@@ -303,6 +310,129 @@ export class GuildRoutes {
     options: RouteOptions = {},
   ): Promise<void> {
     await this.#rest.delete<undefined>(`/guilds/${guildId}/integrations/${integrationId}`, options)
+  }
+
+  /**
+   * Reads a guild's onboarding configuration.
+   *
+   * @param guildId - The guild.
+   * @param options - Request options.
+   * @returns The prompts, default channels and mode.
+   *
+   * @remarks
+   * The read {@link GuildRoutes.setOnboarding} needs, since that route replaces the whole
+   * configuration and has no partial form.
+   */
+  async getOnboarding(
+    guildId: Snowflake,
+    options: RouteOptions = {},
+  ): Promise<RESTGetAPIGuildOnboardingResult> {
+    return await this.#rest.get<RESTGetAPIGuildOnboardingResult>(
+      `/guilds/${guildId}/onboarding`,
+      options,
+    )
+  }
+
+  /**
+   * Replaces a guild's onboarding configuration. Needs `ManageGuild` and `ManageRoles`.
+   *
+   * @param guildId - The guild.
+   * @param body - The complete configuration.
+   * @param options - Request options.
+   * @returns The configuration as stored.
+   *
+   * @remarks
+   * **A `PUT`, and it replaces everything.** There is no partial edit and every field is
+   * required, so changing one prompt means reading the current configuration and writing it
+   * back — which is why {@link GuildRoutes.getOnboarding} is beside it.
+   *
+   * Prompt and option IDs must be unique across the whole payload rather than within a prompt.
+   * Discord assigns real ones on the way out; a caller creating new prompts invents them, and
+   * reusing a number silently merges two options.
+   *
+   * `enabled` is not the last word: Discord requires a minimum number of default channels and
+   * prompts before onboarding may run, and turns it off rather than rejecting the request when
+   * the configuration stops meeting it.
+   */
+  async setOnboarding(
+    guildId: Snowflake,
+    body: RESTPutAPIGuildOnboardingJSONBody,
+    options: RouteOptions = {},
+  ): Promise<RESTPutAPIGuildOnboardingResult> {
+    return await this.#rest.put<RESTPutAPIGuildOnboardingResult>(`/guilds/${guildId}/onboarding`, {
+      ...options,
+      body,
+    })
+  }
+
+  /**
+   * Reads whether the widget is on and what it points at. Needs `ManageGuild`.
+   *
+   * @param guildId - The guild.
+   * @param options - Request options.
+   * @returns The settings.
+   *
+   * @remarks
+   * The settings, not the widget. {@link GuildRoutes.getWidget} is the public payload and
+   * needs no permission at all.
+   */
+  async getWidgetSettings(
+    guildId: Snowflake,
+    options: RouteOptions = {},
+  ): Promise<RESTGetAPIGuildWidgetSettingsResult> {
+    return await this.#rest.get<RESTGetAPIGuildWidgetSettingsResult>(
+      `/guilds/${guildId}/widget`,
+      options,
+    )
+  }
+
+  /**
+   * Turns the widget on or off, or points it at a channel. Needs `ManageGuild`.
+   *
+   * @param guildId - The guild.
+   * @param body - The fields to change.
+   * @param options - Request options.
+   * @returns The updated settings.
+   *
+   * @remarks
+   * Enabling it makes the guild's name, an invite, its voice channels and everybody currently
+   * online readable **by anybody with the guild ID and no token at all**. That is what a
+   * widget is for, and it is worth being deliberate about.
+   */
+  async editWidgetSettings(
+    guildId: Snowflake,
+    body: RESTPatchAPIGuildWidgetSettingsJSONBody,
+    options: RouteOptions = {},
+  ): Promise<RESTPatchAPIGuildWidgetSettingsResult> {
+    return await this.#rest.patch<RESTPatchAPIGuildWidgetSettingsResult>(
+      `/guilds/${guildId}/widget`,
+      { ...options, body },
+    )
+  }
+
+  /**
+   * Reads the public widget payload.
+   *
+   * @param guildId - The guild.
+   * @param options - Request options.
+   * @returns The widget.
+   *
+   * @remarks
+   * **Unauthenticated**, and sent that way: this is the one guild route that needs no token,
+   * so sending one would be pointless and would put the bot's credential on a request that
+   * does not want it.
+   *
+   * The member IDs it carries are anonymised rather than real user snowflakes, because the
+   * route is public. Treating them as user IDs gets nothing.
+   */
+  async getWidget(
+    guildId: Snowflake,
+    options: RouteOptions = {},
+  ): Promise<RESTGetAPIGuildWidgetResult> {
+    return await this.#rest.get<RESTGetAPIGuildWidgetResult>(`/guilds/${guildId}/widget.json`, {
+      ...options,
+      auth: false,
+    })
   }
 
   /**
