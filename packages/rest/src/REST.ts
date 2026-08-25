@@ -21,6 +21,7 @@ import { ApplicationCommandRoutes } from './routes/application-commands.js'
 import { AuditLogRoutes } from './routes/audit-logs.js'
 import { BanRoutes } from './routes/bans.js'
 import { MemberRoutes } from './routes/members.js'
+import { PollRoutes } from './routes/polls.js'
 import { RoleRoutes } from './routes/roles.js'
 import { AutoModerationRoutes } from './routes/auto-moderation.js'
 import { EmojiRoutes } from './routes/emojis.js'
@@ -164,6 +165,14 @@ export class REST extends EventEmitter<RESTEvents> {
    */
   readonly stickers: StickerRoutes
   /**
+   * Poll endpoints.
+   *
+   * @remarks
+   * A poll is a field on a message rather than a resource of its own, so only two things need
+   * routes: who voted for an answer, and ending one early.
+   */
+  readonly polls: PollRoutes
+  /**
    * Membership of and access to existing threads.
    *
    * @remarks
@@ -222,6 +231,7 @@ export class REST extends EventEmitter<RESTEvents> {
     this.commands = new ApplicationCommandRoutes(this)
     this.emojis = new EmojiRoutes(this)
     this.stickers = new StickerRoutes(this)
+    this.polls = new PollRoutes(this)
     this.threads = new ThreadRoutes(this)
     this.auditLogs = new AuditLogRoutes(this)
     this.autoModeration = new AutoModerationRoutes(this)

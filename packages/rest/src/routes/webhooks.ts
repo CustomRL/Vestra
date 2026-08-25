@@ -3,6 +3,8 @@ import type {
   APIWebhook,
   RESTPatchAPIWebhookJSONBody,
   RESTPostAPIChannelWebhookJSONBody,
+  RESTGetAPIWebhookMessageQuery,
+  RESTPatchAPIWebhookMessageJSONBody,
   RESTPostAPIWebhookExecuteJSONBody,
   RESTPostAPIWebhookExecuteQuery,
   Snowflake,
@@ -215,6 +217,108 @@ export class WebhookRoutes {
       ...options,
       auth: false,
       body,
+      query: query as Record<string, string | number | boolean | undefined>,
+    })
+  }
+
+  /**
+   * Reads a message a webhook sent.
+   *
+   * @param webhookId - The webhook.
+   * @param token - Its token.
+   * @param messageId - The message, or the literal `@original`.
+   * @param query - The thread the message is in, if it is in one.
+   * @param options - Request options.
+   * @returns The message.
+   *
+   * @remarks
+   * **Unauthenticated**, like the rest of the token routes: a webhook's ID and token are a
+   * credential in their own right, and a relay process should not need the bot token to read
+   * back what it sent.
+   *
+   * `@original` names the message the last execute returned, which is how a caller that did
+   * not keep the ID edits what it just sent. The parameter is typed as a `Snowflake` because
+   * that is an alias for `string` and a union with the literal collapses to it — the type
+   * cannot record the alias, so this is where it is written down.
+   *
+   * `thread_id` is required when the message is in a thread and there is nothing in the path
+   * to say so. Without it the route answers 404 for a message that plainly exists.
+   */
+  async getMessage(
+    webhookId: Snowflake,
+    token: string,
+    messageId: Snowflake,
+    query: RESTGetAPIWebhookMessageQuery = {},
+    options: RouteOptions = {},
+  ): Promise<APIMessage> {
+    return await this.#rest.get<APIMessage>(
+      `/webhooks/${webhookId}/${token}/messages/${messageId}`,
+      {
+        ...options,
+        auth: false,
+        query: query as Record<string, string | number | boolean | undefined>,
+      },
+    )
+  }
+
+  /**
+   * Edits a message a webhook sent.
+   *
+   * @param webhookId - The webhook.
+   * @param token - Its token.
+   * @param messageId - The message, or the literal `@original`.
+   * @param body - The fields to change.
+   * @param query - The thread the message is in, if it is in one.
+   * @param options - Request options, including files to upload.
+   * @returns The updated message.
+   *
+   * @remarks
+   * A partial update, so absent fields are left alone — except `attachments`, which is the
+   * list of attachments to **keep**. Omitting it keeps them all; sending an empty array
+   * removes every one.
+   */
+  async editMessage(
+    webhookId: Snowflake,
+    token: string,
+    messageId: Snowflake,
+    body: RESTPatchAPIWebhookMessageJSONBody,
+    query: RESTGetAPIWebhookMessageQuery = {},
+    options: MessageOptions = {},
+  ): Promise<APIMessage> {
+    return await this.#rest.patch<APIMessage>(
+      `/webhooks/${webhookId}/${token}/messages/${messageId}`,
+      {
+        ...options,
+        auth: false,
+        body,
+        query: query as Record<string, string | number | boolean | undefined>,
+      },
+    )
+  }
+
+  /**
+   * Deletes a message a webhook sent.
+   *
+   * @param webhookId - The webhook.
+   * @param token - Its token.
+   * @param messageId - The message, or the literal `@original`.
+   * @param query - The thread the message is in, if it is in one.
+   * @param options - Request options.
+   *
+   * @remarks
+   * The only way to delete a webhook message without `ManageMessages` — the channel route
+   * needs it, and this needs only the token.
+   */
+  async deleteMessage(
+    webhookId: Snowflake,
+    token: string,
+    messageId: Snowflake,
+    query: RESTGetAPIWebhookMessageQuery = {},
+    options: RouteOptions = {},
+  ): Promise<void> {
+    await this.#rest.delete<undefined>(`/webhooks/${webhookId}/${token}/messages/${messageId}`, {
+      ...options,
+      auth: false,
       query: query as Record<string, string | number | boolean | undefined>,
     })
   }
